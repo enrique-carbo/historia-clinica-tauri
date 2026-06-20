@@ -1,3 +1,7 @@
+// La regla de oro en SQL: Siempre crea primero las tablas Padre (las que son referenciadas por otros)
+// y luego las Hijas.
+// El orden seguro debería ser: users -> patients -> in_person_consultations -> patient_metrics.
+
 use rusqlite::{Connection, Result};
 use std::fs;
 use std::path::PathBuf;

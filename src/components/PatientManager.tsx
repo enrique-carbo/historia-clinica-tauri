@@ -91,7 +91,7 @@ export function PatientManager({ userId }: PatientManagerProps) {
       {/* Lista */}
       <div style={panelStyle}>
         <h3 style={{ margin: "0 0 15px 0", color: "#f4f4f5" }}>
-          📇 Padón de Pacientes Registrados
+          📇 Padrón de Pacientes Registrados
         </h3>
         <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
           {patients.length === 0 ? (

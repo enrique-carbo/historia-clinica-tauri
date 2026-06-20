@@ -1,2 +1,7 @@
+Médico
 user: enrique_doc
+pass: 12345678
+
+Paciente
+user: enrique_pac
 pass: 12345678
