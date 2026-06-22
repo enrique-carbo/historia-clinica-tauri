@@ -5,6 +5,8 @@ import { SoapHistory } from "./components/SoapHistory";
 import { AuthBox } from "./components/AuthBox";
 import { PatientManager } from "./components/PatientManager";
 import { PatientSelector } from "./components/PatientSelector";
+import { MetricQuickForm } from "./components/MetricQuickForm";
+import { MetricViewer } from "./components/MetricViewer";
 
 interface CurrentUser {
   user_id: string;
@@ -14,7 +16,6 @@ interface CurrentUser {
 
 export default function App() {
   const [user, setUser] = useState<CurrentUser | null>(null);
-  //const [pacienteId] = useState("paciente_123_test"); // Sigue estático hasta el siguiente módulo
   const [history, setHistory] = useState<any[]>([]);
   const [activePatient, setActivePatient] = useState<{
     id: string;
@@ -42,141 +43,104 @@ export default function App() {
     }
   }, [user, activePatient, fetchHistory]);
 
-  // Si el usuario no está autenticado localmente, forzamos el AuthBox
   if (!user) {
     return <AuthBox onAuthSuccess={(loggedUser) => setUser(loggedUser)} />;
   }
 
   return (
-    <div
-      style={{
-        padding: "40px",
-        fontFamily: "system-ui, sans-serif",
-        background: "#0f0f11",
-        color: "#e4e4e7",
-        minHeight: "100vh",
-      }}
-    >
-      <header
-        style={{
-          marginBottom: "30px",
-          borderBottom: "1px solid #27272a",
-          paddingBottom: "20px",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-        }}
-      >
+    <div className="min-h-screen bg-zinc-950 text-zinc-200 p-10 font-sans">
+      {/* HEADER */}
+      <header className="mb-8 pb-5 border-b border-zinc-800 flex justify-between items-center">
         <div>
-          <h1 style={{ fontSize: "24px", color: "#f4f4f5", margin: 0 }}>
+          <h1 className="text-2xl font-bold text-zinc-100 m-0">
             🩺 Simplex Health Core
           </h1>
-          <p style={{ color: "#a1a1aa", fontSize: "14px", marginTop: "5px" }}>
+          <p className="text-sm text-zinc-500 mt-1">
             Ecosistema Clínico Descentralizado — Rol:{" "}
-            <strong style={{ color: "#2563eb", textTransform: "uppercase" }}>
-              {user.role}
-            </strong>
+            <strong className="text-blue-500 uppercase">{user.role}</strong>
           </p>
         </div>
-        <div style={{ textAlign: "right" }}>
-          <span style={{ fontSize: "14px", color: "#a1a1aa" }}>
-            Usuario: <strong>{user.username}</strong>
+        <div className="text-right flex items-center gap-4">
+          <span className="text-sm text-zinc-500">
+            Usuario: <strong className="text-zinc-300">{user.username}</strong>
           </span>
           <button
             onClick={() => setUser(null)}
-            style={{
-              marginLeft: "15px",
-              padding: "6px 12px",
-              background: "#27272a",
-              border: "1px solid #3f3f46",
-              color: "#f4f4f5",
-              borderRadius: "4px",
-              cursor: "pointer",
-              fontSize: "12px",
-            }}
+            className="px-3 py-1.5 bg-zinc-800 border border-zinc-700 text-zinc-300 rounded text-xs hover:bg-zinc-700 transition-colors cursor-pointer"
           >
             Cerrar Sesión
           </button>
         </div>
       </header>
 
+      {/* VISTA ADMIN */}
       {user.role === "admin" && (
         <div>
-          <h2 style={{ fontSize: "18px", marginBottom: "20px" }}>
+          <h2 className="text-lg font-semibold mb-5 text-zinc-300">
             Consola de Recepción y Admisión
           </h2>
           <PatientManager userId={user.user_id} />
         </div>
       )}
 
+      {/* VISTA MÉDICO */}
       {user.role === "medico" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "30px" }}>
-          {/* Sección de Admisión de Pacientes */}
+        <div className="flex flex-col gap-8">
+          {/* Admisión */}
           <div>
-            <h2 style={{ fontSize: "18px", marginBottom: "15px" }}>
+            <h2 className="text-lg font-semibold mb-4 text-zinc-300">
               Admitir Nuevo Paciente
             </h2>
             <PatientManager userId={user.user_id} />
           </div>
 
-          <hr
-            style={{
-              border: "none",
-              borderTop: "1px solid #27272a",
-              margin: "10px 0",
-            }}
-          />
+          <hr className="border-zinc-800" />
 
-          {/* Buscador de Pacientes Activos */}
+          {/* Buscador */}
           <PatientSelector
             onSelectPatient={(p) => setActivePatient(p)}
             selectedPatientId={activePatient ? activePatient.id : null}
           />
 
-          {/* Panel Clínico Sincrónico Dinámico */}
+          {/* Panel Clínico */}
           {activePatient ? (
             <div>
-              <h2 style={{ fontSize: "18px", marginBottom: "15px" }}>
+              <h2 className="text-lg font-semibold mb-4 text-zinc-300">
                 Consulta Activa:{" "}
-                <span style={{ color: "#3b82f6" }}>
-                  {activePatient.full_name}
-                </span>
+                <span className="text-blue-400">{activePatient.full_name}</span>
               </h2>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: "40px",
-                  maxWidth: "1400px",
-                }}
-              >
-                <div>
-                  <div
-                    style={{
-                      marginBottom: "15px",
-                      fontSize: "13px",
-                      color: "#71717a",
-                    }}
-                  >
+
+              <div className="grid grid-cols-2 gap-10 max-w-6xl">
+                {/* Columna Izquierda (Inputs) */}
+                <div className="flex flex-col gap-6">
+                  <div className="text-xs text-zinc-600 font-mono">
                     VÍNCULO RELACIONAL:{" "}
-                    <span style={{ color: "#e4e4e7", fontFamily: "monospace" }}>
-                      {activePatient.id}
-                    </span>
+                    <span className="text-zinc-400">{activePatient.id}</span>
                   </div>
+
                   <SoapForm
                     pacienteId={activePatient.id}
                     medicoId={user.user_id}
                     onSuccess={fetchHistory}
                   />
+
+                  {/* Métricas */}
+                  <div className="p-5 bg-zinc-900 rounded-lg border border-zinc-800">
+                    <h3 className="text-base font-semibold text-zinc-200 mb-4">
+                      📊 Registro de Métrica Rápida
+                    </h3>
+                    <MetricQuickForm
+                      pacienteId={activePatient.id}
+                      onSuccess={fetchHistory}
+                    />
+                  </div>
+
+                  <MetricViewer pacienteId={activePatient.id} />
                 </div>
+
+                {/* Columna Derecha (Historial) */}
                 <div>
-                  <h3
-                    style={{
-                      margin: "0 0 15px 0",
-                      color: "#f4f4f5",
-                      fontSize: "16px",
-                    }}
-                  >
+                  <h3 className="text-base font-semibold text-zinc-200 mb-4">
                     Historial Clínico Cifrado
                   </h3>
                   <SoapHistory records={history} />
@@ -184,16 +148,8 @@ export default function App() {
               </div>
             </div>
           ) : (
-            <div
-              style={{
-                padding: "30px",
-                textAlign: "center",
-                background: "#141417",
-                borderRadius: "8px",
-                border: "1px dashed #27272a",
-                color: "#71717a",
-              }}
-            >
+            /* Estado vacío */
+            <div className="p-10 text-center bg-zinc-900/50 rounded-lg border border-dashed border-zinc-800 text-zinc-600">
               💡 Seleccioná un paciente del buscador para abrir su ficha clínica
               y redactar una evolución SOAP.
             </div>

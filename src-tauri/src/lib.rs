@@ -7,16 +7,18 @@ mod commands;
 mod crypto;
 mod database;
 mod lib_types;
+mod vault;
 
 // Traemos al alcance el estado que aislamos
-use lib_types::DbState;
+use lib_types::{CryptoState, DbState};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        // Inicializamos el estado global vacío
+        // ESTADOS GLOBALES
         .manage(DbState(Mutex::new(None)))
+        .manage(CryptoState(Mutex::new(None)))
         // Configuramos la base de datos local al arrancar
         .setup(|app| {
             let app_data_dir = app
@@ -41,7 +43,10 @@ pub fn run() {
             commands::login_user,
             commands::create_patient,
             commands::get_patients_list,
-            commands::search_patients
+            commands::search_patients,
+            commands::unlock_vault,
+            commands::save_patient_metric,
+            commands::get_patient_metrics
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

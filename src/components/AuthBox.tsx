@@ -32,6 +32,10 @@ export function AuthBox({ onAuthSuccess }: AuthBoxProps) {
         }>("login_user", {
           form: { username, password_plain: password },
         });
+        await invoke("unlock_vault", {
+          userId: user.user_id,
+          password: password,
+        });
         onAuthSuccess(user);
       } else {
         // Ejecuta el comando nativo de Registro
