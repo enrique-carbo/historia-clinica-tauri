@@ -11,7 +11,7 @@ export function MetricQuickForm({ pacienteId, onSuccess }: Props) {
   const [subTipo, setSubTipo] = useState("peso");
   const [valor, setValor] = useState("");
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.SubmitEvent) => {
     e.preventDefault();
     try {
       await invoke("save_patient_metric", {

@@ -15,129 +15,113 @@ export function SoapForm({ pacienteId, medicoId, onSuccess }: SoapFormProps) {
     plan: "",
   });
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
+    if (error) setError(null); // Limpia el error si el médico empieza a escribir de nuevo
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.SubmitEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError(null);
     try {
       await invoke("save_soap_consultation", {
         form: { paciente_id: pacienteId, medico_id: medicoId, ...form },
       });
       setForm({ subjetivo: "", objetivo: "", analisis: "", plan: "" });
-      onSuccess(); // Avisa a App.tsx que hay que recargar el historial
+      onSuccess();
     } catch (err) {
-      alert(`Error en Core: ${err}`);
+      setError(String(err));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} style={formStyle}>
-      <h3 style={{ margin: "0 0 10px 0", color: "#f4f4f5", fontSize: "16px" }}>
+    <form
+      onSubmit={handleSubmit}
+      className="flex flex-col gap-4 bg-zinc-900 p-5 rounded-lg border border-zinc-800"
+    >
+      <h3 className="text-base font-semibold text-zinc-100 mb-0">
         Nueva Evolución (SOAP)
       </h3>
 
+      {error && (
+        <div className="bg-red-950 border border-red-800 text-red-400 p-3 rounded text-xs">
+          Error al cifrar: {error}
+        </div>
+      )}
+
       <div>
-        <label style={labelStyle}>[S] Subjetivo</label>
+        <label className="block text-xs text-zinc-500 mb-1 font-semibold">
+          [S] Subjetivo
+        </label>
         <textarea
           name="subjetivo"
           value={form.subjetivo}
           onChange={handleChange}
           required
           rows={3}
-          style={textareaStyle}
+          className="w-full bg-zinc-950 text-zinc-200 border border-zinc-800 rounded px-3 py-2 text-sm font-[inherit] resize-y focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-zinc-700"
           placeholder="Síntomas relatados por el paciente..."
         />
       </div>
 
       <div>
-        <label style={labelStyle}>[O] Objetivo</label>
+        <label className="block text-xs text-zinc-500 mb-1 font-semibold">
+          [O] Objetivo
+        </label>
         <textarea
           name="objetivo"
           value={form.objetivo}
           onChange={handleChange}
           required
           rows={3}
-          style={textareaStyle}
+          className="w-full bg-zinc-950 text-zinc-200 border border-zinc-800 rounded px-3 py-2 text-sm font-[inherit] resize-y focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-zinc-700"
           placeholder="Examen físico y signos vitales..."
         />
       </div>
 
       <div>
-        <label style={labelStyle}>[A] Análisis</label>
+        <label className="block text-xs text-zinc-500 mb-1 font-semibold">
+          [A] Análisis
+        </label>
         <textarea
           name="analisis"
           value={form.analisis}
           onChange={handleChange}
           required
           rows={2}
-          style={textareaStyle}
+          className="w-full bg-zinc-950 text-zinc-200 border border-zinc-800 rounded px-3 py-2 text-sm font-[inherit] resize-y focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-zinc-700"
           placeholder="Diagnóstico presuntivo o hipótesis..."
         />
       </div>
 
       <div>
-        <label style={labelStyle}>[P] Plan</label>
+        <label className="block text-xs text-zinc-500 mb-1 font-semibold">
+          [P] Plan
+        </label>
         <textarea
           name="plan"
           value={form.plan}
           onChange={handleChange}
           required
           rows={3}
-          style={textareaStyle}
+          className="w-full bg-zinc-950 text-zinc-200 border border-zinc-800 rounded px-3 py-2 text-sm font-[inherit] resize-y focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-zinc-700"
           placeholder="Tratamiento, indicaciones y fármacos..."
         />
       </div>
 
-      <button type="submit" disabled={loading} style={buttonStyle}>
+      <button
+        type="submit"
+        disabled={loading}
+        className="self-end px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-900 disabled:cursor-not-allowed text-white text-sm font-semibold rounded transition-colors cursor-pointer"
+      >
         {loading ? "Cifrando en RAM..." : "Guardar en Registro Local"}
       </button>
     </form>
   );
 }
-
-// Estilos modulares reutilizables
-const formStyle: React.CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  gap: "16px",
-  background: "#18181b",
-  padding: "20px",
-  borderRadius: "8px",
-  border: "1px solid #27272a",
-};
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  fontSize: "13px",
-  color: "#a1a1aa",
-  marginBottom: "4px",
-  fontWeight: "600",
-};
-const textareaStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "10px",
-  borderRadius: "6px",
-  border: "1px solid #27272a",
-  background: "#09090b",
-  color: "#f4f4f5",
-  fontSize: "14px",
-  fontFamily: "inherit",
-  resize: "vertical",
-  boxSizing: "border-box",
-};
-const buttonStyle: React.CSSProperties = {
-  padding: "10px 20px",
-  background: "#2563eb",
-  color: "#fff",
-  border: "none",
-  borderRadius: "6px",
-  fontWeight: "600",
-  cursor: "pointer",
-  alignSelf: "flex-end",
-};

@@ -1,8 +1,9 @@
-# 🩺 Historia Clínica Digital — Simplex Health Core
+
+# 🩺 Simplex Health Core — Historia Clínica Digital
 
 Aplicación de escritorio nativa orientada a la gestión de historias clínicas y telemedicina asíncrona con un enfoque **Local-First** y arquitectura de seguridad **Zero-Knowledge (Cifrado de Extremo a Extremo)**.
 
-El sistema garantiza la máxima privacidad procesando y cifrando toda la información médica sensible directamente en la RAM del hardware local antes de persistirla en el disco o sincronizarla. El servidor remoto (PocketBase) actúa únicamente como un "tubo ciego" que almacena texto cifrado, sin capacidad de leer la información.
+El sistema garantiza la máxima privacidad procesando y cifrando toda la información médica sensible directamente en la RAM del hardware local antes de persistirla en el disco o sincronizarla. El servidor remoto actuará en el futuro únicamente como un "tubo ciego" que almacena texto cifrado, sin capacidad de leer la información.
 
 ---
 
@@ -12,20 +13,22 @@ La arquitectura está dividida de forma estricta en dos capas de alto rendimient
 
 * **Backend Nativo (Core - Rust):**
   * **Rust:** Motor principal encargado de la criptografía, seguridad y acceso a datos.
-  * **Tauri v2:** Puente IPC (Inter-Process Communication) multiplataforma de consumo ultra-bajo.
+  * **Tauri v2:** Puente IPC multiplataforma de consumo ultra-bajo.
   * **SQLite (`rusqlite`):** Base de datos relacional embebida, garantizando autonomía total *offline*.
   * **AES-GCM-256:** Cifrado autenticado para texto médico (Campos SOAP, Nombres).
   * **Argon2id:** Hashing de contraseñas y derivación de claves (KDF).
 * **Frontend (UI):**
   * **React + TypeScript:** Interfaz declarativa, tipada y reactiva.
+  * **Tailwind CSS:** Framework de utilidades CSS para diseño rápido, consistente y responsivo.
   * **Vite:** Entorno de compilación rápida con HMR (Hot Module Replacement).
   * **pnpm:** Gestor de paquetes eficiente mediante *hard links*.
 
 ---
 
-## 📂 Arquitectura del Proyecto (Backend Core)
+## 📂 Arquitectura del Proyecto
 
-El backend implementa un diseño modular estricto para evitar dependencias circulares. El acceso a la base de datos y a la criptografía está aislado mediante patrones de diseño avanzados.
+### Backend Core (Rust)
+Diseño modular estricto para evitar dependencias circulares. El acceso a la base de datos y a la criptografía está aislado mediante patrones de diseño avanzados.
 
 ```text
 src-tauri/src/
@@ -33,28 +36,51 @@ src-tauri/src/
 ├── lib.rs               # Orquestador de Tauri, inyección de estados globales (DbState, CryptoState).
 ├── lib_types.rs         # Contenedores de estado seguro (Mutex<Option<T>>).
 │
-├── vault.rs             # [FASE 1] Gestión de Bóvedas criptográficas por usuario (Cold Start).
-├── auth.rs              # [FASE 1] Hashing Argon2id para autenticación de usuarios.
-├── crypto.rs            # Motor matemático puro (AES-GCM, Nonces, SHA-256 Blind Index).
+├── vault.rs             # Gestión de Bóvedas criptográficas por usuario (Cold Start).
+├── auth.rs              # Hashing Argon2id para autenticación de usuarios.
+├── crypto.rs            # Motor matemático puro (AES-GCM, Nonces OsRng, SHA-256 Blind Index).
 ├── database.rs          # Inicialización física de SQLite y esquemas relacionales.
 │
 └── commands/            # Controladores de API interna (Aduana de peticiones de React).
     ├── mod.rs           # Exportación plana y Helpers (`with_conn`, `get_key`).
     ├── auth_commands.rs # Endpoints de registro, login y desbloqueo de bóveda.
     ├── patient_commands.rs # Endpoints de gestión de pacientes (CRUD cifrado).
+    ├── metric_commands.rs  # Endpoints de métricas clínicas (EAV y cifrado selectivo).
     └── soap_commands.rs     # Endpoints de notas médicas SOAP (Cifrado por campo).
 ```
 
+### Frontend UI (React)
+Implementación de un **Design System** propio basado en componentes atómicos reutilizables, separando la lógica de negocio de la presentación visual.
+
+```text
+src/components/
+├── ui/                  # Design System Atómico (Sin lógica de negocio)
+│   ├── Button.tsx        # Botones con variantes (Primary, Ghost, Danger) y estados de carga.
+│   ├── Card.tsx          # Contenedores estandarizados con estados hover opcionales.
+│   ├── Input.tsx         # Inputs de texto y contraseñas estilizados.
+│   ├── Textarea.tsx      # Áreas de texto redimensionables.
+│   └── Alert.tsx         # Alertas visuales contextuales (Error, Success, Info).
+│
+├── AuthBox.tsx           # Flujo de autenticación y creación de bóvedas.
+├── PatientManager.tsx    # Admisión y padrón de pacientes.
+├── PatientSelector.tsx   # Buscador relacional Zero-Knowledge con debounce.
+├── SoapForm.tsx          # Redacción de evoluciones clínicas (Cifrado RAM -> Disco).
+├── SoapHistory.tsx       # Lectura y visualización del historial (Disco -> RAM -> UI).
+├── MetricQuickForm.tsx  # Registro rápido de variables clínicas numéricas.
+└── MetricViewer.tsx     # Listado crudo de métricas desidentificadas.
+```
+
 ### Principios de Diseño del Core
-1. **Patrón `with_conn`:** Ningún comando saca la conexión a la base de datos de su `Mutex`. Se le inyecta un *closure* para garantizar que el lock se libere instantáneamente después de la query, evitando congelamientos de UI.
+1. **Patrón `with_conn`:** Ningún comando saca la conexión a la base de datos de su `Mutex`. Se le inyecta un *closure* para garantizar que el lock se libere instantáneamente, evitando congelamientos de UI.
 2. **Inyección de Dependencias:** Los comandos que requieren cifrado reciben `State<'_, CryptoState>`, extraen la llave maestra y si el Vault no fue desbloqueado, fallan de forma segura.
+3. **UI Desacoplada:** Los componentes de `/ui` no conocen la estructura de la base de datos ni las rutas de la API, solo reciben `props` primitivas.
 
 ---
 
 ## 🔒 Especificación de Seguridad (Zero-Knowledge & Vault)
 
 ### 1. Ciclo de Vida de la Clave Maestra (Cold Start)
-El sistema no utiliza claves hardcodeadas. La clave de cifrado de toda la aplicación nace y muere en la RAM:
+El sistema no utiliza claves hardcodeadas. La clave de cifrado nace y muere en la RAM:
 1. El usuario ingresa su contraseña en la UI.
 2. Rust verifica el hash en la tabla `users` (Argon2id).
 3. La misma contraseña se usa como semilla para derivar 32 bytes mediante Argon2id en modo KDF.
@@ -62,72 +88,50 @@ El sistema no utiliza claves hardcodeadas. La clave de cifrado de toda la aplica
 5. Al cerrar la app, la RAM se destruye. La clave deja de existir.
 
 ### 2. Aislamiento Multi-Usuario (Vaults)
-En entornos de policonsultorio, cada médico tiene su propio archivo de bóveda (`vault_{user_id}.bin`).
-* Si el Dr. House cifra una nota, utiliza su llave derivada.
-* Si la Dra. Cameron intenta leer esa misma nota, el descifrado fallará (Error AES-GCM), aislando las consultas de forma criptográfica por defecto.
+Cada médico tiene su propio archivo de bóveda (`vault_{user_id}.bin`). Las notas cifradas por el Dr. House no pueden ser descifradas por la Dra. Cameron (aislamiento criptográfico por defecto) sin necesidad de lógica de permisos compleja.
 
-### 3. Cifrado Clínico Granular (SOAP)
-Cada bloque del registro clínico (Subjetivo, Objetivo, Análisis, Plan) se cifra de forma independiente con un **Nonce único de 12 bytes** generado por `OsRng`. Esto evita ataques de análisis de patrones en el disco duro.
+### 3. Cifrado Clínico Granular (SOAP) y Desidentificación (EAV)
+* **Texto (SOAP, Nombres):** Cifrado independiente por campo con un **Nonce único de 12 bytes** (`OsRng`) por inserción.
+* **Métricas (EAV):** Variables numéricas (`value_num`) almacenadas en texto plano desidentificado para permitir cálculos matemáticos y gráficos instantáneos (<1ms) sin comprometer la identidad del paciente. Notas opcionales van cifradas.
 
 ### 4. Prevención de Duplicados (Blind Index)
-Se genera un hash determinista **SHA-256** combinando el DNI del paciente y una `BLIND_INDEX_SALT`. La base de datos puede rechazar duplicados mediante `UNIQUE` sobre este hash, **sin conocer jamás la identidad real del paciente**.
+Hash determinista **SHA-256** (DNI + `BLIND_INDEX_SALT`) para rechazar registros duplicados mediante `UNIQUE` en SQLite **sin conocer la identidad real del paciente**.
 
 ---
 
 ## 🗺️ Mapa de Ruta del Desarrollo (Roadmap)
 
 ### 🟩 Fase 1: Almacenamiento Local y Autenticación (¡Completado!)
-* [x] Inicialización del entorno híbrido (Tauri v2 + pnpm + React).
-* [x] Integración de criptografía (`aes-gcm`, `rand`, `argon2`, `hex`).
-* [x] Sistema de registro y login local con roles (`admin`, `medico`, `paciente`).
-* [x] **Sistema de Vault Local (`vault.rs`):** Derivación de clave maestra desde la contraseña del usuario y archivo validador `.bin`.
-* [x] **Refactorización Arquitectónica:** Migración de `commands.rs` monolítico a módulos separados con patrón `with_conn` para control estricto de Mutex.
-* [x] Eliminación completa de claves de cifrado hardcodeadas (`MOCK_MASTER_KEY`).
+* [x] Entorno Tauri v2 + pnpm + React + Tailwind CSS.
+* [x] Sistema de Vault Local (`vault.rs`) y eliminación de claves hardcodeadas.
+* [x] Refactorización a módulos con patrón `with_conn`.
 
-### 🟩 Fase 2: Robustez del Core Local y Relaciones (¡Completado!)
-* [x] Índice Ciego (Blind Index) para control de unicidad Zero-Knowledge.
-* [x] Buscador relacional clínico (Descifrado en RAM y filtrado en Rust).
-* [x] Flujo completo de prueba: Crear paciente -> Redactar nota SOAP -> Cerrar app -> Reabrir -> Descifrar exitoso.
+### 🟩 Fase 2: Robustez del Core Local (¡Completado!)
+* [x] Índice Ciego (Blind Index) y Buscador Relacional Clínico.
+* [x] Creación de Design System propio (`/ui`).
 
-### 🟨 Fase 3: Métricas Clínicas (EAV Local) (Próximo paso)
-* [ ] Comandos de inserción/lectura para la tabla `patient_metrics` (Entity-Attribute-Value).
-* [ ] Lógica de cifrado selectivo: Valores numéricos (`REAL`) en claro para gráficos, notas opcionales (`TEXT`) cifradas con la llave del `CryptoState`.
-* [ ] Integración de librería de gráficos en React (ej. Recharts) para mostrar evolución de peso/presión.
+### 🟨 Fase 3: Métricas Clínicas (EAV Local) (¡Completado!)
+* [x] Comandos de inserción/lectura para `patient_metrics`.
+* [x] Cifrado selectivo (Numéricas en claro, notas cifradas).
+* [x] Interfaz rápida de registro y listado de variables.
 
-### 🟧 Fase 4: Infraestructura y Sincronización Híbrida
+### 🟧 Fase 4: Infraestructura y Sincronización Híbrida (Próximo paso)
 * [ ] Despliegue de VPS con Dokploy y PocketBase.
-* [ ] Configuración de colecciones "Ciegas" en PocketBase (campos llamados `ciphertext` y `nonce`).
-* [ ] **Sync Engine (`tokio`):** Background worker en Rust que hace polling de registros `is_synced = 0`, los empuja vía HTTPS (`reqwest`) y actualiza el flag local a `1`.
+* [ ] **Sync Engine (`tokio`):** Background worker que hace polling de `is_synced = 0` y empuja vía HTTPS.
 
 ### 🟥 Fase 5: Teleconsulta Asíncrona (Multi-Usuario)
-* [ ] Creación de tabla `asynchronous_threads` (Hilos de conversación por motivo médico).
-* [ ] Flujo de linkage: Vincular un usuario de rol `paciente` con un ID de la tabla `patients`.
-* [ ] **El gran desafío criptográfico:** Implementar cifrado asimétrico (o clave de sesión compartida) para que el médico y el paciente puedan desencriptar el mismo hilo desde dispositivos distintos.
+* [ ] Tabla `asynchronous_threads` y linkage paciente-usuario.
+* [ ] Cifrado asimétrico o clave de sesión compartida.
 
 ### ⬜ Fase 6: Interoperabilidad (Futuro)
-* [ ] Motor de exportación en Rust que consolide el historial en un "Paciente Index" JSON.
-* [ ] Puente a estándares internacionales HL7 v2/v3 o FHIR (potencialmente asistido por IA local).
+* [ ] Motor de exportación JSON y traducción a estándares FHIR (IA-Driven).
 
 ---
 
 ## 🚀 Comandos Útiles de Desarrollo
 
-Para levantar el entorno (compila Rust en segundo plano e inicia HMR de React):
 ```bash
-pnpm tauri dev
-```
-
-Para añadir dependencias al frontend:
-```bash
-pnpm add <nombre-paquete>
-```
-
-Para añadir dependencias al backend criptográfico (ejecutar dentro de `src-tauri`):
-```bash
-cargo add <nombre-crate>
-```
-
-Para compilar en modo release (optimizado para producción):
-```bash
-pnpm tauri build
+pnpm tauri dev      # Levanta el entorno (Rust + React HMR)
+pnpm tauri build    # Compila en modo release para producción
+cargo add <crate>   # Añade dependencias al backend (desde src-tauri)
 ```
