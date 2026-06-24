@@ -1,5 +1,8 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { Button } from "./ui/Button";
+import { Input } from "./ui/Input"; // 🚀 Importamos el Design System
+import { usePatientRegistryStore } from "../stores/usePatientRegistryStore";
 
 interface PatientManagerProps {
   userId: string;
@@ -8,39 +11,42 @@ interface PatientManagerProps {
 export function PatientManager({ userId }: PatientManagerProps) {
   const [fullName, setFullName] = useState("");
   const [identityDoc, setIdentityDoc] = useState("");
-  const [patients, setPatients] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const fetchPatients = async () => {
-    try {
-      const res = await invoke<any[]>("get_patients_list");
-      setPatients(res);
-    } catch (err) {
-      console.error(err);
-    }
-  };
+  const { patients, isLoading, fetchPatients, addPatientLocally } =
+    usePatientRegistryStore();
 
   useEffect(() => {
     fetchPatients();
-  }, []);
+  }, [fetchPatients]);
 
   const handleSubmit = async (e: React.SubmitEvent) => {
+    // ✅ Cambié a FormEvent que es el estándar para <form>
     e.preventDefault();
     setError(null);
-
+    setLoading(true);
     try {
-      await invoke("create_patient", {
+      const newId = await invoke<string>("create_patient", {
         form: {
           created_by_user_id: userId,
           full_name: fullName,
           identity_doc: identityDoc,
         },
       });
+
+      addPatientLocally({
+        id: newId,
+        full_name: fullName,
+        created_at: new Date().toISOString(),
+      });
+
       setFullName("");
       setIdentityDoc("");
-      fetchPatients();
     } catch (err) {
       setError(String(err));
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -59,71 +65,63 @@ export function PatientManager({ userId }: PatientManagerProps) {
         )}
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-          <div>
-            <label className="block text-xs text-zinc-500 mb-1 font-semibold">
-              Nombre Completo
-            </label>
-            <input
-              type="text"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              required
-              className="w-full bg-zinc-950 text-zinc-200 border border-zinc-800 rounded px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-zinc-700"
-              placeholder="ej: Juan Pérez"
-            />
-          </div>
+          {/* ✅ MAGIA DEL DESIGN SYSTEM: 5 líneas de código en lugar de 12 */}
+          <Input
+            label="Nombre Completo"
+            type="text"
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            required
+            placeholder="ej: Juan Pérez"
+          />
 
-          <div>
-            <label className="block text-xs text-zinc-500 mb-1 font-semibold">
-              Documento de Identidad (DNI / Pasaporte)
-            </label>
-            <input
-              type="text"
-              value={identityDoc}
-              onChange={(e) => setIdentityDoc(e.target.value)}
-              required
-              className="w-full bg-zinc-950 text-zinc-200 border border-zinc-800 rounded px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-zinc-700"
-              placeholder="ej: 95123456"
-            />
-          </div>
+          <Input
+            label="Documento de Identidad (DNI / Pasaporte)"
+            type="text"
+            value={identityDoc}
+            onChange={(e) => setIdentityDoc(e.target.value)}
+            required
+            placeholder="ej: 95123456"
+          />
 
-          <button
-            type="submit"
-            className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded transition-colors cursor-pointer mt-2"
-          >
+          <Button type="submit" isLoading={loading} className="w-full mt-2">
             Cifrar e Ingresar
-          </button>
+          </Button>
         </form>
       </div>
 
+      {/* Padrón de Pacientes (Sin cambios, ya estaba perfecto) */}
       <div className="bg-zinc-900 p-5 rounded-lg border border-zinc-800">
         <h3 className="text-base font-semibold text-zinc-100 mb-4">
           📇 Padrón de Pacientes Registrados
         </h3>
 
-        <div className="flex flex-col gap-2.5">
-          {patients.length === 0 ? (
-            <p className="text-sm text-zinc-600">
-              No hay pacientes en el sistema.
-            </p>
-          ) : (
-            patients.map((p) => (
+        {isLoading ? (
+          <p className="text-sm text-zinc-600 animate-pulse">
+            Cargando padrón cifrado...
+          </p>
+        ) : patients.length === 0 ? (
+          <p className="text-sm text-zinc-600">
+            No hay pacientes en el sistema.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-2.5 max-h-75 overflow-y-auto pr-1">
+            {patients.map((p) => (
               <div
                 key={p.id}
-                className="bg-zinc-950 p-3 rounded border border-zinc-800"
+                className="bg-zinc-950 p-3 rounded border border-zinc-800 hover:border-zinc-700 transition-colors"
               >
-                <div>
-                  <strong className="text-sm text-zinc-200">
-                    {p.full_name}
-                  </strong>
-                </div>
-                <div className="text-[11px] text-zinc-600 font-mono mt-1">
+                <strong className="text-sm text-zinc-200">{p.full_name}</strong>
+                <div
+                  className="text-[11px] text-zinc-600 font-mono mt-1 truncate"
+                  title={p.id}
+                >
                   UUID: {p.id}
                 </div>
               </div>
-            ))
-          )}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

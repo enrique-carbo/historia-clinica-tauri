@@ -3,22 +3,35 @@ import { invoke } from "@tauri-apps/api/core";
 
 interface PatientSelectorProps {
   onSelectPatient: (patient: { id: string; full_name: string }) => void;
+  onPatientSelected: () => void;
   selectedPatientId: string | null;
 }
 
 export function PatientSelector({
   onSelectPatient,
+  onPatientSelected,
   selectedPatientId,
 }: PatientSelectorProps) {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<any[]>([]);
+  const [results, setResults] = useState<{ id: string; full_name: string }[]>(
+    [],
+  );
+
+  const handleSelect = (p: { id: string; full_name: string }) => {
+    if (p.id === selectedPatientId) return;
+    onSelectPatient(p);
+    onPatientSelected();
+  };
 
   useEffect(() => {
     const delayDebounce = setTimeout(async () => {
       try {
-        const list = await invoke<any[]>("search_patients", {
-          queryName: query,
-        });
+        const list = await invoke<{ id: string; full_name: string }[]>(
+          "search_patients",
+          {
+            queryName: query,
+          },
+        );
         setResults(list);
       } catch (err) {
         console.error("Error al buscar pacientes:", err);
@@ -53,7 +66,7 @@ export function PatientSelector({
             return (
               <div
                 key={p.id}
-                onClick={() => onSelectPatient(p)}
+                onClick={() => handleSelect(p)}
                 className={`p-2.5 rounded border cursor-pointer transition-all duration-200 ease-in-out
                   ${
                     isSelected

@@ -107,6 +107,15 @@ pub fn unlock_vault(
 }
 
 #[tauri::command]
+pub fn lock_vault(state: State<'_, CryptoState>) -> Result<(), String> {
+    // Como CryptoState usa Mutex<Option<T>>, simplemente le ponemos None.
+    // Esto hace que la clave maestra se borre de la RAM inmediatamente.
+    let mut crypto_state = state.0.lock().unwrap();
+    *crypto_state = None;
+    Ok(())
+}
+
+#[tauri::command]
 pub fn test_crypto_flow(
     text: String,
     crypto_state: State<'_, CryptoState>,

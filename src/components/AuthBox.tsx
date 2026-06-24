@@ -3,22 +3,18 @@ import { invoke } from "@tauri-apps/api/core";
 import { Button } from "./ui/Button";
 import { Alert } from "./ui/Alert";
 import { Input } from "./ui/Input";
+import { useAuthStore } from "../stores/useAuthStore";
 
-interface AuthBoxProps {
-  onAuthSuccess: (user: {
-    user_id: string;
-    username: string;
-    role: string;
-  }) => void;
-}
-
-export function AuthBox({ onAuthSuccess }: AuthBoxProps) {
+export function AuthBox() {
   const [isLogin, setIsLogin] = useState(true);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("medico");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // <-- Extraemos la función que actualiza el estado global
+  const unlockVault = useAuthStore((state) => state.unlockVault);
 
   const handleSubmit = async (e: React.SubmitEvent) => {
     e.preventDefault();
@@ -40,13 +36,13 @@ export function AuthBox({ onAuthSuccess }: AuthBoxProps) {
           password: password,
         });
 
-        onAuthSuccess(user);
+        // INYECTAMOS DIRECTAMENTE EN EL ESTADO GLOBAL:
+        unlockVault(user);
       } else {
         await invoke<string>("register_user", {
           form: { username, password_plain: password, role },
         });
 
-        // En lugar de alert, cambiamos a la vista de login suavemente
         setIsLogin(true);
         setPassword("");
       }

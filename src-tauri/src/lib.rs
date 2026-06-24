@@ -45,6 +45,7 @@ pub fn run() {
             commands::get_patients_list,
             commands::search_patients,
             commands::unlock_vault,
+            commands::lock_vault,
             commands::save_patient_metric,
             commands::get_patient_metrics
         ])

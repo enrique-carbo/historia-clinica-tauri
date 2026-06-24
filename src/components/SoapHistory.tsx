@@ -1,5 +1,7 @@
+import { SoapRecord } from "../stores/usePatientStore";
+
 interface SoapHistoryProps {
-  records: any[];
+  records: SoapRecord[];
 }
 
 export function SoapHistory({ records }: SoapHistoryProps) {
@@ -16,7 +18,7 @@ export function SoapHistory({ records }: SoapHistoryProps) {
       {records.map((record) => (
         <div
           key={record.id}
-          className="bg-zinc-900 p-5 rounded-lg border border-zinc-800"
+          className="bg-zinc-900 p-5 rounded-lg border border-zinc-800 hover:border-zinc-700 transition-colors"
         >
           {/* Cabecera con Fecha y Badge de Sync */}
           <div className="flex justify-between items-center border-b border-zinc-800 pb-2.5 mb-3">
@@ -35,27 +37,39 @@ export function SoapHistory({ records }: SoapHistoryProps) {
           </div>
 
           {/* Cuerpo SOAP */}
-          <div className="flex flex-col gap-2 text-sm">
+          <div className="flex flex-col gap-3 text-sm">
             <div>
-              <strong className="text-zinc-400">S:</strong>{" "}
-              <span className="text-zinc-300">{record.subjetivo}</span>
+              <strong className="text-zinc-400 font-mono">S:</strong>{" "}
+              {/* 🚀 whitespace-pre-wrap para que los "Enter" del médico se vean */}
+              <span className="text-zinc-300 whitespace-pre-wrap">
+                {record.subjetivo}
+              </span>
             </div>
             <div>
-              <strong className="text-zinc-400">O:</strong>{" "}
-              <span className="text-zinc-300">{record.objetivo}</span>
+              <strong className="text-zinc-400 font-mono">O:</strong>{" "}
+              <span className="text-zinc-300 whitespace-pre-wrap">
+                {record.objetivo}
+              </span>
             </div>
             <div>
-              <strong className="text-zinc-400">A:</strong>{" "}
-              <span className="text-zinc-300">{record.analisis}</span>
+              <strong className="text-zinc-400 font-mono">A:</strong>{" "}
+              <span className="text-zinc-300 whitespace-pre-wrap">
+                {record.analisis}
+              </span>
             </div>
             <div>
-              <strong className="text-zinc-400">P:</strong>{" "}
-              <span className="text-zinc-300">{record.plan}</span>
+              <strong className="text-zinc-400 font-mono">P:</strong>{" "}
+              <span className="text-zinc-300 whitespace-pre-wrap">
+                {record.plan}
+              </span>
             </div>
           </div>
 
           {/* ID Oculto en el pie */}
-          <div className="text-[11px] text-zinc-700 font-mono mt-3">
+          <div
+            className="text-[11px] text-zinc-700 font-mono mt-3 truncate"
+            title={record.id}
+          >
             ID: {record.id}
           </div>
         </div>

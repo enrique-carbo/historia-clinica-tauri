@@ -75,8 +75,8 @@ Hash determinista **SHA-256** del DNI + una sal secreta. Permite rechazar duplic
 * [x] Flujo completo: Crear paciente -> Redactar nota SOAP -> Cerrar app -> Reabrir -> Descifrar exitoso.
 
 ### 🟨 Fase 3: Métricas Clínicas (EAV Local) (En Progreso)
-* [ ] Comandos de inserción/lectura para `patient_metrics` (Entity-Attribute-Value).
-* [ ] Cifrado selectivo: Valores numéricos (`REAL`) en claro, notas opcionales (`TEXT`) cifradas.
+* [x] Comandos de inserción/lectura para `patient_metrics` (Entity-Attribute-Value).
+* [x] Cifrado selectivo: Valores numéricos (`REAL`) en claro, notas opcionales (`TEXT`) cifradas.
 * [ ] Integración de gráficos en React (ej. Recharts) para evolución de peso/presión.
 
 ### 🟧 Fase 4: Sincronización Híbrida (PocketBase)
