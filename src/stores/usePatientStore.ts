@@ -32,6 +32,7 @@ interface PatientState {
   history: SoapRecord[];
   isLoadingHistory: boolean;
   metrics: Metric[];
+  resetAllPatientData: () => void;
 
   // Acciones
   selectPatient: (patient: Patient | null) => void;
@@ -87,5 +88,12 @@ export const usePatientStore = create<PatientState>((set, get) => ({
     } catch (err) {
       console.error("Error al leer métricas:", err);
     }
+  },
+  resetAllPatientData: () => {
+    set({
+      activePatient: null,
+      history: [],
+      metrics: [],
+    });
   },
 }));
