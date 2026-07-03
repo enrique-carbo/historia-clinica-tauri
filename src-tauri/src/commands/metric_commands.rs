@@ -7,6 +7,7 @@ use crate::lib_types::{CryptoState, DbState};
 #[derive(serde::Deserialize)]
 pub struct SaveMetricInput {
     pub paciente_id: String,
+    pub medico_id: String, // <--- NUEVO: Necesario para la DB
     pub metric_type: String,
     pub sub_metric: String,
     pub value_num: f64,
@@ -38,16 +39,17 @@ pub fn save_patient_metric(
 
     super::with_conn(&db_state, |conn| {
         conn.execute(
-            "INSERT INTO patient_metrics (id, paciente_id, metric_type, sub_metric, value_num, value_text_ciphertext, value_text_nonce, measured_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            "INSERT INTO patient_metrics (id, paciente_id, medico_id, metric_type, sub_metric, value_num, value_text_ciphertext, value_text_nonce, measured_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             rusqlite::params![
                 &metric_id,
                 &form.paciente_id,
+                &form.medico_id, // <--- NUEVO
                 &metric_type_norm,
                 &sub_metric_norm,
-                form.value_num, // Se pasa directamente como f64
-                text_ciphertext, // Si es None, ¡esto se convierte mágicamente en NULL!
-                text_nonce,      // Si es None, ¡esto se convierte mágicamente en NULL!
+                form.value_num,
+                text_ciphertext,
+                text_nonce,
                 &now,
             ],
         ).map_err(|e| format!("Error al guardar métrica: {}", e))?;
@@ -100,6 +102,7 @@ pub fn get_patient_metrics(
                             ciphertext: ciph,
                             nonce,
                         };
+                        // Pasamos master_key directamente
                         crate::crypto::decrypt_text(&enc_data, &master_key)
                             .unwrap_or_else(|_| "[Error al descifrar nota]".to_string())
                     }

@@ -5,3 +5,7 @@ pass: 12345678
 Paciente
 user: enrique_pac
 pass: 12345678
+
+Admin
+user: enrique_adm
+pass: 12345678

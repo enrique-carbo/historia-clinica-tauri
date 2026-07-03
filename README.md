@@ -15,6 +15,8 @@ La arquitectura está dividida de forma estricta en dos capas de alto rendimient
   * **Tauri v2:** Puente IPC multiplataforma de consumo ultra-bajo.
   * **SQLite (`rusqlite`):** Base de datos relacional embebida (acceso directo sin plugins de Tauri para mantener el patrón `with_conn`), garantizando autonomía total *offline*.
   * **AES-GCM-256:** Cifrado autenticado para texto médico (Campos SOAP, Nombres).
+  * **Ed25519 (Dalek):** Firma digital asimétrica para garantizar el No-Repudio y validez legal de las notas médicas.
+  * **SHA-256:** Hashing determinista para Índices Ciegos y huellas digitales de documentos.
   * **Argon2id:** Hashing de contraseñas y derivación de claves (KDF).
 
 * **Frontend (UI):**
@@ -34,20 +36,20 @@ Diseño modular estricto para evitar dependencias circulares. El acceso a la bas
 ```text
 src-tauri/src/
 ├── main.rs              # Punto de entrada al ejecutable nativo.
-├── lib.rs               # Orquestador de Tauri, inyección de estados globales (DbState, CryptoState).
+├── lib.rs               # Orquestador de Tauri, inyección de estados globales (DbState, CryptoState, SigningState).
 ├── lib_types.rs         # Contenedores de estado seguro (Mutex<Option<T>>).
 │
-├── vault.rs             # Gestión de Bóvedas criptográficas por usuario (Cold Start).
+├── vault.rs             # Gestión de Bóvedas criptográficas por usuario (Cold Start + Llave Privada de Firma).
 ├── auth.rs              # Hashing Argon2id para autenticación de usuarios.
-├── crypto.rs            # Motor matemático puro (AES-GCM, Nonces OsRng, SHA-256 Blind Index).
-├── database.rs          # Inicialización física de SQLite y esquemas relacionales.
+├── crypto.rs            # Motor matemático puro (AES-GCM, Ed25519, Nonces OsRng, SHA-256 Blind Index).
+├── database.rs          # Inicialización física de SQLite (WAL Mode activado) y esquemas relacionales.
 │
 └── commands/            # Controladores de API interna (Aduana de peticiones de React).
     ├── mod.rs           # Exportación plana y Helpers (`with_conn`, `get_key`).
     ├── auth_commands.rs # Endpoints de registro, login y desbloqueo de bóveda.
-    ├── patient_commands.rs # Endpoints de gestión de pacientes (CRUD cifrado y Blind Index).
+    ├── patient_commands.rs # Endpoints de gestión de pacientes (Blob Cifrado + Índices Ciegos).
     ├── metric_commands.rs  # Endpoints de métricas clínicas (EAV y cifrado selectivo).
-    └── soap_commands.rs     # Endpoints de notas médicas SOAP (Cifrado por campo).
+    └── soap_commands.rs     # Endpoints de notas médicas SOAP (Cifrado por campo + Firma Digital).
 ```
 
 ### Frontend UI (React)
@@ -61,18 +63,24 @@ src/
 │   └── usePatientRegistryStore.ts # Estado del Padrón (Optimistic UI al dar de alta).
 │
 ├── components/
+│   ├──layouts/
+│   │   └── DashboardLayout.tsx
 │   ├── ui/                 # Design System Atómico (Sin lógica de negocio ni llamadas a Tauri)
 │   │   ├── Button.tsx      # Botones con variantes y estados de carga (isLoading).
 │   │   ├── Card.tsx        # Contenedores estandarizados.
 │   │   ├── Input.tsx       # Inputs de texto y contraseñas estilizados.
 │   │   ├── Textarea.tsx    # Áreas de texto redimensionables.
 │   │   └── Alert.tsx       # Alertas visuales contextuales.
+│   ├── views/
+│   │   ├── AdminView.tsx
+│   │   ├── MedicoView.tsx
+│   │   └── PacienteView.tsx
 │   │
 │   ├── AuthBox.tsx         # Flujo de autenticación (Desacoplado, actualiza Zustand directamente).
 │   ├── PatientManager.tsx  # Admisión y padrón (Actualiza Registry Store vía Optimistic UI).
 │   ├── PatientSelector.tsx # Buscador relacional con debounce (Event-Driven hacia los Stores).
-│   ├── SoapForm.tsx        # Redacción SOAP (Cifrado RAM -> Disco).
-│   ├── SoapHistory.tsx     # Historial estrictamente tipado (soporte whitespace-pre-wrap).
+│   ├── SoapForm.tsx        # Redacción SOAP (Cifrado RAM -> Disco + Firma en RAM).
+│   ├── SoapHistory.tsx     # Historial (Verificación de firma criptográfica en tiempo real).
 │   ├── MetricQuickForm.tsx # Registro rápido EAV (Reseteo inteligente de dependencias).
 │   └── MetricViewer.tsx    # Listado de métricas desidentificadas (Lectura directa del Store).
 ```
@@ -88,23 +96,29 @@ src/
 
 ## 🔒 Especificación de Seguridad (Zero-Knowledge & Vault)
 
-### 1. Ciclo de Vida de la Clave Maestra (Cold Start)
-El sistema no utiliza claves hardcodeadas. La clave de cifrado nace y muere en la RAM:
+### 1. Ciclo de Vida de las Claves (Cold Start)
+El sistema no utiliza claves hardcodeadas. Las claves nacen y mueren en la RAM:
 1. El usuario ingresa su contraseña en la UI.
 2. React llama a `unlock_vault`. Rust verifica el hash en la tabla `users` (Argon2id).
-3. La misma contraseña se usa como semilla para derivar 32 bytes mediante Argon2id en modo KDF.
-4. Esos 32 bytes se inyectan en el `CryptoState` (RAM volátil de Rust).
-5. React actualiza `useAuthStore` (`isVaultUnlocked: true`). La clave nunca cruza hacia el entorno JavaScript.
-6. Al cerrar sesión, React llama a `lock_vault`. Rust destruye el `Option` de la RAM. La clave deja de existir.
+3. La misma contraseña se usa como semilla para derivar 32 bytes mediante Argon2id en modo KDF (Llave Maestra).
+4. Se desbloquea el archivo `vault_{user_id}.bin`, el cual contiene la Llave Privada de Firma (Ed25519) cifrada con la Llave Maestra.
+5. Ambas llaves se inyectan en el `CryptoState` y `SigningState` (RAM volátil de Rust).
+6. Al cerrar sesión, React llama a `lock_vault`. Rust destruye los `Option` de la RAM. Las claves dejan de existir.
 
 ### 2. Aislamiento Multi-Usuario (Vaults)
 Cada médico tiene su propio archivo de bóveda (`vault_{user_id}.bin`). Las notas cifradas por el Dr. House no pueden ser descifradas por la Dra. Cameron (aislamiento criptográfico por defecto) sin necesidad de lógica de permisos compleja.
 
-### 3. Cifrado Clínico Granular (SOAP) y Desidentificación (EAV)
+### 3. Patrón "Blob Cifrado" en Pacientes
+Para evitar consultas lentas descifrando múltiples columnas, los datos demográficos del paciente (DNI, fecha de nacimiento, mail, dirección) se empaquetan en un JSON, se cifran como un solo bloque (`encrypted_data_blob`) y se guardan en SQLite. Solo el Nombre y los Índices Ciegos se mantienen separados para rendimiento del listado.
+
+### 4. Cifrado Clínico Granular (SOAP) y Desidentificación (EAV)
 * **Texto (SOAP, Nombres):** Cifrado independiente por campo con un **Nonce único de 12 bytes** (`OsRng`) por inserción.
 * **Métricas (EAV):** Variables numéricas (`value_num`) almacenadas en texto plano desidentificado para permitir cálculos matemáticos y gráficos instantáneos (<1ms) sin comprometer la identidad del paciente. Notas opcionales van cifradas.
 
-### 4. Prevención de Duplicados (Blind Index)
+### 5. Firma Digital y No-Repudio (Auditoría)
+Cada vez que un médico guarda una nota SOAP, el Core concatena el texto plano, calcula un Hash SHA-256 y lo firma usando su Llave Privada (Ed25519) en RAM. La firma se guarda en la base de datos. Al leer la nota, el sistema utiliza la Llave Pública del médico para verificar matemáticamente que el documento no ha sido alterado desde su creación.
+
+### 6. Prevención de Duplicados (Blind Index)
 Hash determinista **SHA-256** (DNI + `BLIND_INDEX_SALT`) para rechazar registros duplicados mediante `UNIQUE` en SQLite **sin conocer la identidad real del paciente**.
 
 ---
@@ -120,12 +134,14 @@ Hash determinista **SHA-256** (DNI + `BLIND_INDEX_SALT`) para rechazar registros
 * [x] Índice Ciego (Blind Index) y Buscador Relacional Clínico.
 * [x] Creación de Design System propio (`/ui`).
 
-### 🟩 Fase 3: Métricas Clínicas (EAV Local) y Arquitectura Frontend (¡Completado!)
+### 🟩 Fase 3: Métricas, Firmas Digitales y Arquitectura Frontend (¡Completado!)
 * [x] Comandos de inserción/lectura para `patient_metrics`.
 * [x] Cifrado selectivo (Numéricas en claro, notas cifradas).
 * [x] Interfaz rápida de registro y listado de variables.
 * [x] Migración del estado a **Zustand** (Stores de Auth, Patient y Registry).
 * [x] Implementación de **Optimistic UI** y tipado estricto End-to-End.
+* [x] Implementación de **Firma Digital Ed25519** para notas SOAP (No-Repudio).
+* [x] Refactor a Patrón "Blob Cifrado" para datos demográficos de pacientes.
 
 ### 🟧 Fase 4: Infraestructura y Sincronización Híbrida (Próximo paso)
 * [ ] Despliegue de VPS con Dokploy y PocketBase.

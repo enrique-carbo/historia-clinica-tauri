@@ -25,6 +25,7 @@ export interface SoapRecord {
   plan: string;
   is_synced: boolean;
   created_at: string;
+  is_verified: boolean;
 }
 
 interface PatientState {

@@ -10,7 +10,7 @@ mod lib_types;
 mod vault;
 
 // Traemos al alcance el estado que aislamos
-use lib_types::{CryptoState, DbState};
+use lib_types::{CryptoState, DbState, SigningState};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -19,6 +19,7 @@ pub fn run() {
         // ESTADOS GLOBALES
         .manage(DbState(Mutex::new(None)))
         .manage(CryptoState(Mutex::new(None)))
+        .manage(SigningState(Mutex::new(None)))
         // Configuramos la base de datos local al arrancar
         .setup(|app| {
             let app_data_dir = app

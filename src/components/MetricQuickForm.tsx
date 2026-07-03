@@ -3,11 +3,11 @@ import { invoke } from "@tauri-apps/api/core";
 import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
 import { Alert } from "./ui/Alert";
+import { useAuthStore } from "../stores/useAuthStore";
 
 interface Props {
   pacienteId: string;
   onSuccess: () => void;
-  variant: string;
 }
 
 export function MetricQuickForm({ pacienteId, onSuccess }: Props) {
@@ -16,6 +16,8 @@ export function MetricQuickForm({ pacienteId, onSuccess }: Props) {
   const [valor, setValor] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const { activeUser } = useAuthStore();
 
   // 🚀 Resetear la variable dependiente cuando cambia el tipo principal
   const handleTipoChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -32,10 +34,16 @@ export function MetricQuickForm({ pacienteId, onSuccess }: Props) {
     setError(null);
     setLoading(true);
 
+    if (!activeUser) {
+      console.error("No hay un médico activo para firmar esta métrica.");
+      return;
+    }
+
     try {
       await invoke("save_patient_metric", {
         form: {
           paciente_id: pacienteId,
+          medico_id: activeUser.user_id,
           metric_type: tipo,
           sub_metric: subTipo,
           value_num: parseFloat(valor),

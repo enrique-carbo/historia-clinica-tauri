@@ -2,6 +2,7 @@ import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Button } from "./ui/Button";
 import { Textarea } from "./ui/Textarea";
+import { Alert } from "./ui/Alert";
 
 interface SoapFormProps {
   pacienteId: string;
@@ -25,13 +26,11 @@ export function SoapForm({ pacienteId, medicoId, onSuccess }: SoapFormProps) {
     if (error) setError(null);
   };
 
-  // ✅ Estándar de React 19 (sin warnings de deprecación)
   const handleSubmit = async (e: React.SubmitEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
     try {
-      // ✅ Escritura explícita para evitar errores de compilación
       await invoke("save_soap_consultation", {
         form: {
           paciente_id: pacienteId,
@@ -61,12 +60,11 @@ export function SoapForm({ pacienteId, medicoId, onSuccess }: SoapFormProps) {
       </h3>
 
       {error && (
-        <div className="bg-red-950 border border-red-800 text-red-400 p-3 rounded text-xs">
-          Error al cifrar: {error}
+        <div className="p-3 text-xs">
+          <Alert variant="error">Error al cifrar: {error}</Alert>
         </div>
       )}
 
-      {/* ✅ MAGIA DEL DESIGN SYSTEM: Puro contenido, cero HTML repetido */}
       <Textarea
         label="[S] Subjetivo"
         name="subjetivo"

@@ -30,4 +30,5 @@ uuid = { version = "1.23.2", features = ["v4"] }
 chrono = { version = "0.4.45", features = ["serde"] }
 argon2 = "0.5.3"
 sha2 = "0.11.0"
-
+ed25519-dalek = "2.1"
+base64 = "0.22"

@@ -31,21 +31,19 @@ pub fn register_user(form: RegisterInput, db_state: State<'_, DbState>) -> Resul
     let now = chrono::Utc::now().to_rfc3339();
 
     super::with_conn(&db_state, |conn| {
+        // 1. Insertamos el usuario
         conn.execute(
             "INSERT INTO users (id, username, password_hash, role, created_at) VALUES (?1, ?2, ?3, ?4, ?5);",
-            [&user_id, &form.username, &hashed, &form.role, &now],
-        ).map_err(|e| {
-            if e.to_string().contains("UNIQUE constraint failed") {
-                "El nombre de usuario ya existe en este sistema local.".to_string()
-            } else {
-                format!("Error al registrar usuario: {}", e)
-            }
-        })?;
+            rusqlite::params![&user_id, &form.username, &hashed, &form.role, &now],
+        ).map_err(|e| format!("Error al registrar usuario: {}", e))?;
 
-        println!(
-            "👤 [SQLite] Nuevo usuario registrado -> [{}]: {}",
-            form.role, form.username
-        );
+        // 2. Insertamos un perfil profesional VACÍO (sin llaves todavía)
+        conn.execute(
+            "INSERT INTO professional_profiles (user_id, full_name_ciphertext, full_name_nonce, license_number_ciphertext, license_number_nonce, specialty_ciphertext, specialty_nonce, public_key, updated_at)
+             VALUES (?1, '', '', '', '', '', '', '', ?2);",
+            rusqlite::params![&user_id, &now],
+        ).map_err(|e| format!("Error al crear el perfil: {}", e))?;
+
         Ok(user_id)
     })
 }
@@ -87,31 +85,57 @@ pub fn unlock_vault(
     user_id: String,
     password: String,
     app_handle: tauri::AppHandle,
+    db_state: State<'_, crate::lib_types::DbState>,
     crypto_state: State<'_, CryptoState>,
+    signing_state: State<'_, crate::lib_types::SigningState>,
 ) -> Result<bool, String> {
     let app_dir = app_handle
         .path()
         .app_local_data_dir()
         .map_err(|e| format!("Error al obtener ruta del sistema: {}", e))?;
 
-    let master_key = vault::unlock_user_vault(app_dir, &user_id, &password)?;
+    // El vault ahora devuelve 3 cosas: llave_cifrado, llave_firma, y llave_publica_opcional
+    let (master_key, private_signing_key, public_key_opt) =
+        vault::unlock_user_vault(app_dir, &user_id, &password)?;
 
+    // 1. Inyectamos la llave simétrica (AES) en CryptoState
     let mut key_guard = crypto_state.0.lock().unwrap();
     *key_guard = Some(master_key);
 
-    println!(
-        "🔐 [Core] Llave maestra inyectada en memoria para el usuario: {}",
-        user_id
-    );
+    // 2. Inyectamos la llave asimétrica (Ed25519) en SigningState
+    let mut sign_guard = signing_state.0.lock().unwrap();
+    *sign_guard = Some(private_signing_key);
+
+    // 3. NUEVO: Si es primer login, guardamos la llave pública en la DB
+    if let Some(pub_key) = public_key_opt {
+        super::with_conn(&db_state, |conn| {
+            conn.execute(
+                "UPDATE professional_profiles SET public_key = ?1 WHERE user_id = ?2;",
+                rusqlite::params![&pub_key, &user_id],
+            )
+            .map_err(|e| format!("Error al guardar llave pública: {}", e)) // <--- AÑADIR ESTO
+        })?;
+        println!("🔑 [Core] Llave pública guardada en DB para: {}", user_id);
+    }
+
+    println!("🔐 [Core] Bóveda desbloqueada. Llaves inyectadas en RAM.");
     Ok(true)
 }
 
 #[tauri::command]
-pub fn lock_vault(state: State<'_, CryptoState>) -> Result<(), String> {
-    // Como CryptoState usa Mutex<Option<T>>, simplemente le ponemos None.
-    // Esto hace que la clave maestra se borre de la RAM inmediatamente.
-    let mut crypto_state = state.0.lock().unwrap();
-    *crypto_state = None;
+pub fn lock_vault(
+    crypto_state: State<'_, CryptoState>,
+    signing_state: State<'_, crate::lib_types::SigningState>, // <--- NUEVO PARÁMETRO
+) -> Result<(), String> {
+    // Limpiamos la llave de cifrado
+    let mut crypto_guard = crypto_state.0.lock().unwrap();
+    *crypto_guard = None;
+
+    // Limpiamos la llave de firma
+    let mut sign_guard = signing_state.0.lock().unwrap();
+    *sign_guard = None;
+
+    println!("🔒 [Core] Bóveda bloqueada. Llaves borradas de la RAM.");
     Ok(())
 }
 
