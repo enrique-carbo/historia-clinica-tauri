@@ -1,26 +1,23 @@
 use std::sync::Mutex;
 use tauri::Manager;
 
-// Declaramos todos los módulos de nuestra aplicación
 mod auth;
 mod commands;
+mod config_schema;
 mod crypto;
 mod database;
 mod lib_types;
 mod vault;
 
-// Traemos al alcance el estado que aislamos
 use lib_types::{CryptoState, DbState, SigningState};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        // ESTADOS GLOBALES
         .manage(DbState(Mutex::new(None)))
         .manage(CryptoState(Mutex::new(None)))
         .manage(SigningState(Mutex::new(None)))
-        // Configuramos la base de datos local al arrancar
         .setup(|app| {
             let app_data_dir = app
                 .path()
@@ -33,9 +30,14 @@ pub fn run() {
             let state = app.state::<DbState>();
             *state.0.lock().unwrap() = Some(conn);
 
+            // SCHEMA EMPAQUETADO: incluido en el binario en tiempo de compilación
+            const SCHEMA_JSON: &str = include_str!("../config/schema.json");
+            let schema: config_schema::SchemaConfig =
+                serde_json::from_str(SCHEMA_JSON).map_err(|e| format!("Schema inválido: {}", e))?;
+
+            app.manage(schema);
             Ok(())
         })
-        // 🚀 IMPORTANTE: Registramos el comando llamando al módulo externo
         .invoke_handler(tauri::generate_handler![
             commands::test_crypto_flow,
             commands::save_soap_consultation,
@@ -48,7 +50,10 @@ pub fn run() {
             commands::unlock_vault,
             commands::lock_vault,
             commands::save_patient_metric,
-            commands::get_patient_metrics
+            commands::get_patient_metrics,
+            commands::create_entity,
+            commands::find_entity_by_blind_index,
+            commands::get_entity,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

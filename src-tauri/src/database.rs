@@ -127,5 +127,62 @@ pub fn init_db(app_dir: PathBuf) -> Result<Connection, String> {
     .map_err(|e| format!("Error al crear tabla metricas: {}", e))?;
 
     println!("¡Tablas de la base de datos local verificadas/creadas con éxito!");
+
+    // ============================================================
+    // TABLAS GENÉRICAS (Template v1 - Experimental)
+    // Conviven con tablas legacy durante migración gradual.
+    // No se usan en producción aún. Solo para desarrollo y testing.
+    // ============================================================
+
+    // Entidades genéricas: reemplazará 'patients' en el futuro
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS entities (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            entity_type TEXT NOT NULL,
+            created_by_user_id INTEGER NOT NULL,
+            blind_index BLOB UNIQUE,
+            enc_data_blob BLOB NOT NULL,
+            created_at TEXT NOT NULL
+        );",
+        [],
+    )
+    .ok();
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_entities_type ON entities(entity_type);",
+        [],
+    )
+    .ok();
+
+    // Notas genéricas: reemplazará 'in_person_consultations' en el futuro
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS notes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            entity_id INTEGER NOT NULL,
+            template_id TEXT NOT NULL,
+            created_by_user_id INTEGER NOT NULL,
+            enc_fields BLOB NOT NULL,
+            signature BLOB NOT NULL,
+            created_at TEXT NOT NULL
+        );",
+        [],
+    )
+    .ok();
+
+    // Cola de sincronización: reemplazará 'is_synced' en tablas individuales
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS sync_queue (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            table_name TEXT NOT NULL,
+            record_id INTEGER NOT NULL,
+            operation TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        );",
+        [],
+    )
+    .ok();
+
+    println!("Tablas genéricas (template) verificadas.");
+
     Ok(conn)
 }

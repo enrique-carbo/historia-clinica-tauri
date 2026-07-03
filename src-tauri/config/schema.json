@@ -1,0 +1,83 @@
+{
+  "$schema": "simplex-entity-v1",
+  "version": 1,
+  "default_entity": "patient",
+  "entities": {
+    "patient": {
+      "label": "Paciente",
+      "label_plural": "Pacientes",
+      "icon": "user",
+      "blind_index_field": "dni",
+      "fields": [
+        {
+          "name": "nombre",
+          "label": "Nombre",
+          "type": "text",
+          "required": true,
+          "encrypted": true
+        },
+        {
+          "name": "apellido",
+          "label": "Apellido",
+          "type": "text",
+          "required": true,
+          "encrypted": true
+        },
+        {
+          "name": "dni",
+          "label": "DNI / Documento",
+          "type": "text",
+          "required": true,
+          "encrypted": false,
+          "blind_index": true
+        },
+        {
+          "name": "fecha_nacimiento",
+          "label": "Fecha de Nacimiento",
+          "type": "date",
+          "required": false,
+          "encrypted": true
+        },
+        {
+          "name": "telefono",
+          "label": "Teléfono",
+          "type": "tel",
+          "required": false,
+          "encrypted": true
+        },
+        {
+          "name": "email",
+          "label": "Correo Electrónico",
+          "type": "email",
+          "required": false,
+          "encrypted": true
+        },
+        {
+          "name": "direccion",
+          "label": "Dirección",
+          "type": "textarea",
+          "required": false,
+          "encrypted": true
+        },
+        {
+          "name": "grupo_sanguineo",
+          "label": "Grupo Sanguíneo",
+          "type": "select",
+          "required": false,
+          "encrypted": true,
+          "options": [
+            "A+",
+            "A-",
+            "B+",
+            "B-",
+            "AB+",
+            "AB-",
+            "O+",
+            "O-",
+            "Desconocido"
+          ]
+        }
+      ]
+    }
+  }
+}

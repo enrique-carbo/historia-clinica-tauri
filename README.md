@@ -164,3 +164,60 @@ pnpm tauri dev      # Levanta el entorno (Rust + React HMR)
 pnpm tauri build    # Compila en modo release para producción
 cargo add <crate>   # Añade dependencias al backend (desde src-tauri)
 ```
+---
+
+## 🏗️ Arquitectura de Template (Experimental — v1)
+
+Simplex Health Core evoluciona hacia un **sistema de template** que permite adaptar el core a diferentes especialidades médicas (medicina general, veterinaria, psicología) sin modificar código Rust.
+
+### Principio del Template
+
+> "El core no sabe si el paciente es humano o animal. Sabe que hay entidades, atributos, relaciones y cifrado. El resto es configuración."
+
+### Estructura de Configuración
+
+```
+config/
+├── schema.json              ← Define entidades y campos (ej: paciente humano)
+├── note_templates/
+│   └── soap.json           ← Define plantillas de notas clínicas
+└── eav_attributes.json     ← Define métricas y variables (próximo)
+```
+
+### Tablas Genéricas (Conviven con Legacy)
+
+| Tabla | Propósito | Reemplaza a |
+|-------|-----------|-------------|
+| `entities` | Entidades genéricas con blob cifrado + blind index | `patients` |
+| `notes` | Notas genéricas con template_id + campos cifrados | `in_person_consultations` |
+| `sync_queue` | Cola FIFO de sincronización | `is_synced` en tablas individuales |
+
+### Flujo de Datos del Template
+
+1. **Configuración:** `schema.json` define qué campos tiene una entidad, cuál genera el blind index, cuáles son requeridos.
+2. **Validación:** El core lee `schema.json` al iniciar y valida los datos dinámicamente.
+3. **Cifrado:** Cada campo se cifra individualmente con AES-GCM-256 + nonce único (OsRng).
+4. **Almacenamiento:** Los campos cifrados se serializan en JSON y se guardan en `enc_data_blob`.
+5. **Búsqueda:** El blind index (SHA-256 + salt) permite búsqueda exacta sin exponer el dato real.
+
+### Comandos Experimentales (Template v1)
+
+| Comando | Tabla | Estado |
+|---------|-------|--------|
+| `create_entity` | `entities` | ✅ Funcional |
+| `get_entity` | `entities` | ✅ Funcional |
+| `find_entity_by_blind_index` | `entities` | ✅ Funcional |
+
+### Convivencia con Legacy
+
+Las tablas y comandos legacy (`patients`, `in_person_consultations`, etc.) siguen funcionando. La migración es gradual: las nuevas funcionalidades usan las tablas genéricas; las existentes mantienen las tablas fijas hasta su deprecación.
+
+### Roadmap del Template
+
+- [x] Esquema genérico `entities` + `notes` + `sync_queue`
+- [x] Carga dinámica de `schema.json`
+- [x] Cifrado campo a campo con validación dinámica
+- [ ] `note_commands.rs` genérico (SOAP con firma digital)
+- [ ] `eav_attributes.json` para métricas configurables
+- [ ] Primer fork: `simplex-vet` (veterinaria)
+- [ ] Primer fork: `simplex-psy` (psicología)
