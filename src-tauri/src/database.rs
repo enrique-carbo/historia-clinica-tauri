@@ -160,7 +160,7 @@ pub fn init_db(app_dir: PathBuf) -> Result<Connection, String> {
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             entity_id INTEGER NOT NULL,
             template_id TEXT NOT NULL,
-            created_by_user_id INTEGER NOT NULL,
+            created_by_user_id TEXT NOT NULL,
             enc_fields BLOB NOT NULL,
             signature BLOB NOT NULL,
             created_at TEXT NOT NULL

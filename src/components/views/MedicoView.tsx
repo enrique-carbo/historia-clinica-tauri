@@ -7,12 +7,14 @@ import { SoapHistory } from "../../components/SoapHistory";
 import { MetricQuickForm } from "../../components/MetricQuickForm";
 import { MetricViewer } from "../../components/MetricViewer";
 import { EntityTest } from "../../components/EntityTest";
+import { NoteTest } from "../../components/NoteTest";
 import { usePatientStore, SoapRecord } from "../../stores/usePatientStore";
 
 const MEDICO_TABS: Tab[] = [
   { id: "paciente", label: "Paciente", icon: "👤" },
   { id: "consulta", label: "Consulta", icon: "🩺" },
   { id: "test", label: "Test Entities", icon: "🧪" },
+  { id: "test-note", label: "Test Notas", icon: "📝" },
 ];
 
 interface MedicoViewProps {
@@ -111,6 +113,7 @@ export function MedicoView({
       )}
 
       {activeTab === "test" && <EntityTest />}
+      {activeTab === "test-note" && <NoteTest />}
     </Navbar>
   );
 }

@@ -2,7 +2,7 @@ use serde::Deserialize;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Deserialize)]
-#[allow(dead_code)] //suppress warnings about unused code.
+#[allow(dead_code)]
 pub struct SchemaConfig {
     pub version: i32,
     #[serde(rename = "default_entity")]
@@ -11,7 +11,7 @@ pub struct SchemaConfig {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-#[allow(dead_code)] //suppress warnings about unused code.
+#[allow(dead_code)]
 pub struct EntitySchema {
     pub label: String,
     #[serde(rename = "label_plural")]
@@ -23,7 +23,7 @@ pub struct EntitySchema {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-#[allow(dead_code)] //suppress warnings about unused code.
+#[allow(dead_code)]
 pub struct FieldSchema {
     pub name: String,
     pub label: String,
@@ -36,8 +36,87 @@ pub struct FieldSchema {
     pub options: Option<Vec<String>>,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)]
+pub struct NoteTemplatesConfig {
+    pub version: i32,
+    pub templates: HashMap<String, NoteTemplate>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)]
+pub struct NoteTemplate {
+    pub label: String,
+    pub description: String,
+    pub icon: Option<String>,
+    pub immutable: bool,
+    pub requires_signature: bool,
+    #[serde(rename = "signature_payload_order")]
+    pub signature_payload_order: Vec<String>,
+    pub fields: Vec<NoteFieldSchema>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)]
+pub struct NoteFieldSchema {
+    pub name: String,
+    pub label: String,
+    #[serde(rename = "type")]
+    pub field_type: String,
+    pub required: bool,
+    pub placeholder: Option<String>,
+    pub rows: Option<u32>,
+}
+
+impl NoteTemplatesConfig {
+    /// Valida que los campos requeridos del template estén presentes
+    pub fn validate_note_fields(
+        &self,
+        template_id: &str,
+        fields: &HashMap<String, String>,
+    ) -> Result<(), String> {
+        let template = self
+            .templates
+            .get(template_id)
+            .ok_or_else(|| format!("Template desconocido: {}", template_id))?;
+
+        for field in &template.fields {
+            if field.required {
+                let value = fields.get(&field.name).map(|s| s.trim()).unwrap_or("");
+                if value.is_empty() {
+                    return Err(format!("Campo requerido faltante: {}", field.label));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Construye el payload de firma según signature_payload_order
+    pub fn build_signature_payload(
+        &self,
+        template_id: &str,
+        fields: &HashMap<String, String>,
+    ) -> Result<String, String> {
+        let template = self
+            .templates
+            .get(template_id)
+            .ok_or_else(|| format!("Template desconocido: {}", template_id))?;
+
+        let mut parts = Vec::new();
+        for field_name in &template.signature_payload_order {
+            let value = fields
+                .get(field_name)
+                .ok_or_else(|| format!("Campo de firma faltante: {}", field_name))?;
+            parts.push(value.as_str());
+        }
+
+        Ok(parts.join("|"))
+    }
+}
+
+// ========== ENTITY SCHEMA METHODS (ya existentes) ==========
+
 impl SchemaConfig {
-    /// Valida que los datos tengan todos los campos required
     pub fn validate_entity_data(
         &self,
         entity_type: &str,
@@ -59,7 +138,6 @@ impl SchemaConfig {
         Ok(())
     }
 
-    /// Devuelve el nombre del campo que genera el blind index
     pub fn get_blind_index_field(&self, entity_type: &str) -> Result<String, String> {
         let schema = self
             .entities

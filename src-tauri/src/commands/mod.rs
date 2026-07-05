@@ -2,6 +2,7 @@
 mod auth_commands;
 mod entity_commands;
 mod metric_commands;
+mod note_commands;
 mod patient_commands;
 mod soap_commands;
 
@@ -9,6 +10,7 @@ mod soap_commands;
 pub use auth_commands::*;
 pub use entity_commands::*;
 pub use metric_commands::*;
+pub use note_commands::*;
 pub use patient_commands::*;
 pub use soap_commands::*;
 

@@ -30,12 +30,19 @@ pub fn run() {
             let state = app.state::<DbState>();
             *state.0.lock().unwrap() = Some(conn);
 
-            // SCHEMA EMPAQUETADO: incluido en el binario en tiempo de compilación
+            // CARGAR SCHEMAS EMPAQUETADOS
             const SCHEMA_JSON: &str = include_str!("../config/schema.json");
             let schema: config_schema::SchemaConfig =
                 serde_json::from_str(SCHEMA_JSON).map_err(|e| format!("Schema inválido: {}", e))?;
 
+            const NOTE_TEMPLATES_JSON: &str = include_str!("../config/note_templates/soap.json");
+            let note_templates: config_schema::NoteTemplatesConfig =
+                serde_json::from_str(NOTE_TEMPLATES_JSON)
+                    .map_err(|e| format!("Note templates inválidos: {}", e))?;
+
             app.manage(schema);
+            app.manage(note_templates);
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -54,6 +61,8 @@ pub fn run() {
             commands::create_entity,
             commands::find_entity_by_blind_index,
             commands::get_entity,
+            commands::create_note,
+            commands::get_note,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
