@@ -4,21 +4,17 @@ use uuid::Uuid;
 
 use super::get_key;
 
-// 1. Ampliamos el input para aceptar todos los datos sensibles adicionales
 #[derive(serde::Deserialize)]
 pub struct CreatePatientInput {
     pub created_by_user_id: String,
     pub full_name: String,
     pub identity_doc: String,
-
-    // Nuevos datos opcionales que irán dentro del Blob Cifrado
     pub birth_date: Option<String>,
     pub address: Option<String>,
     pub phone: Option<String>,
     pub email: Option<String>,
 }
 
-// 2. Estructura para devolver la lista de pacientes (sin exponer el Blob)
 #[derive(serde::Serialize, Clone)]
 pub struct PatientRecord {
     pub id: String,
@@ -34,25 +30,21 @@ pub fn create_patient(
 ) -> Result<String, String> {
     let master_key = get_key(&crypto_state)?;
 
-    // Ciframos el nombre por separado (para mostrarlo rápido en listas)
     let name_enc = crypto::encrypt_text(&form.full_name, &master_key)?;
 
-    // Generamos los índices ciegos (DNI y Nombre)
-    let blind_index = crypto::generate_blind_index(&form.identity_doc);
-    let name_blind_index = crypto::generate_blind_index(&form.full_name);
+    // ← CORREGIDO: Derivar sal de master_key
+    let salt = crypto::get_blind_index_salt(&master_key);
+    let blind_index = crypto::generate_blind_index(&form.identity_doc, &salt);
+    let name_blind_index = crypto::generate_blind_index(&form.full_name, &salt);
 
-    // --- NUEVO: Construcción del Blob Cifrado ---
-    // Empaquetamos el resto de los datos en un JSON
     let patient_data_blob = serde_json::json!({
         "birth_date": form.birth_date,
         "address": form.address,
         "phone": form.phone,
         "email": form.email
-        // Aquí puedes agregar más campos en el futuro sin tocar la DB
     })
     .to_string();
 
-    // Ciframos el JSON completo
     let blob_enc = crypto::encrypt_text(&patient_data_blob, &master_key)?;
 
     let patient_id = Uuid::new_v4().to_string();
@@ -135,7 +127,6 @@ pub fn search_patients(
     let master_key = get_key(&crypto_state)?;
 
     super::with_conn(&db_state, |conn| {
-        // Obtenemos todos los pacientes (solo el nombre, para no traer el Blob pesado)
         let mut stmt = conn
             .prepare("SELECT id, full_name_ciphertext, full_name_nonce, created_at FROM patients ORDER BY created_at DESC;")
             .map_err(|e| e.to_string())?;
@@ -147,7 +138,6 @@ pub fn search_patients(
         let query_lower = query_name.to_lowercase().trim().to_string();
         let mut filtered = Vec::new();
 
-        // Filtramos en memoria (Rust es ultra rápido para esto)
         for r in rows {
             let patient = r.map_err(|e| e.to_string())?;
             if query_lower.is_empty() || patient.full_name.to_lowercase().contains(&query_lower) {
@@ -159,14 +149,12 @@ pub fn search_patients(
     })
 }
 
-// Helper para mapear el resultado de la DB a la estructura PatientRecord
 fn map_patient_row(row: &rusqlite::Row, master_key: &[u8]) -> rusqlite::Result<PatientRecord> {
     let enc = crypto::EncryptedData {
         ciphertext: row.get(1)?,
         nonce: row.get(2)?,
     };
 
-    // Convertimos el slice &[u8] a un arreglo &[u8; 32] para satisfacer al compilador
     let key_array: &[u8; 32] = master_key.try_into().unwrap_or(&[0u8; 32]);
 
     let full_name = crypto::decrypt_text(&enc, key_array)

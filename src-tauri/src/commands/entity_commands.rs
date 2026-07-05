@@ -51,7 +51,9 @@ pub fn create_entity(
         .trim()
         .to_lowercase();
 
-    let blind_index = crypto::generate_blind_index(&dni);
+    // ← CORREGIDO: Usar sal derivada de master_key
+    let salt = crypto::get_blind_index_salt(&master_key);
+    let blind_index = crypto::generate_blind_index(&dni, &salt);
     let blind_index_hex = blind_index.clone();
 
     // Cifrar campos
@@ -65,7 +67,7 @@ pub fn create_entity(
     let enc_data_json =
         serde_json::to_vec(&encrypted_fields).map_err(|e| format!("Error serializando: {}", e))?;
 
-    let external_id = Uuid::new_v4().to_string(); // ← NUEVO
+    let external_id = Uuid::new_v4().to_string();
 
     let entity_id = super::with_conn(&db_state, |conn| {
         conn.execute(
@@ -94,15 +96,15 @@ pub fn get_entity(
 
     let record = super::with_conn(&db_state, |conn| {
         let mut stmt = conn
-            .prepare("SELECT external_id, entity_type, enc_data_blob, created_at FROM entities WHERE id = ?1")  // ← Agregar external_id
+            .prepare("SELECT external_id, entity_type, enc_data_blob, created_at FROM entities WHERE id = ?1")
             .map_err(|e| e.to_string())?;
 
         let row = stmt
             .query_row(params![id], |row| {
-                let external_id: Option<String> = row.get(0)?; // ← NUEVO
-                let entity_type: String = row.get(1)?; // ← Era 0, ahora 1
-                let enc_data_blob: Vec<u8> = row.get(2)?; // ← Era 1, ahora 2
-                let created_at: String = row.get(3)?; // ← Era 2, ahora 3
+                let external_id: Option<String> = row.get(0)?;
+                let entity_type: String = row.get(1)?;
+                let enc_data_blob: Vec<u8> = row.get(2)?;
+                let created_at: String = row.get(3)?;
                 Ok((external_id, entity_type, enc_data_blob, created_at))
             })
             .map_err(|e| e.to_string())?;
@@ -112,14 +114,11 @@ pub fn get_entity(
 
     let (external_id, entity_type, enc_data_blob, created_at) = record;
 
-    // Parsear JSON de campos cifrados
     let encrypted_fields: HashMap<String, String> = serde_json::from_slice(&enc_data_blob)
         .map_err(|e| format!("Error parseando blob: {}", e))?;
 
-    // Descifrar cada campo
     let mut data: EntityData = HashMap::new();
     for (field_name, combined) in encrypted_fields {
-        // Separar ciphertext:nonce por el ':'
         let parts: Vec<&str> = combined.split(':').collect();
         if parts.len() != 2 {
             return Err(format!("Formato inválido en campo {}", field_name));
@@ -150,9 +149,14 @@ pub fn find_entity_by_blind_index(
     entity_type: String,
     dni: String,
     db_state: State<'_, DbState>,
+    crypto_state: State<'_, CryptoState>, // ← NUEVO: Necesitamos CryptoState para la sal
 ) -> Result<Option<i64>, String> {
     let dni_normalized = dni.trim().to_lowercase();
-    let blind_index = crypto::generate_blind_index(&dni_normalized);
+
+    // ← CORREGIDO: Derivar sal de master_key
+    let master_key = get_key(&crypto_state)?;
+    let salt = crypto::get_blind_index_salt(&master_key);
+    let blind_index = crypto::generate_blind_index(&dni_normalized, &salt);
 
     let found_id = super::with_conn(&db_state, |conn| {
         let mut stmt = conn
@@ -193,11 +197,11 @@ pub fn list_entities(
         let rows = stmt
             .query_map(params![entity_type, limit, offset], |row| {
                 Ok((
-                    row.get::<_, i64>(0)?,            // id
-                    row.get::<_, Option<String>>(1)?, // external_id ← NUEVO
-                    row.get::<_, String>(2)?,         // entity_type
-                    row.get::<_, Option<String>>(3)?, // blind_index
-                    row.get::<_, Vec<u8>>(4)?,        // enc_data_blob
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, Option<String>>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, Option<String>>(3)?,
+                    row.get::<_, Vec<u8>>(4)?,
                     row.get::<_, String>(5)?,
                 ))
             })
@@ -236,7 +240,6 @@ pub fn search_entities(
     let master_key = get_key(&crypto_state)?;
     let query_lower = query.to_lowercase();
 
-    // Traemos las últimas 200 entidades del tipo (límite práctico para RAM)
     let rows = super::with_conn(&db_state, |conn| {
         let mut stmt = conn
             .prepare(
@@ -251,12 +254,12 @@ pub fn search_entities(
         let rows = stmt
             .query_map(params![entity_type], |row| {
                 Ok((
-                    row.get::<_, i64>(0)?,            // id
-                    row.get::<_, Option<String>>(1)?, // external_id ← NUEVO
-                    row.get::<_, String>(2)?,         // entity_type
-                    row.get::<_, Option<String>>(3)?, // blind_index
-                    row.get::<_, Vec<u8>>(4)?,        // enc_data_blob
-                    row.get::<_, String>(5)?,         // created_at
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, Option<String>>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, Option<String>>(3)?,
+                    row.get::<_, Vec<u8>>(4)?,
+                    row.get::<_, String>(5)?,
                 ))
             })
             .map_err(|e| e.to_string())?;
@@ -272,7 +275,6 @@ pub fn search_entities(
     for (id, external_id, entity_type, _blind_index, enc_data_blob, created_at) in rows {
         let data = decrypt_entity_blob(&enc_data_blob, &master_key)?;
 
-        // Buscar en cualquier campo descifrado
         let mut found = false;
         for (_, value) in &data {
             if value.to_lowercase().contains(&query_lower) {
@@ -295,7 +297,6 @@ pub fn search_entities(
     Ok(matches)
 }
 
-// En entity_commands.rs, función privada
 fn decrypt_entity_blob(enc_data_blob: &[u8], master_key: &[u8; 32]) -> Result<EntityData, String> {
     let encrypted_fields: HashMap<String, String> = serde_json::from_slice(enc_data_blob)
         .map_err(|e| format!("Error parseando blob: {}", e))?;
