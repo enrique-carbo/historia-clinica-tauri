@@ -63,6 +63,8 @@ pub fn run() {
             commands::get_entity,
             commands::create_note,
             commands::get_note,
+            commands::list_entities,
+            commands::search_entities,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -5,6 +5,7 @@ use rusqlite::params;
 use serde::Serialize;
 use std::collections::HashMap;
 use tauri::State;
+use uuid::Uuid;
 
 use super::get_key;
 
@@ -13,6 +14,7 @@ pub type NoteFields = HashMap<String, String>;
 #[derive(Serialize)]
 pub struct NoteCreated {
     pub id: i64,
+    pub external_id: String,
     pub template_id: String,
     pub signature_hex: String,
 }
@@ -20,6 +22,7 @@ pub struct NoteCreated {
 #[derive(Serialize)]
 pub struct NoteRecord {
     pub id: i64,
+    pub external_id: Option<String>,
     pub entity_id: i64,
     pub template_id: String,
     pub fields: NoteFields,
@@ -63,17 +66,20 @@ pub fn create_note(
     let hash = crypto::hash_document(&payload);
     let signature_hex = crypto::sign_hash(&hash, &private_key_bytes)?;
 
+    let external_id = Uuid::new_v4().to_string();
+
     let note_id = super::with_conn(&db_state, |conn| {
         conn.execute(
-            "INSERT INTO notes (entity_id, template_id, created_by_user_id, enc_fields, signature, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, datetime('now'))",
-            params![entity_id, template_id, user_id, enc_fields_json, signature_hex.clone()],
+            "INSERT INTO notes (external_id, entity_id, template_id, created_by_user_id, enc_fields, signature, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, datetime('now'))",
+            params![external_id, entity_id, template_id, user_id, enc_fields_json, signature_hex.clone()],
         ).map_err(|e| e.to_string())?;
         Ok(conn.last_insert_rowid())
     })?;
 
     Ok(NoteCreated {
         id: note_id,
+        external_id,
         template_id,
         signature_hex,
     })
@@ -90,19 +96,20 @@ pub fn get_note(
 
     let row = super::with_conn(&db_state, |conn| {
         let mut stmt = conn.prepare(
-            "SELECT entity_id, template_id, enc_fields, signature, created_at, created_by_user_id
+            "SELECT external_id, entity_id, template_id, enc_fields, signature, created_at, created_by_user_id
              FROM notes WHERE id = ?1"
         ).map_err(|e| e.to_string())?;
 
         let result = stmt
             .query_row(params![id], |row| {
                 Ok((
-                    row.get::<_, i64>(0)?,
-                    row.get::<_, String>(1)?,
-                    row.get::<_, Vec<u8>>(2)?,
-                    row.get::<_, Option<String>>(3)?,
-                    row.get::<_, String>(4)?,
+                    row.get::<_, Option<String>>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, Vec<u8>>(3)?,
+                    row.get::<_, Option<String>>(4)?,
                     row.get::<_, String>(5)?,
+                    row.get::<_, String>(6)?,
                 ))
             })
             .map_err(|e| e.to_string())?;
@@ -110,7 +117,15 @@ pub fn get_note(
         Ok(result)
     })?;
 
-    let (entity_id, template_id, enc_fields_blob, signature_hex, created_at, medico_id) = row;
+    let (
+        external_id,
+        entity_id,
+        template_id,
+        enc_fields_blob,
+        signature_hex,
+        created_at,
+        medico_id,
+    ) = row;
 
     // Descifrar campos
     let encrypted_fields: HashMap<String, String> = serde_json::from_slice(&enc_fields_blob)
@@ -159,6 +174,7 @@ pub fn get_note(
 
     Ok(NoteRecord {
         id,
+        external_id,
         entity_id,
         template_id,
         fields,

@@ -6,12 +6,14 @@ type NoteFields = Record<string, string>;
 
 interface NoteCreated {
   id: number;
+  external_id: string;
   template_id: string;
   signature_hex: string;
 }
 
 interface NoteRecord {
   id: number;
+  external_id?: string;
   entity_id: number;
   template_id: string;
   fields: NoteFields;
@@ -55,7 +57,10 @@ export function NoteTest() {
         userId, // ← PASAR EL UUID REAL DEL MÉDICO
       });
       setResult(
-        `✅ Nota creada: ID=${res.id}, Template=${res.template_id}\nFirma: ${res.signature_hex.slice(0, 16)}...`,
+        `✅ Nota creada: ID=${res.id}\n` +
+          `External ID: ${res.external_id.slice(0, 8)}\n` +
+          `Template=${res.template_id}\n` +
+          `Firma: ${res.signature_hex.slice(0, 16)}`,
       );
     } catch (err) {
       setResult(`❌ Error: ${err}`);
@@ -81,6 +86,7 @@ export function NoteTest() {
 
       setResult(
         `📋 Nota #${res.id}\n` +
+          `External ID: ${res.external_id?.slice(0, 8)}\n` +
           `Paciente: ${res.entity_id}\n` +
           `Template: ${res.template_id}\n` +
           `Verificada: ${res.is_verified ? "✅ SÍ" : "❌ NO"}\n` +

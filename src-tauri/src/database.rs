@@ -138,9 +138,10 @@ pub fn init_db(app_dir: PathBuf) -> Result<Connection, String> {
     conn.execute(
         "CREATE TABLE IF NOT EXISTS entities (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            external_id TEXT UNIQUE,
             entity_type TEXT NOT NULL,
             created_by_user_id INTEGER NOT NULL,
-            blind_index BLOB UNIQUE,
+            blind_index TEXT UNIQUE,
             enc_data_blob BLOB NOT NULL,
             created_at TEXT NOT NULL
         );",
@@ -158,6 +159,7 @@ pub fn init_db(app_dir: PathBuf) -> Result<Connection, String> {
     conn.execute(
         "CREATE TABLE IF NOT EXISTS notes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            external_id TEXT UNIQUE,
             entity_id INTEGER NOT NULL,
             template_id TEXT NOT NULL,
             created_by_user_id TEXT NOT NULL,
