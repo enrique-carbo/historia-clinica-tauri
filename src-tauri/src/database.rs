@@ -147,7 +147,7 @@ pub fn init_db(app_dir: PathBuf) -> Result<Connection, String> {
         );",
         [],
     )
-    .ok();
+    .map_err(|e| format!("Error al crear tabla entities: {}", e))?;
 
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_entities_type ON entities(entity_type);",
@@ -169,7 +169,7 @@ pub fn init_db(app_dir: PathBuf) -> Result<Connection, String> {
         );",
         [],
     )
-    .ok();
+    .map_err(|e| format!("Error al crear tabla notes: {}", e))?;
 
     // Cola de sincronización: reemplazará 'is_synced' en tablas individuales
     conn.execute(
@@ -182,7 +182,7 @@ pub fn init_db(app_dir: PathBuf) -> Result<Connection, String> {
         );",
         [],
     )
-    .ok();
+    .map_err(|e| format!("Error al crear tabla sync_queue: {}", e))?;
 
     println!("Tablas genéricas (template) verificadas.");
 

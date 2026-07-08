@@ -16,7 +16,7 @@ pub use soap_commands::*;
 
 // --- HELPERS ---
 
-use crate::lib_types::{CryptoState, DbState};
+use crate::lib_types::{CryptoState, DataKey, DbState};
 use rusqlite::Connection;
 use tauri::State;
 
@@ -41,4 +41,10 @@ pub fn get_key(crypto_state: &State<'_, CryptoState>) -> Result<[u8; 32], String
         .as_ref()
         .cloned()
         .ok_or("Sesión no desbloqueada. La llave maestra no está en memoria.".to_string())
+}
+
+/// Helper: Extraer la data key del DataKey state
+pub fn get_data_key(data_key_state: &DataKey) -> Result<[u8; 32], String> {
+    let guard = data_key_state.0.lock().map_err(|_| "Lock poisoned")?;
+    guard.ok_or("Data key no inicializada. ¿Reiniciaste la aplicación?".to_string())
 }

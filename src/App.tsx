@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { AuthBox } from "./components/AuthBox";
 import { DashboardLayout } from "./components/layouts/DashboardLayout";
 import { AdminView } from "./components/views/AdminView";
@@ -6,37 +7,34 @@ import { MedicoView } from "./components/views/MedicoView";
 import { PacienteView } from "./components/views/PacienteView";
 
 import { useAuthStore } from "./stores/useAuthStore";
-import { usePatientStore } from "./stores/usePatientStore";
 
 export default function App() {
-  const { activeUser: user } = useAuthStore();
-  const { activePatient, history, fetchHistory, fetchMetrics } =
-    usePatientStore();
+  const { activeUser, isVaultUnlocked, lockVault } = useAuthStore();
 
+  // Sincronizar vault con Rust al iniciar
   useEffect(() => {
-    if (activePatient && user?.role === "medico") {
-      fetchHistory();
-    }
-  }, [activePatient, user?.role, fetchHistory]);
+    invoke<boolean>("is_vault_unlocked")
+      .then((unlocked) => {
+        if (!unlocked && isVaultUnlocked) {
+          lockVault();
+        }
+      })
+      .catch(() => {
+        // is_vault_unlocked no disponible, ignorar
+      });
+  }, [isVaultUnlocked, lockVault]);
 
-  if (!user) {
+  if (!activeUser || !isVaultUnlocked) {
     return <AuthBox />;
   }
 
   return (
     <DashboardLayout>
-      {user.role === "admin" && <AdminView userId={user.user_id} />}
+      {activeUser.role === "admin" && <AdminView />}
 
-      {user.role === "medico" && (
-        <MedicoView
-          userId={user.user_id}
-          history={history}
-          fetchHistory={fetchHistory}
-          fetchMetrics={fetchMetrics}
-        />
-      )}
+      {activeUser.role === "medico" && <MedicoView />}
 
-      {user.role === "paciente" && <PacienteView />}
+      {activeUser.role === "paciente" && <PacienteView />}
     </DashboardLayout>
   );
 }

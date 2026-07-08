@@ -32,10 +32,8 @@ pub fn create_patient(
 
     let name_enc = crypto::encrypt_text(&form.full_name, &master_key)?;
 
-    // ← CORREGIDO: Derivar sal de master_key
-    let salt = crypto::get_blind_index_salt(&master_key);
-    let blind_index = crypto::generate_blind_index(&form.identity_doc, &salt);
-    let name_blind_index = crypto::generate_blind_index(&form.full_name, &salt);
+    let blind_index = crypto::generate_blind_index(&form.identity_doc);
+    let name_blind_index = crypto::generate_blind_index(&form.full_name);
 
     let patient_data_blob = serde_json::json!({
         "birth_date": form.birth_date,

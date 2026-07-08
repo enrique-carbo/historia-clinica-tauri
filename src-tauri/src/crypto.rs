@@ -5,11 +5,15 @@ use aes_gcm::{
 use rand::rngs::OsRng;
 use rand::RngCore;
 use sha2::{Digest, Sha256};
+use std::sync::OnceLock;
 
 pub const AES_KEY_SIZE: usize = 32;
 pub const AES_NONCE_SIZE: usize = 12;
 pub const ED25519_SECRET_SIZE: usize = 32;
 pub const ED25519_SIGNATURE_SIZE: usize = 64;
+
+/// Sal de instalación para blind index (compartida entre todos los usuarios de la misma instancia)
+static INSTALLATION_SALT: OnceLock<Vec<u8>> = OnceLock::new();
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct EncryptedData {
@@ -59,20 +63,27 @@ pub fn decrypt_text(
         .map_err(|_| "Datos descifrados no son UTF-8 válido".to_string())
 }
 
-/// Genera la sal del blind index a partir de la master key (primeros 16 bytes)
-/// Esto garantiza que cada usuario tenga una sal única derivada de su contraseña
-pub fn get_blind_index_salt(master_key: &[u8; AES_KEY_SIZE]) -> Vec<u8> {
-    master_key[..16].to_vec()
+/// Inicializa la sal de instalación para blind index.
+/// Debe llamarse una sola vez al iniciar la aplicación.
+pub fn init_blind_index_salt(salt: Vec<u8>) -> Result<(), String> {
+    INSTALLATION_SALT
+        .set(salt)
+        .map_err(|_| "Blind index salt ya inicializado".to_string())
 }
 
-/// Genera hash determinista para búsqueda sin revelar dato real
-pub fn generate_blind_index(identity_doc: &str, salt: &[u8]) -> String {
+/// Genera hash determinista para búsqueda sin revelar dato real.
+/// Usa la sal de instalación compartida (todos los usuarios de la misma instancia ven los mismos índices).
+pub fn generate_blind_index(identity_doc: &str) -> String {
     let normalized = identity_doc
         .trim()
         .replace("-", "")
         .replace(".", "")
         .replace(" ", "")
         .to_lowercase();
+
+    let salt = INSTALLATION_SALT
+        .get()
+        .expect("Blind index salt no inicializado. ¿Se llamó init_blind_index_salt?");
 
     let mut hasher = Sha256::new();
     hasher.update(salt);
@@ -154,21 +165,13 @@ pub fn verify_signature(
 mod tests {
     use super::*;
 
+    fn init_test_salt() {
+        let _ = INSTALLATION_SALT.set(vec![0u8; 32]);
+    }
+
     fn random_key() -> [u8; AES_KEY_SIZE] {
         let mut key = [0u8; AES_KEY_SIZE];
         OsRng.fill_bytes(&mut key);
-        key
-    }
-
-    fn test_salt() -> Vec<u8> {
-        vec![0u8; 32]
-    }
-
-    fn test_master_key() -> [u8; AES_KEY_SIZE] {
-        let mut key = [0u8; AES_KEY_SIZE];
-        for i in 0..AES_KEY_SIZE {
-            key[i] = i as u8;
-        }
         key
     }
 
@@ -220,49 +223,29 @@ mod tests {
     }
 
     #[test]
-    fn test_get_blind_index_salt() {
-        let master_key = test_master_key();
-        let salt = get_blind_index_salt(&master_key);
-        assert_eq!(salt.len(), 16);
-        assert_eq!(
-            salt,
-            vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
-        );
-    }
-
-    #[test]
     fn test_blind_index_deterministic() {
-        let salt = test_salt();
+        init_test_salt();
         let dni = "12345678";
-        let hash1 = generate_blind_index(dni, &salt);
-        let hash2 = generate_blind_index(dni, &salt);
+        let hash1 = generate_blind_index(dni);
+        let hash2 = generate_blind_index(dni);
         assert_eq!(hash1, hash2);
     }
 
     #[test]
     fn test_blind_index_normalization() {
-        let salt = test_salt();
-        let hash1 = generate_blind_index("12345678", &salt);
-        let hash2 = generate_blind_index("  12.345.678  ", &salt);
-        let hash3 = generate_blind_index("12-345-678", &salt);
+        init_test_salt();
+        let hash1 = generate_blind_index("12345678");
+        let hash2 = generate_blind_index("  12.345.678  ");
+        let hash3 = generate_blind_index("12-345-678");
         assert_eq!(hash1, hash2);
         assert_eq!(hash1, hash3);
     }
 
     #[test]
     fn test_blind_index_different_inputs() {
-        let salt = test_salt();
-        let hash1 = generate_blind_index("12345678", &salt);
-        let hash2 = generate_blind_index("87654321", &salt);
-        assert_ne!(hash1, hash2);
-    }
-
-    #[test]
-    fn test_blind_index_different_salts() {
-        let salt1 = vec![0u8; 32];
-        let salt2 = vec![1u8; 32];
-        let hash1 = generate_blind_index("12345678", &salt1);
-        let hash2 = generate_blind_index("12345678", &salt2);
+        init_test_salt();
+        let hash1 = generate_blind_index("12345678");
+        let hash2 = generate_blind_index("87654321");
         assert_ne!(hash1, hash2);
     }
 

@@ -3,6 +3,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { useAuthStore } from "../../stores/useAuthStore";
 import { usePatientStore } from "../../stores/usePatientStore";
 import { usePatientRegistryStore } from "../../stores/usePatientRegistryStore";
+import { useEntityStore } from "../../stores/useEntityStore";
+import { useNoteStore } from "../../stores/useNoteStore";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -11,23 +13,37 @@ interface DashboardLayoutProps {
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const { activeUser: user, lockVault } = useAuthStore();
 
-  // Cerrar sesión segura (Se mueve aquí porque es responsabilidad del Layout)
   const handleLogout = async () => {
     try {
       await invoke("lock_vault");
       lockVault();
+
+      // Limpiar stores legacy
       usePatientStore.getState().resetAllPatientData();
       usePatientRegistryStore.setState({ patients: [] });
+
+      // Limpiar stores de Template v1
+      useEntityStore.setState({
+        entities: [],
+        selectedEntity: null,
+        isLoading: false,
+        error: null,
+      });
+      useNoteStore.setState({
+        notes: [],
+        selectedNote: null,
+        isLoading: false,
+        error: null,
+      });
     } catch (err) {
       console.error("Error al cerrar la bóveda:", err);
     }
   };
 
-  if (!user) return null; // Fallback de seguridad
+  if (!user) return null;
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-200 font-sans flex flex-col">
-      {/* HEADER FIJO */}
       <header className="sticky top-0 z-10 bg-zinc-950/80 backdrop-blur-sm border-b border-zinc-800 px-10 py-4 flex justify-between items-center">
         <div>
           <h1 className="text-xl font-bold text-zinc-100 m-0">
@@ -51,7 +67,6 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         </div>
       </header>
 
-      {/* CONTENIDO DINÁMICO (Scrollable) */}
       <main className="flex-1 overflow-y-auto p-10">{children}</main>
     </div>
   );

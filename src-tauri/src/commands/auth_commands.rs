@@ -152,3 +152,8 @@ pub fn test_crypto_flow(
         encrypted.ciphertext, decrypted
     ))
 }
+
+#[tauri::command]
+pub fn is_vault_unlocked(crypto_state: State<'_, CryptoState>) -> bool {
+    crypto_state.0.lock().map(|g| g.is_some()).unwrap_or(false)
+}

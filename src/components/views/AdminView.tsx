@@ -1,16 +1,24 @@
-import { PatientManager } from "../../components/PatientManager";
+import { useState } from "react";
+import { Navbar, Tab } from "../../components/ui/Navbar";
+import { EntityTest } from "../../components/EntityTest";
 
-interface AdminViewProps {
-  userId: string;
-}
+const ADMIN_TABS: Tab[] = [{ id: "paciente", label: "Paciente", icon: "👤" }];
 
-export function AdminView({ userId }: AdminViewProps) {
+export function AdminView() {
+  const [activeTab, setActiveTab] = useState("paciente"); // ← Default a la nueva vista
+
   return (
-    <div>
-      <h2 className="text-lg font-semibold mb-5 text-zinc-300">
-        Consola de Recepción y Admisión
-      </h2>
-      <PatientManager userId={userId} />
-    </div>
+    <Navbar tabs={ADMIN_TABS} activeTab={activeTab} onTabChange={setActiveTab}>
+      {activeTab === "paciente" && (
+        <div className="flex flex-col gap-8">
+          <div>
+            <h2 className="text-lg font-semibold mb-4 text-zinc-300">
+              Admitir Nuevo Paciente
+            </h2>
+            <EntityTest />
+          </div>
+        </div>
+      )}
+    </Navbar>
   );
 }

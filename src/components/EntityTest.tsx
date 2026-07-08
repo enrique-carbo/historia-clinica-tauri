@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useAuthStore } from "../stores/useAuthStore";
 
 type EntityData = Record<string, string>;
 
@@ -28,7 +29,7 @@ export function EntityTest() {
     email: "",
     direccion: "",
   });
-
+  const { activeUser, isVaultUnlocked } = useAuthStore();
   const [searchDni, setSearchDni] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [getId, setGetId] = useState("");
@@ -41,6 +42,10 @@ export function EntityTest() {
   };
 
   const handleCreate = async () => {
+    if (!isVaultUnlocked || !activeUser) {
+      setResult("❌ Error: No hay usuario logueado");
+      return;
+    }
     setLoading(true);
     setResult("");
     try {
@@ -51,6 +56,7 @@ export function EntityTest() {
       const res = await invoke<EntityCreated>("create_entity", {
         entityType: "patient",
         data,
+        userId: activeUser.user_id,
       });
 
       setResult(

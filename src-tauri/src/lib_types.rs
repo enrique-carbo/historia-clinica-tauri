@@ -9,3 +9,6 @@ pub struct CryptoState(pub Mutex<Option<[u8; 32]>>);
 
 // Aquí vivirá Llave asimétrica (Ed25519)
 pub struct SigningState(pub Mutex<Option<[u8; 32]>>);
+
+// Llave de cifrado compartida para datos médicos (entidades y notas)
+pub struct DataKey(pub Mutex<Option<[u8; 32]>>);
