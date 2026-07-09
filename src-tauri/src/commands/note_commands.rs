@@ -117,22 +117,24 @@ pub fn get_note(
 
     // VERIFICACIÓN DE FIRMA con payload dinámico según template
     let is_verified = match signature_hex {
-        Some(sig) => {
-            let payload = templates.build_signature_payload(&template_id, &fields)?;
-            let hash = crypto::hash_document(&payload);
-
-            let pub_key_result: Result<String, _> = with_conn(&db_state, |conn| {
-                conn.query_row(
-                    "SELECT public_key FROM professional_profiles WHERE user_id = ?1",
-                    params![&medico_id],
-                    |r| r.get(0),
-                )
-                .map_err(|e| e.to_string())
-            });
-
-            match pub_key_result {
-                Ok(pk) => crypto::verify_signature(&hash, &sig, &pk).unwrap_or(false),
-                Err(_) => false,
+        Some(ref sig) => {
+            if sig.is_empty() {
+                false
+            } else {
+                let payload = templates.build_signature_payload(&template_id, &fields)?;
+                let hash = crypto::hash_document(&payload);
+                let pub_key_result: Result<String, _> = with_conn(&db_state, |conn| {
+                    conn.query_row(
+                        "SELECT public_key FROM professional_profiles WHERE user_id = ?1",
+                        params![&medico_id],
+                        |r| r.get(0),
+                    )
+                    .map_err(|e| e.to_string())
+                });
+                match pub_key_result {
+                    Ok(pk) => crypto::verify_signature(&hash, sig, &pk).unwrap_or(false),
+                    Err(_) => false,
+                }
             }
         }
         None => false,
@@ -188,7 +190,8 @@ pub fn get_notes_by_entity(
     let mut notes = Vec::new();
     for (id, external_id, entity_id, template_id, enc_fields_blob, signature, created_at) in rows {
         let fields = decrypt_note_fields(&enc_fields_blob, &data_key)?; // ← Usar data_key
-        let is_verified = signature.is_some();
+
+        let is_verified = signature.as_ref().map(|s| !s.is_empty()).unwrap_or(false);
 
         notes.push(NoteRecord {
             id,

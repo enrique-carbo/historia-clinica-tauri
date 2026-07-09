@@ -80,6 +80,8 @@ pub fn run() {
             commands::search_entities,
             commands::get_notes_by_entity,
             commands::is_vault_unlocked,
+            commands::get_my_profile,
+            commands::update_my_profile,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

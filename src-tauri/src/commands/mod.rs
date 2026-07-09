@@ -4,6 +4,7 @@ mod entity_commands;
 mod metric_commands;
 mod note_commands;
 mod patient_commands;
+mod professional_profile_commands;
 mod soap_commands;
 
 // Re-exportamos todo al exterior
@@ -12,6 +13,7 @@ pub use entity_commands::*;
 pub use metric_commands::*;
 pub use note_commands::*;
 pub use patient_commands::*;
+pub use professional_profile_commands::*;
 pub use soap_commands::*;
 
 // --- HELPERS ---
