@@ -403,7 +403,7 @@ Cada comando declara explícitamente los estados que consume:
 `DataKey` se guarda en `.data_key` (hex) en el directorio de la app. **No está cifrada.** Esto es una decisión de diseño intencional para permitir descifrado sin autenticación (ej. backups, migraciones), pero implica:
 
 - La seguridad física del disco es crítica.
-- Para endurecer: cifrar `.data_key` con una llave derivada del password del usuario (pero esto rompería el acceso sin login).
+- Para endurecer: cifrar `.data_key` con una llave derivada del password del master admin.
 
 ### 9.2 Sobre `search_entities`
 

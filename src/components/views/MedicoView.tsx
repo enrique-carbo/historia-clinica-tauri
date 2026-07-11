@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Navbar, Tab } from "../../components/ui/Navbar";
 import { PatientEhrView } from "../../components/PatientEhrView";
-import { EntityTest } from "../../components/EntityTest";
+import { Entity } from "../Entity";
 import { ProfileView } from "../../components/ProfileView";
 
 const MEDICO_TABS: Tab[] = [
@@ -23,7 +23,7 @@ export function MedicoView() {
             <h2 className="text-lg font-semibold mb-4 text-zinc-300">
               Admitir Nuevo Paciente
             </h2>
-            <EntityTest />
+            <Entity/>
           </div>
         </div>
       )}

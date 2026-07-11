@@ -2,14 +2,12 @@
 mod auth_commands;
 mod entity_commands;
 mod note_commands;
-mod patient_commands;
 mod professional_profile_commands;
 
 // Re-exportamos todo al exterior
 pub use auth_commands::*;
 pub use entity_commands::*;
 pub use note_commands::*;
-pub use patient_commands::*;
 pub use professional_profile_commands::*;
 
 // --- HELPERS ---

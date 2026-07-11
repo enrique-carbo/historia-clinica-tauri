@@ -19,7 +19,7 @@ interface EntityRecord {
   created_at: string;
 }
 
-export function EntityTest() {
+export function Entity() {
   const [form, setForm] = useState<EntityData>({
     nombre: "",
     apellido: "",
