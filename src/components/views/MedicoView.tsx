@@ -11,7 +11,7 @@ const MEDICO_TABS: Tab[] = [
 ];
 
 export function MedicoView() {
-  const [activeTab, setActiveTab] = useState("ehr"); // ← Default a la nueva vista
+  const [activeTab, setActiveTab] = useState("perfil");
 
   return (
     <Navbar tabs={MEDICO_TABS} activeTab={activeTab} onTabChange={setActiveTab}>

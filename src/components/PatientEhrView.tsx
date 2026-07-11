@@ -320,15 +320,20 @@ export function PatientEhrView() {
                         <span className="text-sm font-medium text-zinc-300">
                           Nota #{note.id}
                         </span>
-                        <span
-                          className={`text-xs ${
-                            note.is_verified
-                              ? "text-emerald-500"
-                              : "text-red-500"
-                          }`}
-                        >
-                          {note.is_verified ? "✅ Firmada" : "❌ Sin firma"}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-zinc-400">
+                            {note.created_by_name || "Médico desconocido"}
+                          </span>
+                          <span
+                            className={`text-xs ${
+                              note.is_verified
+                                ? "text-emerald-500"
+                                : "text-red-500"
+                            }`}
+                          >
+                            {note.is_verified ? "✅ Firmada" : "❌ Sin firma"}
+                          </span>
+                        </div>
                       </div>
                       <div className="text-xs text-zinc-600 mt-1">
                         {note.created_at}

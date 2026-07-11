@@ -24,14 +24,16 @@ pub fn init_db(app_dir: PathBuf) -> Result<Connection, String> {
     // La regla de oro en SQL: Siempre crea primero las tablas Padre (las que son referenciadas)
     // y luego las Hijas. Orden: users -> professional_profiles -> patients -> consultas/métricas
 
-    // 1. Tabla de Usuarios (Médicos, Admins, Pacientes Autoregistrados)
+    // 1. Tabla de Usuarios (Médicos, Admins, Pacientes)
     conn.execute(
         "CREATE TABLE IF NOT EXISTS users (
                 id TEXT PRIMARY KEY,
                 username TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
                 role TEXT CHECK(role IN ('admin', 'medico', 'paciente')) NOT NULL,
-                created_at TEXT NOT NULL
+                entity_id INTEGER,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY(entity_id) REFERENCES entities(id)
             );",
         [],
     )
@@ -55,86 +57,11 @@ pub fn init_db(app_dir: PathBuf) -> Result<Connection, String> {
     )
     .map_err(|e| format!("Error al crear tabla professional_profiles: {}", e))?;
 
-    // 3. Tabla de Pacientes (Patrón: Blob Cifrado + Índices Ciegos)
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS patients (
-                id TEXT PRIMARY KEY,
-                created_by_user_id TEXT NOT NULL,
-
-                -- Índices Ciegos (Texto plano hasheado, para buscar rápido sin descifrar)
-                identity_blind_index TEXT UNIQUE NOT NULL,
-                name_blind_index TEXT NOT NULL,
-
-                -- Datos Básicos para mostrar rápido en listados (Cifrados)
-                full_name_ciphertext TEXT NOT NULL,
-                full_name_nonce TEXT NOT NULL,
-
-                -- Resto de datos sensibles (JSON Cifrado: nacimiento, mail, teléfono, etc.)
-                encrypted_data_blob TEXT NOT NULL,
-                encrypted_data_nonce TEXT NOT NULL,
-
-                created_at TEXT NOT NULL,
-                FOREIGN KEY(created_by_user_id) REFERENCES users(id)
-            );",
-        [],
-    )
-    .map_err(|e| format!("Error al crear tabla patients: {}", e))?;
-
-    // 4. Tabla de Consultas Presenciales (SOAP) - Cifrada y lista para Firma Digital
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS in_person_consultations (
-            id TEXT PRIMARY KEY,
-            paciente_id TEXT NOT NULL,
-            medico_id TEXT NOT NULL,
-            s_subjetivo_ciphertext TEXT NOT NULL,
-            s_subjetivo_nonce TEXT NOT NULL,
-            o_objetivo_ciphertext TEXT NOT NULL,
-            o_objetivo_nonce TEXT NOT NULL,
-            a_analisis_ciphertext TEXT NOT NULL,
-            a_analisis_nonce TEXT NOT NULL,
-            p_plan_ciphertext TEXT NOT NULL,
-            p_plan_nonce TEXT NOT NULL,
-            digital_signature TEXT,
-            is_synced INTEGER DEFAULT 0,
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL,
-            FOREIGN KEY(paciente_id) REFERENCES patients(id),
-            FOREIGN KEY(medico_id) REFERENCES users(id)
-        );",
-        [],
-    )
-    .map_err(|e| format!("Error al crear tabla consultas: {}", e))?;
-
-    // 5. Tabla de Métricas Clínicas (EAV) - Cifrado Selectivo y Firma Opcional
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS patient_metrics (
-            id TEXT PRIMARY KEY,
-            paciente_id TEXT NOT NULL,
-            medico_id TEXT NOT NULL,
-            metric_type TEXT NOT NULL,
-            sub_metric TEXT NOT NULL,
-            value_num REAL,
-            value_text_ciphertext TEXT,
-            value_text_nonce TEXT,
-            digital_signature TEXT,
-            is_shared INTEGER DEFAULT 0,
-            measured_at TEXT NOT NULL,
-            FOREIGN KEY(paciente_id) REFERENCES patients(id),
-            FOREIGN KEY(medico_id) REFERENCES users(id)
-        );",
-        [],
-    )
-    .map_err(|e| format!("Error al crear tabla metricas: {}", e))?;
-
-    println!("¡Tablas de la base de datos local verificadas/creadas con éxito!");
-
     // ============================================================
-    // TABLAS GENÉRICAS (Template v1 - Experimental)
-    // Conviven con tablas legacy durante migración gradual.
-    // No se usan en producción aún. Solo para desarrollo y testing.
+    // TABLAS GENÉRICAS (Template v1)
     // ============================================================
 
-    // Entidades genéricas: reemplazará 'patients' en el futuro
+    // 3. Tabla Entidades genéricas: pacientes humanos o animales segun corresponda
     conn.execute(
         "CREATE TABLE IF NOT EXISTS entities (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -155,7 +82,7 @@ pub fn init_db(app_dir: PathBuf) -> Result<Connection, String> {
     )
     .ok();
 
-    // Notas genéricas: reemplazará 'in_person_consultations' en el futuro
+    // 4. Tabla notas genéricas
     conn.execute(
         "CREATE TABLE IF NOT EXISTS notes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -171,7 +98,21 @@ pub fn init_db(app_dir: PathBuf) -> Result<Connection, String> {
     )
     .map_err(|e| format!("Error al crear tabla notes: {}", e))?;
 
-    // Cola de sincronización: reemplazará 'is_synced' en tablas individuales
+    // 5. Tabla patient_keys
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS patient_keys (
+        patient_user_id TEXT PRIMARY KEY,
+        patient_data_key_ciphertext TEXT NOT NULL,
+        patient_data_key_nonce TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY(patient_user_id) REFERENCES users(id)
+    );",
+        [],
+    )
+    .map_err(|e| format!("Error al crear tabla patients_keys: {}", e))?;
+
+    // 6. Tabla cola de sincronización: reemplazará 'is_synced' en tablas individuales
     conn.execute(
         "CREATE TABLE IF NOT EXISTS sync_queue (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -184,7 +125,9 @@ pub fn init_db(app_dir: PathBuf) -> Result<Connection, String> {
     )
     .map_err(|e| format!("Error al crear tabla sync_queue: {}", e))?;
 
-    println!("Tablas genéricas (template) verificadas.");
+    println!(
+        "¡Tablas genéricas (template) de la base de datos local verificadas/creadas con éxito!"
+    );
 
     Ok(conn)
 }

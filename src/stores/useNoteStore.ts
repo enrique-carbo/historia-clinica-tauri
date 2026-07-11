@@ -9,6 +9,7 @@ export interface Note {
   template_id: string;
   fields: Record<string, string>;
   is_verified: boolean;
+  created_by_name: string;
   created_at: string;
 }
 

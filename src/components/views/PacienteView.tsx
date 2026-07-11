@@ -1,9 +1,7 @@
-import { MetricQuickForm } from "../../components/MetricQuickForm";
-import { MetricViewer } from "../../components/MetricViewer";
-import { usePatientStore } from "../../stores/usePatientStore";
+
 
 export function PacienteView() {
-  const { fetchMetrics } = usePatientStore();
+
 
   return (
     <div className="max-w-3xl mx-auto flex flex-col gap-8">
@@ -36,19 +34,13 @@ export function PacienteView() {
         <h3 className="text-base font-semibold text-zinc-200 mb-4">
           📊 Registrar Mi Métrica Diaria
         </h3>
-        <MetricQuickForm
-          pacienteId="pending_patient_link"
-          onSuccess={() => {
-            fetchMetrics();
-          }}
-        />
       </div>
 
       <div>
         <h3 className="text-base font-semibold text-zinc-200 mb-4">
           Historial de Mis Registros
         </h3>
-        <MetricViewer />
+
       </div>
 
       <div className="p-4 bg-blue-950/30 border border-blue-900 rounded-lg text-xs text-blue-400 text-center">

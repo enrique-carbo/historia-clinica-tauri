@@ -19,6 +19,8 @@ pub struct NoteRecord {
     pub template_id: String,
     pub fields: NoteFields,
     pub is_verified: bool,
+    pub created_by_user_id: String,
+    pub created_by_name: String,
     pub created_at: String,
 }
 
@@ -81,10 +83,16 @@ pub fn get_note(
     let data_key = get_data_key(&data_key_state)?; // ← Usar data_key
 
     let row = with_conn(&db_state, |conn| {
-        let mut stmt = conn.prepare(
-            "SELECT external_id, entity_id, template_id, enc_fields, signature, created_at, created_by_user_id
-             FROM notes WHERE id = ?1"
-        ).map_err(|e| e.to_string())?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT n.external_id, n.entity_id, n.template_id, n.enc_fields,
+                    n.signature, n.created_at, n.created_by_user_id,
+                    pp.full_name_ciphertext, pp.full_name_nonce
+             FROM notes n
+             LEFT JOIN professional_profiles pp ON pp.user_id = n.created_by_user_id
+             WHERE n.id = ?1",
+            )
+            .map_err(|e| e.to_string())?;
 
         let result = stmt
             .query_row(params![id], |row| {
@@ -96,6 +104,8 @@ pub fn get_note(
                     row.get::<_, Option<String>>(4)?,
                     row.get::<_, String>(5)?,
                     row.get::<_, String>(6)?,
+                    row.get::<_, String>(7)?, // full_name_ciphertext
+                    row.get::<_, String>(8)?, // full_name_nonce
                 ))
             })
             .map_err(|e| e.to_string())?;
@@ -111,7 +121,20 @@ pub fn get_note(
         signature_hex,
         created_at,
         medico_id,
+        name_ct,
+        name_nonce,
     ) = row;
+
+    // Descifrar nombre del médico
+    let created_by_name = if name_ct.is_empty() {
+        "Médico desconocido".to_string()
+    } else {
+        let enc = crypto::EncryptedData {
+            ciphertext: name_ct,
+            nonce: name_nonce,
+        };
+        crypto::decrypt_text(&enc, &data_key).unwrap_or_else(|_| "Médico desconocido".to_string())
+    };
 
     let fields = decrypt_note_fields(&enc_fields_blob, &data_key)?; // ← Usar data_key
 
@@ -147,6 +170,8 @@ pub fn get_note(
         template_id,
         fields,
         is_verified,
+        created_by_user_id: medico_id,
+        created_by_name,
         created_at,
     })
 }
@@ -159,39 +184,71 @@ pub fn get_notes_by_entity(
 ) -> Result<Vec<NoteRecord>, String> {
     let data_key = get_data_key(&data_key_state)?; // ← Usar data_key
 
-    let rows =
-        with_conn(&db_state, |conn| {
-            let mut stmt = conn.prepare(
-            "SELECT id, external_id, entity_id, template_id, enc_fields, signature, created_at
-             FROM notes WHERE entity_id = ?1 ORDER BY created_at DESC"
-        ).map_err(|e| e.to_string())?;
+    let rows = with_conn(&db_state, |conn| {
+        let mut stmt = conn
+            .prepare(
+                "SELECT n.id, n.external_id, n.entity_id, n.template_id,
+                    n.enc_fields, n.signature, n.created_at, n.created_by_user_id,
+                    pp.full_name_ciphertext, pp.full_name_nonce
+             FROM notes n
+             LEFT JOIN professional_profiles pp ON pp.user_id = n.created_by_user_id
+             WHERE n.entity_id = ?1
+             ORDER BY n.created_at DESC",
+            )
+            .map_err(|e| e.to_string())?;
 
-            let rows = stmt
-                .query_map(params![entity_id], |row| {
-                    Ok((
-                        row.get::<_, i64>(0)?,
-                        row.get::<_, Option<String>>(1)?,
-                        row.get::<_, i64>(2)?,
-                        row.get::<_, String>(3)?,
-                        row.get::<_, Vec<u8>>(4)?,
-                        row.get::<_, Option<String>>(5)?,
-                        row.get::<_, String>(6)?,
-                    ))
-                })
-                .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map(params![entity_id], |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, Option<String>>(1)?,
+                    row.get::<_, i64>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, Vec<u8>>(4)?,
+                    row.get::<_, Option<String>>(5)?,
+                    row.get::<_, String>(6)?,
+                    row.get::<_, String>(7)?, // created_by_user_id
+                    row.get::<_, String>(8)?, // full_name_ciphertext
+                    row.get::<_, String>(9)?, // full_name_nonce
+                ))
+            })
+            .map_err(|e| e.to_string())?;
 
-            let mut results = Vec::new();
-            for row in rows {
-                results.push(row.map_err(|e| e.to_string())?);
-            }
-            Ok(results)
-        })?;
+        let mut results = Vec::new();
+        for row in rows {
+            results.push(row.map_err(|e| e.to_string())?);
+        }
+        Ok(results)
+    })?;
 
     let mut notes = Vec::new();
-    for (id, external_id, entity_id, template_id, enc_fields_blob, signature, created_at) in rows {
-        let fields = decrypt_note_fields(&enc_fields_blob, &data_key)?; // ← Usar data_key
-
+    for (
+        id,
+        external_id,
+        entity_id,
+        template_id,
+        enc_fields_blob,
+        signature,
+        created_at,
+        created_by_user_id,
+        name_ct,
+        name_nonce,
+    ) in rows
+    {
+        let fields = decrypt_note_fields(&enc_fields_blob, &data_key)?;
         let is_verified = signature.as_ref().map(|s| !s.is_empty()).unwrap_or(false);
+
+        // Descifrar nombre del médico
+        let created_by_name = if name_ct.is_empty() {
+            "Médico desconocido".to_string()
+        } else {
+            let enc = crypto::EncryptedData {
+                ciphertext: name_ct,
+                nonce: name_nonce,
+            };
+            crypto::decrypt_text(&enc, &data_key)
+                .unwrap_or_else(|_| "Médico desconocido".to_string())
+        };
 
         notes.push(NoteRecord {
             id,
@@ -200,6 +257,8 @@ pub fn get_notes_by_entity(
             template_id,
             fields,
             is_verified,
+            created_by_user_id,
+            created_by_name,
             created_at,
         });
     }

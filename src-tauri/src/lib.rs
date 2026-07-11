@@ -60,8 +60,6 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::test_crypto_flow,
-            commands::save_soap_consultation,
-            commands::get_patient_history,
             commands::register_user,
             commands::login_user,
             commands::create_patient,
@@ -69,8 +67,6 @@ pub fn run() {
             commands::search_patients,
             commands::unlock_vault,
             commands::lock_vault,
-            commands::save_patient_metric,
-            commands::get_patient_metrics,
             commands::create_entity,
             commands::find_entity_by_blind_index,
             commands::get_entity,
