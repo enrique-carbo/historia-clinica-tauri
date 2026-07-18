@@ -19,6 +19,7 @@ interface NoteState {
   isLoading: boolean;
   error: string | null;
 
+  // Acciones
   fetchNotes: (entityId: number) => Promise<void>;
   createNote: (
     entityId: number,
@@ -27,6 +28,7 @@ interface NoteState {
     userId: string,
   ) => Promise<Note | null>;
   selectNote: (note: Note | null) => void;
+  clearSelection: () => void;
   clearError: () => void;
 }
 
@@ -39,10 +41,10 @@ export const useNoteStore = create<NoteState>((set) => ({
   fetchNotes: async (entityId: number) => {
     set({ isLoading: true, error: null });
     try {
-      const res = await invoke<Note[]>("get_notes_by_entity", {
-        entityId,
-      });
-      set({ notes: res, isLoading: false });
+      const res = await invoke<Note[]>("get_notes_by_entity", { entityId });
+      // Ordenamos por fecha descendente por defecto
+      const sorted = res.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      set({ notes: sorted, isLoading: false });
     } catch (err) {
       set({ error: String(err), isLoading: false });
     }
@@ -51,7 +53,7 @@ export const useNoteStore = create<NoteState>((set) => ({
   createNote: async (entityId, templateId, fields, userId) => {
     set({ isLoading: true, error: null });
     try {
-      // 1. Crear la nota, devuelve el ID
+      // 1. Crear la nota (Rust devuelve el ID)
       const noteId = await invoke<number>("create_note", {
         entityId,
         templateId,
@@ -59,12 +61,10 @@ export const useNoteStore = create<NoteState>((set) => ({
         userId,
       });
 
-      // 2. Obtener la nota completa recién creada
-      const note = await invoke<Note>("get_note", {
-        id: noteId,
-      });
+      // 2. Obtener la nota completa con su firma verificada
+      const note = await invoke<Note>("get_note", { id: noteId });
 
-      // 3. Agregar a la lista local (Optimistic UI)
+      // 3. Optimistic UI: Agregar al principio de la lista
       set((state) => ({
         notes: [note, ...state.notes],
         isLoading: false,
@@ -77,9 +77,9 @@ export const useNoteStore = create<NoteState>((set) => ({
     }
   },
 
-  selectNote: (note) => {
-    set({ selectedNote: note });
-  },
+  selectNote: (note) => set({ selectedNote: note }),
+
+  clearSelection: () => set({ selectedNote: null }),
 
   clearError: () => set({ error: null }),
 }));

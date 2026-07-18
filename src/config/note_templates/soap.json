@@ -1,0 +1,53 @@
+{
+  "$schema": "simplex-note-v1",
+  "version": 1,
+  "templates": {
+    "soap_v1": {
+      "label": "Nota SOAP",
+      "description": "Evaluación clínica estructurada: Subjetivo, Objetivo, Evaluación, Plan",
+      "icon": "file-text",
+      "immutable": true,
+      "requires_signature": true,
+      "signature_payload_order": [
+        "subjetivo",
+        "objetivo",
+        "evaluacion",
+        "plan"
+      ],
+      "fields": [
+        {
+          "name": "subjetivo",
+          "label": "Subjetivo",
+          "type": "textarea",
+          "required": true,
+          "placeholder": "Motivo de consulta, síntomas referidos por el paciente, duración, evolución...",
+          "rows": 6
+        },
+        {
+          "name": "objetivo",
+          "label": "Objetivo",
+          "type": "textarea",
+          "required": true,
+          "placeholder": "Hallazgos del examen físico, signos vitales, resultados de estudios previos...",
+          "rows": 6
+        },
+        {
+          "name": "evaluacion",
+          "label": "Evaluación",
+          "type": "textarea",
+          "required": true,
+          "placeholder": "Diagnóstico, impresión clínica, códigos CIE-10, diferenciales...",
+          "rows": 4
+        },
+        {
+          "name": "plan",
+          "label": "Plan",
+          "type": "textarea",
+          "required": true,
+          "placeholder": "Tratamiento, medicación, estudios solicitados, controles, derivaciones...",
+          "rows": 4
+        }
+      ]
+    }
+  }
+}

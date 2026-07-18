@@ -1,5 +1,4 @@
 // src/stores/useEntityStore.ts
-// src/stores/useEntityStore.ts
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
 import { useAuthStore } from "./useAuthStore";
@@ -18,16 +17,16 @@ interface EntityState {
   isLoading: boolean;
   error: string | null;
 
+  // Acciones
   fetchEntities: (entityType: string, limit?: number) => Promise<void>;
   searchEntities: (entityType: string, query: string) => Promise<void>;
   selectEntity: (entity: Entity | null) => void;
-  createEntity: (
-    entityType: string,
-    data: Record<string, string>,
-  ) => Promise<Entity | null>;
+  createEntity: (data: Record<string, string>) => Promise<Entity | null>;
   findByBlindIndex: (entityType: string, dni: string) => Promise<number | null>;
   clearError: () => void;
 }
+
+const DEFAULT_LIMIT = 50;
 
 export const useEntityStore = create<EntityState>((set, get) => ({
   entities: [],
@@ -35,13 +34,13 @@ export const useEntityStore = create<EntityState>((set, get) => ({
   isLoading: false,
   error: null,
 
-  fetchEntities: async (entityType: string, limit = 50) => {
+  fetchEntities: async (entityType: string, limit = DEFAULT_LIMIT) => {
     set({ isLoading: true, error: null });
     try {
       const res = await invoke<Entity[]>("list_entities", {
         entityType,
         limit,
-        offset: 0,
+        offset: 0
       });
       set({ entities: res, isLoading: false });
     } catch (err) {
@@ -50,15 +49,17 @@ export const useEntityStore = create<EntityState>((set, get) => ({
   },
 
   searchEntities: async (entityType: string, query: string) => {
+    // Si la búsqueda está vacía, volvemos al listado general
     if (!query.trim()) {
       get().fetchEntities(entityType);
       return;
     }
+
     set({ isLoading: true, error: null });
     try {
       const res = await invoke<Entity[]>("search_entities", {
         entityType,
-        query,
+        query
       });
       set({ entities: res, isLoading: false });
     } catch (err) {
@@ -66,26 +67,25 @@ export const useEntityStore = create<EntityState>((set, get) => ({
     }
   },
 
-  selectEntity: (entity) => {
-    set({ selectedEntity: entity });
-  },
+  selectEntity: (entity) => set({ selectedEntity: entity }),
 
-  createEntity: async (entityType: string, data: Record<string, string>) => {
+  createEntity: async (data: Record<string, string>) => {
     set({ isLoading: true, error: null });
-    try {
-      // ← NUEVO: Obtener userId del auth store
-      const { activeUser } = useAuthStore.getState();
-      if (!activeUser) {
-        set({ error: "Usuario no autenticado", isLoading: false });
-        return null;
-      }
+    const { activeUser } = useAuthStore.getState();
 
+    if (!activeUser) {
+      set({ error: "Usuario no autenticado", isLoading: false });
+      return null;
+    }
+
+    try {
       const res = await invoke<Entity>("create_entity", {
-        entityType,
+        entityType: "patient",
         data,
-        userId: activeUser.user_id, // ← PASAR userId
+        userId: activeUser.user_id,
       });
 
+      // Optimistic UI: Agregamos al inicio sin recargar todo
       set((state) => ({
         entities: [res, ...state.entities],
         selectedEntity: res,
@@ -100,11 +100,10 @@ export const useEntityStore = create<EntityState>((set, get) => ({
 
   findByBlindIndex: async (entityType: string, dni: string) => {
     try {
-      const id = await invoke<number | null>("find_entity_by_blind_index", {
+      return await invoke<number | null>("find_entity_by_blind_index", {
         entityType,
-        dni,
+        dni
       });
-      return id;
     } catch (err) {
       set({ error: String(err) });
       return null;

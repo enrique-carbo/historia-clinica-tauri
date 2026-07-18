@@ -67,6 +67,7 @@ pub fn run() {
             commands::create_entity,
             commands::find_entity_by_blind_index,
             commands::get_entity,
+            commands::update_entity,
             commands::create_note,
             commands::get_note,
             commands::list_entities,

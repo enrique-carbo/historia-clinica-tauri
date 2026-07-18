@@ -310,3 +310,50 @@ fn decrypt_entity_blob(enc_data_blob: &[u8], data_key: &[u8; 32]) -> Result<Enti
 
     Ok(data)
 }
+
+#[tauri::command]
+pub fn update_entity(
+    id: i64,
+    data: EntityData,
+    user_id: String,
+    db_state: State<'_, DbState>,
+    data_key_state: State<'_, DataKey>,
+    schema: State<'_, SchemaConfig>,
+) -> Result<(), String> {
+    let data_key = get_data_key(&data_key_state)?;
+
+    // 1. Validar que la entidad existe y obtener su tipo
+    let entity_type = with_conn(&db_state, |conn| {
+        conn.query_row(
+            "SELECT entity_type FROM entities WHERE id = ?1",
+            params![id],
+            |row| row.get::<_, String>(0),
+        )
+        .map_err(|e| format!("Entidad no encontrada o error de DB: {}", e))
+    })?;
+
+    // 2. Validar los datos contra el schema (opcional pero recomendado)
+    schema.validate_entity_data(&entity_type, &data)?;
+
+    // 3. Cifrar los nuevos datos con DataKey (mismo patrón que create_entity)
+    let mut encrypted_fields: HashMap<String, String> = HashMap::new();
+    for (field_name, field_value) in &data {
+        let enc = crypto::encrypt_text(field_value, &data_key)?;
+        let combined = format!("{}:{}", enc.ciphertext, enc.nonce);
+        encrypted_fields.insert(field_name.clone(), combined);
+    }
+
+    // 4. Serializar a JSON
+    let enc_data_json =
+        serde_json::to_vec(&encrypted_fields).map_err(|e| format!("Error serializando: {}", e))?;
+
+    // 5. Actualizar en SQLite
+    with_conn(&db_state, |conn| {
+        conn.execute(
+            "UPDATE entities SET enc_data_blob = ?, created_by_user_id = ? WHERE id = ?",
+            params![enc_data_json, user_id, id],
+        )
+        .map_err(|e| format!("Error actualizando entidad: {}", e))?;
+        Ok(())
+    })
+}

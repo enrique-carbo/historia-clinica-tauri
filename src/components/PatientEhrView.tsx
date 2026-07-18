@@ -11,9 +11,7 @@ export function PatientEhrView() {
     selectedEntity,
     isLoading: entityLoading,
     searchEntities,
-    selectEntity,
-    findByBlindIndex,
-  } = useEntityStore();
+    selectEntity} = useEntityStore();
 
   const {
     notes,
@@ -25,7 +23,6 @@ export function PatientEhrView() {
   } = useNoteStore();
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [dniQuery, setDniQuery] = useState("");
   const [showNewNote, setShowNewNote] = useState(false);
 
   // Campos para nueva nota
@@ -56,100 +53,71 @@ export function PatientEhrView() {
     [selectEntity, fetchNotes, selectNote],
   );
 
-  const handleFindByDni = async () => {
-    if (!dniQuery.trim()) return;
-    const id = await findByBlindIndex("patient", dniQuery);
-    if (id) {
-      const entity = entities.find((e) => e.id === id);
-      if (entity) {
-        handleSelectPatient(entity);
-      }
-    }
-  };
-
   const handleCreateNote = async () => {
     if (!selectedEntity || !activeUser) return;
+
     const res = await createNote(
       selectedEntity.id,
       "soap_v1",
       noteFields,
       activeUser.user_id,
     );
+
     if (res) {
       setNoteFields({ subjetivo: "", objetivo: "", evaluacion: "", plan: "" });
       setShowNewNote(false);
-      fetchNotes(selectedEntity.id);
+      // No necesitamos fetchNotes aquí gracias al Optimistic UI del store
     }
   };
 
   return (
-    <div className="grid grid-cols-12 gap-6 h-[calc(100vh-200px)]">
-      {/* PANEL IZQUIERDO: Búsqueda y listado */}
-      <div className="col-span-4 flex flex-col border border-zinc-800 rounded-lg bg-zinc-900 overflow-hidden">
-        {/* Búsqueda */}
-        <div className="p-4 border-b border-zinc-800 space-y-3">
-          <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider">
-            Buscar Paciente
+    <div className="grid grid-cols-12 gap-6 h-[calc(100vh-180px)]">
+      {/* PANEL IZQUIERDO: Búsqueda y Listado */}
+      <div className="col-span-4 flex flex-col border border-zinc-800 rounded-xl bg-zinc-900/50 backdrop-blur-sm overflow-hidden shadow-lg">
+        <div className="p-4 border-b border-zinc-800 space-y-3 bg-zinc-900">
+          <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest">
+            Padrón de Pacientes
           </h3>
-
-          {/* Búsqueda por DNI (exacto) */}
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={dniQuery}
-              onChange={(e) => setDniQuery(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleFindByDni()}
-              placeholder="DNI exacto..."
-              className="flex-1 rounded bg-zinc-950 border border-zinc-700 px-3 py-2 text-sm text-zinc-200"
-            />
-            <button
-              onClick={handleFindByDni}
-              disabled={entityLoading}
-              className="rounded bg-amber-600 px-3 py-2 text-sm text-white hover:bg-amber-700 disabled:opacity-50"
-            >
-              🔍
-            </button>
-          </div>
-
-          {/* Búsqueda por nombre (parcial) */}
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Nombre, apellido, teléfono..."
-            className="w-full rounded bg-zinc-950 border border-zinc-700 px-3 py-2 text-sm text-zinc-200"
+            placeholder="Buscar por nombre, DNI o teléfono..."
+            className="w-full rounded-lg bg-zinc-950 border border-zinc-700 px-4 py-2.5 text-sm text-zinc-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all outline-none"
           />
         </div>
 
-        {/* Listado de resultados */}
-        <div className="flex-1 overflow-y-auto p-2 space-y-1">
+        <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
           {entityLoading ? (
-            <div className="text-center py-8 text-zinc-500 text-sm">
-              Buscando...
+            <div className="flex justify-center py-8">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
             </div>
           ) : entities.length === 0 ? (
-            <div className="text-center py-8 text-zinc-600 text-sm">
-              {searchQuery ? "Sin resultados" : "Escribí para buscar"}
+            <div className="text-center py-12 text-zinc-600 text-sm">
+              {searchQuery ? "No se encontraron coincidencias" : "Comienza escribiendo para buscar"}
             </div>
           ) : (
             entities.map((entity) => (
               <button
                 key={entity.id}
                 onClick={() => handleSelectPatient(entity)}
-                className={`w-full text-left p-3 rounded transition-colors ${
+                className={`w-full text-left p-3 rounded-lg transition-all duration-200 group ${
                   selectedEntity?.id === entity.id
-                    ? "bg-blue-950 border border-blue-800"
-                    : "bg-zinc-950 border border-transparent hover:bg-zinc-800"
+                    ? "bg-blue-900/20 border border-blue-500/50 shadow-md"
+                    : "bg-zinc-950/50 border border-transparent hover:bg-zinc-800 hover:border-zinc-700"
                 }`}
               >
-                <div className="font-medium text-zinc-200">
-                  {entity.data.nombre} {entity.data.apellido}
+                <div className="flex justify-between items-start">
+                  <div className="font-semibold text-zinc-200 group-hover:text-white">
+                    {entity.data.nombre} {entity.data.apellido}
+                  </div>
+                  {selectedEntity?.id === entity.id && (
+                    <span className="h-2 w-2 rounded-full bg-blue-500 mt-1.5"></span>
+                  )}
                 </div>
-                <div className="text-xs text-zinc-500 mt-1">
-                  DNI: {entity.data.dni} • {entity.data.telefono}
-                </div>
-                <div className="text-xs text-zinc-600 mt-0.5">
-                  ID: {entity.id} • {entity.created_at.slice(0, 10)}
+                <div className="text-xs text-zinc-500 mt-1.5 flex items-center gap-2">
+                  <span className="bg-zinc-800 px-1.5 py-0.5 rounded text-zinc-400">DNI: {entity.data.dni}</span>
+                  <span>{entity.data.telefono}</span>
                 </div>
               </button>
             ))
@@ -162,208 +130,260 @@ export function PatientEhrView() {
         {selectedEntity ? (
           <>
             {/* FICHA DEL PACIENTE */}
-            <div className="border border-zinc-800 rounded-lg bg-zinc-900 p-4">
-              <div className="flex justify-between items-start">
+            <div className="border border-zinc-800 rounded-xl bg-zinc-900/50 p-5 shadow-lg">
+              <div className="flex justify-between items-start mb-4">
                 <div>
-                  <h2 className="text-xl font-bold text-zinc-100">
+                  <h2 className="text-2xl font-bold text-zinc-100 tracking-tight">
                     {selectedEntity.data.nombre} {selectedEntity.data.apellido}
                   </h2>
-                  <p className="text-sm text-zinc-500 mt-1">
-                    DNI: {selectedEntity.data.dni} •{" "}
-                    {selectedEntity.data.fecha_nacimiento}
-                  </p>
+                  <div className="flex items-center gap-3 mt-1 text-sm text-zinc-400">
+                    <span>DNI: {selectedEntity.data.dni}</span>
+                    <span className="w-1 h-1 rounded-full bg-zinc-600"></span>
+                    <span>Nac: {selectedEntity.data.fecha_nacimiento || "—"}</span>
+                  </div>
                 </div>
                 <div className="text-right">
-                  <div className="text-xs text-zinc-600 font-mono">
+                  <div className="text-xs font-mono text-zinc-600 bg-zinc-950 px-2 py-1 rounded border border-zinc-800">
                     ID: {selectedEntity.id}
-                  </div>
-                  <div className="text-xs text-zinc-600 font-mono">
-                    {selectedEntity.external_id?.slice(0, 8)}
                   </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-4 mt-4">
-                <div className="bg-zinc-950 rounded p-3 border border-zinc-800">
-                  <div className="text-xs text-zinc-500 uppercase">
-                    Teléfono
+              <div className="grid grid-cols-3 gap-3 mt-2">
+                {[
+                  { label: "Teléfono", value: selectedEntity.data.telefono },
+                  { label: "Email", value: selectedEntity.data.email },
+                  { label: "Dirección", value: selectedEntity.data.direccion },
+                ].map((item, idx) => (
+                  <div key={idx} className="bg-zinc-950/50 rounded-lg p-3 border border-zinc-800/50">
+                    <div className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider">{item.label}</div>
+                    <div className="text-sm text-zinc-300 mt-0.5 truncate">{item.value || "—"}</div>
                   </div>
-                  <div className="text-sm text-zinc-300 mt-1">
-                    {selectedEntity.data.telefono || "—"}
+                ))}
+              </div>
+
+              {/* SECCIÓN DE ANTECEDENTES (Grid de 2 columnas para textos largos) */}
+              <div className="grid grid-cols-2 gap-3 mt-3">
+                {[
+                  {
+                    label: "Antecedentes Personales",
+                    value: selectedEntity.data.antecedentes_personales,
+                    color: "text-blue-400"
+                  },
+                  {
+                    label: "Antecedentes Familiares",
+                    value: selectedEntity.data.antecedentes_familiares,
+                    color: "text-blue-400"
+                  },
+                  {
+                    label: "Alergias",
+                    value: selectedEntity.data.alergias,
+                    color: "text-red-600"
+                  },
+                ].map((item, idx) => (
+                  <div key={idx} className="bg-zinc-950/50 rounded-lg p-4 border border-zinc-800/50 min-h-25">
+                    <div className={`text-[10px] uppercase font-bold tracking-wider mb-2 ${item.color}`}>
+                      {item.label}
+                    </div>
+                    <p className="text-sm text-zinc-300 whitespace-pre-wrap leading-relaxed">
+                      {item.value || "Sin registros"}
+                    </p>
                   </div>
-                </div>
-                <div className="bg-zinc-950 rounded p-3 border border-zinc-800">
-                  <div className="text-xs text-zinc-500 uppercase">Email</div>
-                  <div className="text-sm text-zinc-300 mt-1">
-                    {selectedEntity.data.email || "—"}
-                  </div>
-                </div>
-                <div className="bg-zinc-950 rounded p-3 border border-zinc-800">
-                  <div className="text-xs text-zinc-500 uppercase">
-                    Dirección
-                  </div>
-                  <div className="text-sm text-zinc-300 mt-1">
-                    {selectedEntity.data.direccion || "—"}
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
 
-            {/* EVOLUCIONES */}
-            <div className="flex-1 border border-zinc-800 rounded-lg bg-zinc-900 overflow-hidden flex flex-col">
-              <div className="p-4 border-b border-zinc-800 flex justify-between items-center">
-                <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider">
-                  Evoluciones ({notes.length})
+            {/* SECCIÓN DE EVOLUCIONES */}
+            <div className="flex-1 border border-zinc-800 rounded-xl bg-zinc-900/50 overflow-hidden flex flex-col shadow-lg">
+              <div className="p-4 border-b border-zinc-800 flex justify-between items-center bg-zinc-900">
+                <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest">
+                  Historial Clínico ({notes.length})
                 </h3>
                 <button
                   onClick={() => setShowNewNote(!showNewNote)}
-                  className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700"
+                  className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                    showNewNote
+                      ? "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                      : "bg-blue-600 text-white hover:bg-blue-700 shadow-md shadow-blue-900/20"
+                  }`}
                 >
-                  {showNewNote ? "Cancelar" : "+ Nueva Evolución"}
+                  {showNewNote ? "Cancelar Nota" : "+ Nueva Nota"}
                 </button>
               </div>
 
-              {/* Formulario nueva nota */}
+              {/* Formulario Nueva Nota (SOAP) */}
               {showNewNote && (
-                <div className="p-4 border-b border-zinc-800 bg-zinc-950 space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs text-zinc-500">Subjetivo</label>
+                <div className="p-4 border-b border-zinc-800 bg-zinc-950/80 space-y-4 animate-in slide-in-from-top-2 duration-200">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-blue-400 uppercase">Subjetivo (S)</label>
                       <textarea
                         value={noteFields.subjetivo}
-                        onChange={(e) =>
-                          setNoteFields((p) => ({
-                            ...p,
-                            subjetivo: e.target.value,
-                          }))
-                        }
-                        rows={3}
-                        className="w-full rounded bg-zinc-900 border border-zinc-700 px-3 py-2 text-sm text-zinc-200 resize-y"
+                        onChange={(e) => setNoteFields((p) => ({ ...p, subjetivo: e.target.value }))}
+                        rows={4}
+                        className="w-full rounded-lg bg-zinc-900 border border-zinc-700 px-3 py-2 text-sm text-zinc-200 focus:border-blue-500 outline-none resize-none"
+                        placeholder="Motivo de consulta y síntomas..."
                       />
                     </div>
-                    <div>
-                      <label className="text-xs text-zinc-500">Objetivo</label>
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-emerald-400 uppercase">Objetivo (O)</label>
                       <textarea
                         value={noteFields.objetivo}
-                        onChange={(e) =>
-                          setNoteFields((p) => ({
-                            ...p,
-                            objetivo: e.target.value,
-                          }))
-                        }
-                        rows={3}
-                        className="w-full rounded bg-zinc-900 border border-zinc-700 px-3 py-2 text-sm text-zinc-200 resize-y"
+                        onChange={(e) => setNoteFields((p) => ({ ...p, objetivo: e.target.value }))}
+                        rows={4}
+                        className="w-full rounded-lg bg-zinc-900 border border-zinc-700 px-3 py-2 text-sm text-zinc-200 focus:border-emerald-500 outline-none resize-none"
+                        placeholder="Signos vitales y examen físico..."
                       />
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs text-zinc-500">
-                        Evaluación
-                      </label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-amber-400 uppercase">Evaluación (A)</label>
                       <textarea
                         value={noteFields.evaluacion}
-                        onChange={(e) =>
-                          setNoteFields((p) => ({
-                            ...p,
-                            evaluacion: e.target.value,
-                          }))
-                        }
-                        rows={2}
-                        className="w-full rounded bg-zinc-900 border border-zinc-700 px-3 py-2 text-sm text-zinc-200 resize-y"
+                        onChange={(e) => setNoteFields((p) => ({ ...p, evaluacion: e.target.value }))}
+                        rows={3}
+                        className="w-full rounded-lg bg-zinc-900 border border-zinc-700 px-3 py-2 text-sm text-zinc-200 focus:border-amber-500 outline-none resize-none"
+                        placeholder="Diagnóstico presuntivo..."
                       />
                     </div>
-                    <div>
-                      <label className="text-xs text-zinc-500">Plan</label>
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-purple-400 uppercase">Plan (P)</label>
                       <textarea
                         value={noteFields.plan}
-                        onChange={(e) =>
-                          setNoteFields((p) => ({ ...p, plan: e.target.value }))
-                        }
-                        rows={2}
-                        className="w-full rounded bg-zinc-900 border border-zinc-700 px-3 py-2 text-sm text-zinc-200 resize-y"
+                        onChange={(e) => setNoteFields((p) => ({ ...p, plan: e.target.value }))}
+                        rows={3}
+                        className="w-full rounded-lg bg-zinc-900 border border-zinc-700 px-3 py-2 text-sm text-zinc-200 focus:border-purple-500 outline-none resize-none"
+                        placeholder="Tratamiento y estudios..."
                       />
                     </div>
                   </div>
-                  <button
-                    onClick={handleCreateNote}
-                    disabled={noteLoading}
-                    className="rounded bg-emerald-600 px-4 py-2 text-sm text-white hover:bg-emerald-700 disabled:opacity-50"
-                  >
-                    {noteLoading ? "Guardando..." : "Guardar + Firmar"}
-                  </button>
+
+                  {/* BOTÓN DE GUARDAR Y FIRMAR - AHORA SÍ VISIBLE */}
+                  <div className="flex justify-end pt-2">
+                    <button
+                      onClick={handleCreateNote}
+                      disabled={noteLoading || !activeUser}
+                      className="rounded-lg bg-emerald-600 px-6 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-emerald-900/20 transition-all flex items-center gap-2"
+                    >
+                      {noteLoading ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                          Firmando...
+                        </>
+                      ) : (
+                        <>Guardar + Firmar</>
+                      )}
+                    </button>
+                  </div>
                 </div>
               )}
 
-              {/* Listado de notas */}
-              <div className="flex-1 overflow-y-auto p-2 space-y-2">
-                {noteLoading ? (
-                  <div className="text-center py-8 text-zinc-500">
-                    Cargando...
+              {/* Listado de Notas */}
+              <div className="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar">
+                {noteLoading && !showNewNote ? (
+                  <div className="flex justify-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
                   </div>
                 ) : notes.length === 0 ? (
-                  <div className="text-center py-8 text-zinc-600 text-sm">
-                    Sin evoluciones registradas
+                  <div className="flex flex-col items-center justify-center h-full text-zinc-600">
+                    <span className="text-4xl mb-2 opacity-20">📝</span>
+                    <p>No hay evoluciones registradas</p>
                   </div>
                 ) : (
                   notes.map((note) => (
-                    <div
-                      key={note.id}
-                      onClick={() => selectNote(note)}
-                      className={`p-3 rounded border cursor-pointer transition-colors ${
-                        selectedNote?.id === note.id
-                          ? "bg-blue-950 border-blue-800"
-                          : "bg-zinc-950 border-zinc-800 hover:bg-zinc-800"
-                      }`}
-                    >
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm font-medium text-zinc-300">
-                          Nota #{note.id}
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-zinc-400">
-                            {note.created_by_name || "Médico desconocido"}
-                          </span>
-                          <span
-                            className={`text-xs ${
+                      <div
+                        key={note.id}
+                        onClick={() => selectNote(note.id === selectedNote?.id ? null : note)}
+                        className={`p-4 rounded-xl border cursor-pointer transition-all duration-200 ${
+                          selectedNote?.id === note.id
+                            ? "bg-blue-900/10 border-blue-500/30 shadow-md"
+                            : "bg-zinc-950/50 border-zinc-800 hover:bg-zinc-800/50 hover:border-zinc-700"
+                        }`}
+                      >
+                        {/* Cabecera de la Nota */}
+                        <div className="flex justify-between items-start mb-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-bold text-zinc-200">Nota #{note.id}</span>
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold uppercase ${
                               note.is_verified
-                                ? "text-emerald-500"
-                                : "text-red-500"
-                            }`}
-                          >
-                            {note.is_verified ? "✅ Firmada" : "❌ Sin firma"}
+                                ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20"
+                                : "bg-red-500/10 text-red-500 border border-red-500/20"
+                            }`}>
+                              {note.is_verified ? "Firmada" : "Sin firma"}
+                            </span>
+                          </div>
+                          <span className="text-xs text-zinc-500 font-mono bg-zinc-900 px-2 py-1 rounded">
+                            {new Date(note.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short', hour12: false })}
                           </span>
                         </div>
-                      </div>
-                      <div className="text-xs text-zinc-600 mt-1">
-                        {note.created_at}
-                      </div>
-                      {selectedNote?.id === note.id && note.fields && (
-                        <div className="mt-3 pt-3 border-t border-zinc-800 space-y-2">
-                          {Object.entries(note.fields).map(([k, v]) => (
-                            <div key={k}>
-                              <span className="text-xs text-zinc-500 uppercase">
-                                {k}
-                              </span>
-                              <p className="text-sm text-zinc-300 mt-0.5 whitespace-pre-wrap">
-                                {v}
+
+                        <div className="text-xs text-zinc-400 mb-2 flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-zinc-600"></span>
+                          Por: <span className="text-zinc-300 font-medium">{note.created_by_name}</span>
+                        </div>
+
+                        {/* Contenido Expandido (Ordenado S-O-A-P) */}
+                        {selectedNote?.id === note.id && note.fields && (
+                          <div className="mt-4 pt-4 border-t border-zinc-800 grid grid-cols gap-x-6 gap-y-4 animate-in fade-in slide-in-from-top-1 duration-200">
+
+                            {/* 1. Subjetivo */}
+                            <div className="col-span-2 sm:col-span-1 space-y-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-blue-400 bg-blue-900/20 px-1.5 py-0.5 rounded">S</span>
+                                <span className="text-xs font-semibold text-zinc-400">Subjetivo</span>
+                              </div>
+                              <p className="text-sm text-zinc-300 whitespace-pre-wrap leading-relaxed pl-1 border-l-2 border-blue-900/50 min-h-5">
+                                {note.fields.subjetivo || "—"}
                               </p>
                             </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+
+                            {/* 2. Objetivo */}
+                            <div className="col-span-2 sm:col-span-1 space-y-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 bg-emerald-900/20 px-1.5 py-0.5 rounded">O</span>
+                                <span className="text-xs font-semibold text-zinc-400">Objetivo</span>
+                              </div>
+                              <p className="text-sm text-zinc-300 whitespace-pre-wrap leading-relaxed pl-1 border-l-2 border-emerald-900/50 min-h-5">
+                                {note.fields.objetivo || "—"}
+                              </p>
+                            </div>
+
+                            {/* 3. Evaluación */}
+                            <div className="col-span-2 sm:col-span-1 space-y-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 bg-amber-900/20 px-1.5 py-0.5 rounded">A</span>
+                                <span className="text-xs font-semibold text-zinc-400">Evaluación</span>
+                              </div>
+                              <p className="text-sm text-zinc-300 whitespace-pre-wrap leading-relaxed pl-1 border-l-2 border-amber-900/50 min-h-5">
+                                {note.fields.evaluacion || "—"}
+                              </p>
+                            </div>
+
+                            {/* 4. Plan */}
+                            <div className="col-span-2 sm:col-span-1 space-y-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-purple-400 bg-purple-900/20 px-1.5 py-0.5 rounded">P</span>
+                                <span className="text-xs font-semibold text-zinc-400">Plan</span>
+                              </div>
+                              <p className="text-sm text-zinc-300 whitespace-pre-wrap leading-relaxed pl-1 border-l-2 border-purple-900/50 min-h-5">
+                                {note.fields.plan || "—"}
+                              </p>
+                            </div>
+
+                          </div>
+                        )}
+                      </div>
+
                   ))
                 )}
               </div>
             </div>
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center border border-zinc-800 rounded-lg bg-zinc-900">
-            <div className="text-center text-zinc-600">
-              <div className="text-4xl mb-4">👤</div>
-              <p>Seleccioná un paciente para ver su ficha</p>
-            </div>
+          <div className="flex-1 flex flex-col items-center justify-center border border-zinc-800 rounded-xl bg-zinc-900/30 border-dashed">
+            <div className="text-zinc-700 text-6xl mb-4 opacity-50">🩺</div>
+            <p className="text-zinc-500 font-medium">Selecciona un paciente para comenzar la atención</p>
           </div>
         )}
       </div>
