@@ -1,8 +1,6 @@
 import { ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useAuthStore } from "../../stores/useAuthStore";
-import { usePatientStore } from "../../stores/usePatientStore";
-import { usePatientRegistryStore } from "../../stores/usePatientRegistryStore";
 import { useEntityStore } from "../../stores/useEntityStore";
 import { useNoteStore } from "../../stores/useNoteStore";
 
@@ -18,11 +16,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       await invoke("lock_vault");
       lockVault();
 
-      // Limpiar stores legacy
-      usePatientStore.getState().resetAllPatientData();
-      usePatientRegistryStore.setState({ patients: [] });
-
-      // Limpiar stores de Template v1
+      // Limpiar stores
       useEntityStore.setState({
         entities: [],
         selectedEntity: null,

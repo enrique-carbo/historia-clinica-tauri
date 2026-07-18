@@ -24,11 +24,10 @@ Tareas bloqueantes para la Fase 4.
 |---|-------|---------------|
 | 3.5.1 | Cifrar `.data_key` en disco con password del admin | Robo físico del disco no descifra todo |
 | 3.5.2 | Corregir `get_notes_by_entity`: mostrar todas las notas, indicar si es corrección de otra | Las notas firmadas son inmutables; el historial es lineal |
-| 3.5.3 | Agregar `previous_note_id` opcional a la tabla `notes` | Permite encadenar correcciones sin editar |
-| 3.5.4 | Alimentar `sync_queue` desde TODOS los comandos de escritura | Sin esto, el sync engine no tiene trabajo |
-| 3.5.5 | Agregar índices faltantes: `idx_notes_entity_id`, `idx_entities_blind_index` | Performance para sync de grandes volúmenes |
-| 3.5.6 | Implementar múltiples blind indexes por entidad | Búsqueda server-side sin descifrado masivo |
-| 3.5.7 | Zeroize de claves sensibles en RAM (`zeroize` crate) | Cuando `lock_vault` limpia, garantizar borrado seguro |
+| 3.5.3 | Alimentar `sync_queue` desde TODOS los comandos de escritura | Sin esto, el sync engine no tiene trabajo |
+| 3.5.4 | Agregar índices faltantes: `idx_notes_entity_id`, `idx_entities_blind_index` | Performance para sync de grandes volúmenes |
+| 3.5.5 | Implementar múltiples blind indexes por entidad | Búsqueda server-side sin descifrado masivo |
+| 3.5.6 | Zeroize de claves sensibles en RAM (`zeroize` crate) | Cuando `lock_vault` limpia, garantizar borrado seguro |
 
 ---
 
@@ -71,8 +70,7 @@ Nota 3 (id=3, previous_note_id=NULL, signature=CCC, created_at=11:00)
 |-----------|-----------|
 | Dos médicos crean notas simultáneamente | Ambas existen. Orden por `created_at`. |
 | Médico crea nota offline, otro online | Ambas existen. No hay conflicto. |
-| Nota "corregida" en Device A, original en Device B | Ambas existen. La UI muestra la cadena de correcciones. |
-| Nota con `previous_note_id` que aún no llegó | La UI muestra "corrección pendiente" hasta que llegue la original. |
+| Las nota se crean y no se pueden modificar | Las notas No puede ser editadas
 
 **No se necesita resolución de conflictos.** Solo ordenamiento cronológico.
 

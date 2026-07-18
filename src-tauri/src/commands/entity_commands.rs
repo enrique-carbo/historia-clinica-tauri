@@ -1,8 +1,3 @@
-// ============================================================
-// COMANDOS EXPERIMENTALES — Template v1
-// Conviven con patient_commands.rs (legacy).
-// ============================================================
-
 use crate::config_schema::SchemaConfig;
 use crate::crypto;
 use crate::lib_types::{DataKey, DbState}; // ← Cambiar CryptoState por DataKey

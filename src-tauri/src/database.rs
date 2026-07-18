@@ -21,8 +21,9 @@ pub fn init_db(app_dir: PathBuf) -> Result<Connection, String> {
     )
     .map_err(|e| format!("Error al activar PRAGMAs: {}", e))?;
 
-    // La regla de oro en SQL: Siempre crea primero las tablas Padre (las que son referenciadas)
-    // y luego las Hijas. Orden: users -> professional_profiles -> patients -> consultas/métricas
+    // ============================================================
+    // TABLAS PADRE (se crean primero, son referenciadas por hijas)
+    // ============================================================
 
     // 1. Tabla de Usuarios (Médicos, Admins, Pacientes)
     conn.execute(
@@ -61,13 +62,13 @@ pub fn init_db(app_dir: PathBuf) -> Result<Connection, String> {
     // TABLAS GENÉRICAS (Template v1)
     // ============================================================
 
-    // 3. Tabla Entidades genéricas: pacientes humanos o animales segun corresponda
+    // 3. Tabla Entidades genéricas: pacientes humanos o animales según corresponda
     conn.execute(
         "CREATE TABLE IF NOT EXISTS entities (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             external_id TEXT UNIQUE,
             entity_type TEXT NOT NULL,
-            created_by_user_id INTEGER NOT NULL,
+            created_by_user_id TEXT NOT NULL,
             blind_index TEXT UNIQUE,
             enc_data_blob BLOB NOT NULL,
             created_at TEXT NOT NULL
@@ -92,32 +93,38 @@ pub fn init_db(app_dir: PathBuf) -> Result<Connection, String> {
             created_by_user_id TEXT NOT NULL,
             enc_fields BLOB NOT NULL,
             signature BLOB NOT NULL,
-            created_at TEXT NOT NULL
+            created_at TEXT NOT NULL,
+            FOREIGN KEY(entity_id) REFERENCES entities(id),
+            FOREIGN KEY(created_by_user_id) REFERENCES users(id)
         );",
         [],
     )
     .map_err(|e| format!("Error al crear tabla notes: {}", e))?;
 
-    // 5. Tabla patient_keys
-
+    // 5. Tabla entity_keys
+    //    Cada entidad que sea usuario de telemedicina
+    //    tiene su propia clave de datos, cifrada con la clave maestra
+    //    del médico que la creó o con la que el usuario estableció.
+    //    Permite compartir datos cifrados con múltiples médicos.
     conn.execute(
-        "CREATE TABLE IF NOT EXISTS patient_keys (
-        patient_user_id TEXT PRIMARY KEY,
-        patient_data_key_ciphertext TEXT NOT NULL,
-        patient_data_key_nonce TEXT NOT NULL,
-        created_at TEXT NOT NULL,
-        FOREIGN KEY(patient_user_id) REFERENCES users(id)
-    );",
+        "CREATE TABLE IF NOT EXISTS entity_keys (
+            entity_id INTEGER PRIMARY KEY,
+            entity_data_key_ciphertext TEXT NOT NULL,
+            entity_data_key_nonce TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY(entity_id) REFERENCES entities(id)
+        );",
         [],
     )
-    .map_err(|e| format!("Error al crear tabla patients_keys: {}", e))?;
+    .map_err(|e| format!("Error al crear tabla entity_keys: {}", e))?;
 
     // 6. Tabla cola de sincronización: reemplazará 'is_synced' en tablas individuales
     conn.execute(
         "CREATE TABLE IF NOT EXISTS sync_queue (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             table_name TEXT NOT NULL,
-            record_id INTEGER NOT NULL,
+            local_record_id INTEGER NOT NULL,
+            external_record_id TEXT,
             operation TEXT NOT NULL,
             created_at TEXT NOT NULL
         );",
@@ -125,9 +132,29 @@ pub fn init_db(app_dir: PathBuf) -> Result<Connection, String> {
     )
     .map_err(|e| format!("Error al crear tabla sync_queue: {}", e))?;
 
-    println!(
-        "¡Tablas genéricas (template) de la base de datos local verificadas/creadas con éxito!"
-    );
+    // ============================================================
+    // ÍNDICES DE PERFORMANCE
+    // ============================================================
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_notes_entity_id ON notes(entity_id);",
+        [],
+    )
+    .ok();
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_notes_created_by ON notes(created_by_user_id);",
+        [],
+    )
+    .ok();
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_sync_queue_table ON sync_queue(table_name);",
+        [],
+    )
+    .ok();
+
+    println!("¡Tablas de la base de datos local verificadas/creadas con éxito!");
 
     Ok(conn)
 }
