@@ -19,6 +19,11 @@ pub struct ProfessionalProfile {
     pub license_number: String,
     pub specialty: String,
     pub public_key: String,
+    // Nuevos campos
+    pub address: String,
+    pub phone: String,
+    pub email: String,
+    pub website: String,
 }
 
 #[derive(Deserialize)]
@@ -27,6 +32,11 @@ pub struct UpdateProfileInput {
     pub full_name: String,
     pub license_number: String,
     pub specialty: String,
+    // Nuevos campos
+    pub address: String,
+    pub phone: String,
+    pub email: String,
+    pub website: String,
 }
 
 // =======================================================================
@@ -42,14 +52,30 @@ pub fn get_my_profile(
 ) -> Result<ProfessionalProfile, String> {
     let data_key = get_data_key(&data_key_state)?;
 
+    // Helper interno para descifrar un par ciphertext/nonce
+    let decrypt_field = |ct: String, nonce: String| -> String {
+        if ct.is_empty() {
+            return String::new();
+        }
+        let enc = crypto::EncryptedData {
+            ciphertext: ct,
+            nonce,
+        };
+        crypto::decrypt_text(&enc, &data_key).unwrap_or_default()
+    };
+
     let row = with_conn(&db_state, |conn| {
         conn.query_row(
             "SELECT full_name_ciphertext, full_name_nonce,
-                    license_number_ciphertext, license_number_nonce,
-                    specialty_ciphertext, specialty_nonce,
-                    public_key
-             FROM professional_profiles
-             WHERE user_id = ?1",
+                     license_number_ciphertext, license_number_nonce,
+                     specialty_ciphertext, specialty_nonce,
+                     public_key,
+                     address_ciphertext, address_nonce,
+                     phone_ciphertext, phone_nonce,
+                     email_ciphertext, email_nonce,
+                     website_ciphertext, website_nonce
+              FROM professional_profiles
+              WHERE user_id = ?1",
             params![&user_id],
             |row| {
                 Ok((
@@ -60,59 +86,49 @@ pub fn get_my_profile(
                     row.get::<_, String>(4)?,
                     row.get::<_, String>(5)?,
                     row.get::<_, String>(6)?,
+                    row.get::<_, String>(7)?,
+                    row.get::<_, String>(8)?,
+                    row.get::<_, String>(9)?,
+                    row.get::<_, String>(10)?,
+                    row.get::<_, String>(11)?,
+                    row.get::<_, String>(12)?,
+                    row.get::<_, String>(13)?,
+                    row.get::<_, String>(14)?,
                 ))
             },
         )
         .map_err(|e| e.to_string())
     })?;
 
+    // Desempaquetar y descifrar
     let (
-        full_name_ct,
-        full_name_nonce,
-        license_ct,
-        license_nonce,
-        specialty_ct,
-        specialty_nonce,
-        public_key,
+        fn_ct,
+        fn_n,
+        ln_ct,
+        ln_n,
+        sp_ct,
+        sp_n,
+        pk,
+        addr_ct,
+        addr_n,
+        ph_ct,
+        ph_n,
+        em_ct,
+        em_n,
+        web_ct,
+        web_n,
     ) = row;
-
-    // Descifrar campos (si están vacíos, devolver string vacío)
-    let full_name = if full_name_ct.is_empty() {
-        String::new()
-    } else {
-        let enc = crypto::EncryptedData {
-            ciphertext: full_name_ct,
-            nonce: full_name_nonce,
-        };
-        crypto::decrypt_text(&enc, &data_key).unwrap_or_default()
-    };
-
-    let license_number = if license_ct.is_empty() {
-        String::new()
-    } else {
-        let enc = crypto::EncryptedData {
-            ciphertext: license_ct,
-            nonce: license_nonce,
-        };
-        crypto::decrypt_text(&enc, &data_key).unwrap_or_default()
-    };
-
-    let specialty = if specialty_ct.is_empty() {
-        String::new()
-    } else {
-        let enc = crypto::EncryptedData {
-            ciphertext: specialty_ct,
-            nonce: specialty_nonce,
-        };
-        crypto::decrypt_text(&enc, &data_key).unwrap_or_default()
-    };
 
     Ok(ProfessionalProfile {
         user_id,
-        full_name,
-        license_number,
-        specialty,
-        public_key,
+        full_name: decrypt_field(fn_ct, fn_n),
+        license_number: decrypt_field(ln_ct, ln_n),
+        specialty: decrypt_field(sp_ct, sp_n),
+        public_key: pk,
+        address: decrypt_field(addr_ct, addr_n),
+        phone: decrypt_field(ph_ct, ph_n),
+        email: decrypt_field(em_ct, em_n),
+        website: decrypt_field(web_ct, web_n),
     })
 }
 
@@ -125,35 +141,52 @@ pub fn update_my_profile(
 ) -> Result<bool, String> {
     let data_key = get_data_key(&data_key_state)?;
 
-    // Cifrar campos
-    let full_name_enc = crypto::encrypt_text(&input.full_name, &data_key)?;
-    let license_enc = crypto::encrypt_text(&input.license_number, &data_key)?;
-    let specialty_enc = crypto::encrypt_text(&input.specialty, &data_key)?;
+    // Cifrar todos los campos sensibles
+    let encrypt = |text: &str| -> Result<(String, String), String> {
+        let enc = crypto::encrypt_text(text, &data_key)?;
+        Ok((enc.ciphertext, enc.nonce))
+    };
+
+    let (fn_ct, fn_n) = encrypt(&input.full_name)?;
+    let (ln_ct, ln_n) = encrypt(&input.license_number)?;
+    let (sp_ct, sp_n) = encrypt(&input.specialty)?;
+    let (addr_ct, addr_n) = encrypt(&input.address)?;
+    let (ph_ct, ph_n) = encrypt(&input.phone)?;
+    let (em_ct, em_n) = encrypt(&input.email)?;
+    let (web_ct, web_n) = encrypt(&input.website)?;
 
     with_conn(&db_state, |conn| {
         conn.execute(
             "UPDATE professional_profiles
-             SET full_name_ciphertext = ?1,
-                 full_name_nonce = ?2,
-                 license_number_ciphertext = ?3,
-                 license_number_nonce = ?4,
-                 specialty_ciphertext = ?5,
-                 specialty_nonce = ?6
-             WHERE user_id = ?7",
+             SET full_name_ciphertext = ?1, full_name_nonce = ?2,
+                 license_number_ciphertext = ?3, license_number_nonce = ?4,
+                 specialty_ciphertext = ?5, specialty_nonce = ?6,
+                 address_ciphertext = ?7, address_nonce = ?8,
+                 phone_ciphertext = ?9, phone_nonce = ?10,
+                 email_ciphertext = ?11, email_nonce = ?12,
+                 website_ciphertext = ?13, website_nonce = ?14,
+                 updated_at = datetime('now')
+             WHERE user_id = ?15",
             params![
-                full_name_enc.ciphertext,
-                full_name_enc.nonce,
-                license_enc.ciphertext,
-                license_enc.nonce,
-                specialty_enc.ciphertext,
-                specialty_enc.nonce,
+                fn_ct,
+                fn_n,
+                ln_ct,
+                ln_n,
+                sp_ct,
+                sp_n,
+                addr_ct,
+                addr_n,
+                ph_ct,
+                ph_n,
+                em_ct,
+                em_n,
+                web_ct,
+                web_n,
                 &input.user_id,
             ],
         )
         .map_err(|e| e.to_string())?;
-
         Ok(())
     })?;
-
     Ok(true)
 }

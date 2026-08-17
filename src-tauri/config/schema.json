@@ -100,6 +100,14 @@
           "required": false,
           "encrypted": true,
           "placeholder": "Ej: Penicilina..."
+        },
+        {
+          "name": "medicacion",
+          "label": "Medicación habitual",
+          "type": "textarea",
+          "required": false,
+          "encrypted": true,
+          "placeholder": "Ej: Enalapril, Amlodipina..."
         }
       ]
     }
