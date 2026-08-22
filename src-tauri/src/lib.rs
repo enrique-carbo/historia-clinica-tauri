@@ -1,3 +1,4 @@
+use crate::config_schema::MedicalHistorySchemaConfig;
 use rand::RngCore;
 use std::sync::Mutex;
 use tauri::Manager;
@@ -48,12 +49,19 @@ pub fn run() {
             let schema: config_schema::SchemaConfig =
                 serde_json::from_str(SCHEMA_JSON).map_err(|e| format!("Schema inválido: {}", e))?;
 
+            const MEDICAL_HISTORY_SCHEMA_JSON: &str =
+                include_str!("../config/medical_history_schema.json");
+            let medical_history_schema: MedicalHistorySchemaConfig =
+                serde_json::from_str(MEDICAL_HISTORY_SCHEMA_JSON)
+                    .map_err(|e| format!("Error parseando medical_history_schema.json: {}", e))?;
+
             const NOTE_TEMPLATES_JSON: &str = include_str!("../config/note_templates/soap.json");
             let note_templates: config_schema::NoteTemplatesConfig =
                 serde_json::from_str(NOTE_TEMPLATES_JSON)
                     .map_err(|e| format!("Note templates inválidos: {}", e))?;
 
             app.manage(schema);
+            app.manage(medical_history_schema);
             app.manage(note_templates);
 
             Ok(())
@@ -76,6 +84,8 @@ pub fn run() {
             commands::is_vault_unlocked,
             commands::get_my_profile,
             commands::update_my_profile,
+            commands::upsert_medical_history,
+            commands::get_medical_history,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

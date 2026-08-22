@@ -1,12 +1,14 @@
 // Traemos los sub-módulos
 mod auth_commands;
 mod entity_commands;
+mod medical_history_commands;
 mod note_commands;
 mod professional_profile_commands;
 
 // Re-exportamos todo al exterior
 pub use auth_commands::*;
 pub use entity_commands::*;
+pub use medical_history_commands::*;
 pub use note_commands::*;
 pub use professional_profile_commands::*;
 

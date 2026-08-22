@@ -109,7 +109,31 @@ pub fn init_db(app_dir: PathBuf) -> Result<Connection, String> {
     )
     .map_err(|e| format!("Error al crear tabla notes: {}", e))?;
 
-    // 5. Tabla entity_keys
+    // 5. Tabla Medical History: antecedentes clínicos mutables por paciente
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS medical_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            external_id TEXT UNIQUE NOT NULL,
+            entity_id INTEGER NOT NULL,
+            created_by_user_id TEXT NOT NULL,
+            enc_fields BLOB NOT NULL,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY(entity_id) REFERENCES entities(id),
+            FOREIGN KEY(created_by_user_id) REFERENCES users(id)
+        );",
+        [],
+    )
+    .map_err(|e| format!("Error al crear tabla medical_history: {}", e))?;
+
+    // Un solo registro mutable por paciente
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_medical_history_entity
+         ON medical_history(entity_id);",
+        [],
+    )
+    .map_err(|e| format!("Error al crear índice medical_history: {}", e))?;
+
+    // 6. Tabla entity_keys
     //    Cada entidad que sea usuario de telemedicina
     //    tiene su propia clave de datos, cifrada con la clave maestra
     //    del médico que la creó o con la que el usuario estableció.
@@ -126,7 +150,7 @@ pub fn init_db(app_dir: PathBuf) -> Result<Connection, String> {
     )
     .map_err(|e| format!("Error al crear tabla entity_keys: {}", e))?;
 
-    // 6. Tabla cola de sincronización: reemplazará 'is_synced' en tablas individuales
+    // 7. Tabla cola de sincronización: reemplazará 'is_synced' en tablas individuales
     conn.execute(
         "CREATE TABLE IF NOT EXISTS sync_queue (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

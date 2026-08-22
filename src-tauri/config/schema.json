@@ -58,56 +58,6 @@
           "type": "textarea",
           "required": false,
           "encrypted": true
-        },
-        {
-          "name": "grupo_sanguineo",
-          "label": "Grupo Sanguíneo",
-          "type": "select",
-          "required": false,
-          "encrypted": true,
-          "options": [
-            "A+",
-            "A-",
-            "B+",
-            "B-",
-            "AB+",
-            "AB-",
-            "O+",
-            "O-",
-            "Desconocido"
-          ]
-        },
-        {
-          "name": "antecedentes_personales",
-          "label": "Antecedentes Personales Patológicos",
-          "type": "textarea",
-          "required": false,
-          "encrypted": true,
-          "placeholder": "Ej: Hipertensión arterial, Diabetes tipo 2, Hipotiroidismo..."
-        },
-        {
-          "name": "antecedentes_familiares",
-          "label": "Antecedentes Familiares",
-          "type": "textarea",
-          "required": false,
-          "encrypted": true,
-          "placeholder": "Ej: Padre con IAM a los 50 años, Madre con cáncer de mama..."
-        },
-        {
-          "name": "alergias",
-          "label": "Alergias",
-          "type": "textarea",
-          "required": false,
-          "encrypted": true,
-          "placeholder": "Ej: Penicilina..."
-        },
-        {
-          "name": "medicacion",
-          "label": "Medicación habitual",
-          "type": "textarea",
-          "required": false,
-          "encrypted": true,
-          "placeholder": "Ej: Enalapril, Amlodipina..."
         }
       ]
     }
