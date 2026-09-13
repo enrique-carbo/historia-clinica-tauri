@@ -41,11 +41,13 @@ pub fn create_entity(
     schema.validate_entity_data(&entity_type, &data)?;
 
     let blind_index_field = schema.get_blind_index_field(&entity_type)?;
-    let dni = data
+    let dni: String = data
         .get(&blind_index_field)
         .ok_or_else(|| format!("Campo de blind index faltante: {}", blind_index_field))?
-        .trim()
-        .to_lowercase();
+        .chars()
+        .filter(|c| c.is_alphanumeric())
+        .collect::<String>()
+        .to_uppercase();
 
     let blind_index = crypto::generate_blind_index(&dni);
     let blind_index_hex = blind_index.clone();

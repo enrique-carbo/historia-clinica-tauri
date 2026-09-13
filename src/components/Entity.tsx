@@ -113,7 +113,6 @@ export function Entity() {
       if (id) {
         setResult(`🔍 Encontrado: ID=${id}`);
         await handleSelect(id);
-        //await loadEntityForEdit(id);
       } else {
         setResult("🔍 No encontrado");
       }
