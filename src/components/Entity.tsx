@@ -112,7 +112,8 @@ export function Entity() {
       });
       if (id) {
         setResult(`🔍 Encontrado: ID=${id}`);
-        await loadEntityForEdit(id);
+        await handleSelect(id);
+        //await loadEntityForEdit(id);
       } else {
         setResult("🔍 No encontrado");
       }
@@ -249,6 +250,7 @@ export function Entity() {
           <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest">
             Padrón de Pacientes
           </h3>
+          <div className="flex gap-2">
           <input
             type="text"
             value={searchQuery}
@@ -256,7 +258,15 @@ export function Entity() {
             onKeyDown={(e) => e.key === "Enter" && handleSearch()}
             placeholder="Buscar por nombre, teléfono..."
             className="w-full rounded-lg bg-zinc-950 border border-zinc-700 px-4 py-2.5 text-sm text-zinc-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all outline-none"
-          />
+            />
+            <button
+              onClick={handleSearch}
+              disabled={loading}
+              className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50 transition-colors"
+            >
+              🔍
+            </button>
+          </div>
           <div className="flex gap-2">
             <input
               type="text"

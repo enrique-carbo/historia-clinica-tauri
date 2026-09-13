@@ -145,7 +145,13 @@ pub fn find_entity_by_blind_index(
     dni: String,
     db_state: State<'_, DbState>,
 ) -> Result<Option<i64>, String> {
-    let dni_normalized = dni.trim().to_lowercase();
+    // Normalización en Rust: quita todo lo que no sea alfanumérico y pone en mayúsculas
+    // Esto compatibiliza con formatos internacionales: "12.345.678", "12345678", "12345678A"
+    let dni_normalized: String = dni
+        .chars()
+        .filter(|c| c.is_alphanumeric())
+        .collect::<String>()
+        .to_uppercase();
     let blind_index = crypto::generate_blind_index(&dni_normalized);
 
     let found_id = with_conn(&db_state, |conn| {

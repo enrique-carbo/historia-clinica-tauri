@@ -1,6 +1,7 @@
 import { ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useAuthStore } from "../../stores/useAuthStore";
+import { usePatientStore } from "../../stores/usePatientStore";
 import { useEntityStore } from "../../stores/useEntityStore";
 import { useNoteStore } from "../../stores/useNoteStore";
 
@@ -26,6 +27,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       useNoteStore.setState({
         notes: [],
         selectedNote: null,
+        isLoading: false,
+        error: null,
+      });
+      usePatientStore.setState({
+        selected: null,
         isLoading: false,
         error: null,
       });
