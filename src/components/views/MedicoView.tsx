@@ -9,6 +9,7 @@ import { MedicalHistoryForm } from "../../components/MedicalHistoryForm";
 const MEDICO_TABS: Tab[] = [
   { id: "perfil", label: "Perfil", icon: "👨🏻‍⚕️" },
   { id: "paciente", label: "Paciente", icon: "👤" },
+  { id: "antecedentes", label: "Antecedentes", icon: "📝" },
   { id: "ehr", label: "Historia Clínica", icon: "📋" },
 ];
 
@@ -26,10 +27,18 @@ export function MedicoView() {
               <span className="p-1.5 rounded bg-blue-900/20 text-blue-400">👤</span>
               Admitir / Editar Paciente
             </h2>
-            <Entity />
+            <Entity/>
           </div>
-          <div className="border-t border-zinc-800 my-2 opacity-50"></div>
+        </div>
+      )}
+
+      {activeTab === "antecedentes" && (
+        <div className="flex flex-col gap-8 mx-auto w-full p-6">
           <div>
+            <h2 className="text-lg font-semibold mb-4 text-zinc-300 flex items-center gap-2">
+              <span className="p-1.5 rounded bg-blue-900/20 text-blue-400">👤</span>
+              Antecedentes
+            </h2>
             <MedicalHistoryForm />
           </div>
         </div>
