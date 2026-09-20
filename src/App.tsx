@@ -30,11 +30,11 @@ export default function App() {
 
   return (
     <DashboardLayout>
-      {activeUser.role === "admin" && <AdminView />}
+      {activeUser.role === "admin" && <AdminView/>}
 
-      {activeUser.role === "medico" && <MedicoView />}
+      {activeUser.role === "medico" && <MedicoView/>}
 
-      {activeUser.role === "paciente" && <PacienteView />}
+      {activeUser.role === "paciente" && <PacienteView/>}
     </DashboardLayout>
   );
 }

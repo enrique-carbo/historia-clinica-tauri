@@ -59,14 +59,14 @@ export function ProfileView() {
     <div className="max-w-4xl mx-auto p-8 bg-zinc-900 rounded-xl border border-zinc-800 shadow-lg">
       <div className="flex justify-between items-center mb-8 border-b border-zinc-800 pb-4">
         <h2 className="text-2xl font-bold text-zinc-100 flex items-center gap-2">
-          👤 Perfil Profesional
+          👤 <span className="hidden md:inline">Datos del profesional</span>
         </h2>
         {!isEditing && (
           <button
             onClick={() => setIsEditing(true)}
             className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
           >
-            Editar Información
+            Editar
           </button>
         )}
       </div>

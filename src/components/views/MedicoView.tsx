@@ -1,10 +1,10 @@
 // src/components/views/MedicoView.tsx
-import { useState } from "react";
 import { Navbar, Tab } from "../../components/ui/Navbar";
 import { PatientEhrView } from "../../components/PatientEhrView";
 import { Entity } from "../Entity";
 import { ProfileView } from "../../components/ProfileView";
 import { MedicalHistoryForm } from "../../components/MedicalHistoryForm";
+import { useNavigationStore, MedicoTab } from "../../stores/useNavigationStore";
 
 const MEDICO_TABS: Tab[] = [
   { id: "perfil", label: "Perfil", icon: "👨🏻‍⚕️" },
@@ -14,13 +14,13 @@ const MEDICO_TABS: Tab[] = [
 ];
 
 export function MedicoView() {
-  const [activeTab, setActiveTab] = useState("perfil");
+  const { activeMedicoTab, setActiveMedicoTab } = useNavigationStore();
 
   return (
-    <Navbar tabs={MEDICO_TABS} activeTab={activeTab} onTabChange={setActiveTab}>
-      {activeTab === "ehr" && <PatientEhrView />}
+    <Navbar tabs={MEDICO_TABS} activeTab={activeMedicoTab} onTabChange={(tab) => setActiveMedicoTab(tab as MedicoTab)}>
+      {activeMedicoTab === "ehr" && <PatientEhrView />}
 
-      {activeTab === "paciente" && (
+      {activeMedicoTab === "paciente" && (
         <div className="flex flex-col gap-8 mx-auto w-full p-6">
           <div>
             <h2 className="text-lg font-semibold mb-4 text-zinc-300 flex items-center gap-2">
@@ -32,19 +32,15 @@ export function MedicoView() {
         </div>
       )}
 
-      {activeTab === "antecedentes" && (
+      {activeMedicoTab === "antecedentes" && (
         <div className="flex flex-col gap-8 mx-auto w-full p-6">
           <div>
-            <h2 className="text-lg font-semibold mb-4 text-zinc-300 flex items-center gap-2">
-              <span className="p-1.5 rounded bg-blue-900/20 text-blue-400">👤</span>
-              Antecedentes
-            </h2>
             <MedicalHistoryForm />
           </div>
         </div>
       )}
 
-      {activeTab === "perfil" && (
+      {activeMedicoTab === "perfil" && (
         <div className="flex flex-col gap-8 max-w-3xl mx-auto w-full p-6">
           <div>
             <h2 className="text-lg font-semibold mb-4 text-zinc-300">Perfil Profesional</h2>

@@ -242,30 +242,34 @@ export function Entity() {
   const selectedId = selected?.patient?.id ?? null;
 
   return (
-    <div className="grid grid-cols-12 gap-6 h-[calc(100vh-180px)]">
-      {/* PANEL IZQUIERDO: Búsqueda y Listado (compartido visualmente con EHR) */}
-      <div className="col-span-4 flex flex-col border border-zinc-800 rounded-xl bg-zinc-900/50 backdrop-blur-sm overflow-hidden shadow-lg">
+    <div className="grid grid-cols-1 md:grid-cols-12 gap-6 h-auto md:h-[calc(100vh-180px)]">
+      {/* PANEL IZQUIERDO: Búsqueda y Listado */}
+      <div className="col-span-1 md:col-span-5 lg:col-span-4 flex flex-col border border-zinc-800 rounded-xl bg-zinc-900/50 backdrop-blur-sm overflow-hidden shadow-lg min-h-100 md:min-h-0">
         <div className="p-4 border-b border-zinc-800 space-y-3 bg-zinc-900">
           <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest">
             Padrón de Pacientes
           </h3>
+
+          {/* Búsqueda por Nombre / Teléfono */}
           <div className="flex gap-2">
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-            placeholder="Buscar por nombre, teléfono..."
-            className="w-full rounded-lg bg-zinc-950 border border-zinc-700 px-4 py-2.5 text-sm text-zinc-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all outline-none"
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+              placeholder="Buscar por nombre, teléfono..."
+              className="w-full min-w-0 rounded-lg bg-zinc-950 border border-zinc-700 px-3.5 py-2 text-sm text-zinc-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all outline-none"
             />
             <button
               onClick={handleSearch}
               disabled={loading}
-              className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50 transition-colors"
+              className="shrink-0 rounded-lg bg-amber-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50 transition-colors"
             >
               🔍
             </button>
           </div>
+
+          {/* Búsqueda por DNI */}
           <div className="flex gap-2">
             <input
               type="text"
@@ -273,24 +277,26 @@ export function Entity() {
               onChange={(e) => setSearchDni(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleFind()}
               placeholder="DNI exacto..."
-              className="flex-1 rounded-lg bg-zinc-950 border border-zinc-700 px-3 py-2 text-sm text-zinc-200 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all outline-none"
+              className="w-full min-w-0 flex-1 rounded-lg bg-zinc-950 border border-zinc-700 px-3.5 py-2 text-sm text-zinc-200 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all outline-none"
             />
             <button
               onClick={handleFind}
               disabled={loading}
-              className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50 transition-colors"
+              className="shrink-0 rounded-lg bg-amber-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50 transition-colors"
             >
               🔍
             </button>
           </div>
         </div>
-        <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
+
+        {/* Lista de Pacientes */}
+        <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar max-h-[50vh] md:max-h-none">
           {loading ? (
             <div className="flex justify-center py-8">
               <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
             </div>
           ) : entities.length === 0 ? (
-            <div className="text-center py-12 text-zinc-600 text-sm">
+            <div className="text-center py-12 text-zinc-600 text-sm px-4">
               {searchQuery || searchDni
                 ? "No se encontraron coincidencias"
                 : "Busca un paciente o crea uno nuevo"}
@@ -299,16 +305,16 @@ export function Entity() {
             entities.map((e) => (
               <div
                 key={e.id}
-                className={`w-full text-left p-3 rounded-lg transition-all duration-200 group flex justify-between items-center ${
+                className={`w-full text-left p-3 rounded-lg transition-all duration-200 group flex items-center justify-between gap-2 ${
                   selectedId === e.id
                     ? "bg-blue-900/20 border border-blue-500/50 shadow-md"
                     : "bg-zinc-950/50 border border-transparent hover:bg-zinc-800 hover:border-zinc-700"
                 }`}
               >
-                <div className="flex-1 cursor-pointer" onClick={() => handleSelect(e.id)}>
-                  <div className="flex justify-between items-start">
+                <div className="flex-1 min-w-0 cursor-pointer" onClick={() => handleSelect(e.id)}>
+                  <div className="flex justify-between items-start gap-2">
                     <div
-                      className={`font-semibold transition-colors ${
+                      className={`font-semibold transition-colors truncate ${
                         selectedId === e.id
                           ? "text-blue-400"
                           : "text-zinc-200 group-hover:text-white"
@@ -317,19 +323,22 @@ export function Entity() {
                       {e.data.nombre} {e.data.apellido}
                     </div>
                     {selectedId === e.id && (
-                      <span className="h-2 w-2 rounded-full bg-blue-500 mt-1.5"></span>
+                      <span className="h-2 w-2 shrink-0 rounded-full bg-blue-500 mt-1.5"></span>
                     )}
                   </div>
-                  <div className="text-xs text-zinc-500 mt-1.5 flex items-center gap-2">
-                    <span className="bg-zinc-800 px-1.5 py-0.5 rounded text-zinc-400">
+                  <div className="text-xs text-zinc-500 mt-1.5 flex flex-wrap items-center gap-2">
+                    <span className="bg-zinc-800 px-1.5 py-0.5 rounded text-zinc-400 font-mono">
                       DNI: {e.data.dni}
                     </span>
-                    <span>{e.data.telefono}</span>
+                    <span className="truncate">{e.data.telefono}</span>
                   </div>
                 </div>
+
+                {/* En móviles siempre visible, en desktop sólo en hover */}
                 <button
                   onClick={() => loadEntityForEdit(e.id)}
-                  className="ml-3 px-2.5 py-1.5 rounded-lg bg-zinc-800 text-zinc-400 hover:text-white hover:bg-amber-600 transition-colors text-xs font-bold uppercase tracking-wide border border-zinc-700 hover:border-amber-500 opacity-0 group-hover:opacity-100"
+                  className="shrink-0 px-2.5 py-1.5 rounded-lg bg-zinc-800 text-zinc-400 hover:text-white hover:bg-amber-600 transition-all text-xs font-bold border border-zinc-700 hover:border-amber-500 opacity-100 md:opacity-0 md:group-hover:opacity-100"
+                  title="Editar paciente"
                 >
                   ✏️
                 </button>
@@ -340,14 +349,15 @@ export function Entity() {
       </div>
 
       {/* PANEL DERECHO: Formulario Dinámico */}
-      <div className="col-span-8 flex flex-col gap-4 overflow-hidden">
+      <div className="col-span-1 md:col-span-7 lg:col-span-8 flex flex-col gap-4 overflow-hidden">
         {result && (
-          <div className="whitespace-pre-wrap rounded-lg border border-zinc-800 bg-zinc-950 p-3 text-sm text-zinc-300 font-mono shadow-inner animate-in fade-in duration-200">
+          <div className="whitespace-pre-wrap rounded-lg border border-zinc-800 bg-zinc-950 p-3 text-sm text-zinc-300 font-mono shadow-inner animate-in fade-in duration-200 overflow-x-auto">
             {result}
           </div>
         )}
+
         <div
-          className={`flex-1 overflow-y-auto border p-6 rounded-xl shadow-lg transition-colors custom-scrollbar ${
+          className={`flex-1 overflow-y-auto p-4 sm:p-6 border rounded-xl shadow-lg transition-colors custom-scrollbar ${
             editingId
               ? "border-amber-700/50 bg-amber-900/10"
               : "border-zinc-800 bg-zinc-900/50"
@@ -366,9 +376,14 @@ export function Entity() {
               </button>
             )}
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+          {/* Grid responsivo de inputs: 1 col en móviles, 2 col en tablets/desktops */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {FIELDS_CONFIG.map((field: any) => (
-              <div key={field.name} className={field.type === "textarea" ? "col-span-2" : ""}>
+              <div
+                key={field.name}
+                className={field.type === "textarea" ? "col-span-1 sm:col-span-2" : "col-span-1"}
+              >
                 <label className="block text-xs font-bold text-zinc-500 mb-1.5 uppercase tracking-wide">
                   {field.label} {field.required && <span className="text-red-500">*</span>}
                 </label>
@@ -376,11 +391,13 @@ export function Entity() {
               </div>
             ))}
           </div>
-          <div className="pt-6 flex justify-end gap-3 sticky bottom-0 bg-linear-to-t from-zinc-900 via-zinc-900 to-transparent pb-2">
+
+          {/* Footer sticky responsivo */}
+          <div className="pt-6 mt-4 flex flex-col-reverse sm:flex-row justify-end gap-3 sticky bottom-0 bg-linear-to-t from-zinc-900 via-zinc-900 to-transparent pb-2">
             {editingId && (
               <button
                 onClick={resetForm}
-                className="rounded-lg bg-zinc-700 px-6 py-2.5 text-sm font-bold text-white hover:bg-zinc-600 transition-all"
+                className="w-full sm:w-auto rounded-lg bg-zinc-700 px-6 py-2.5 text-sm font-bold text-white hover:bg-zinc-600 transition-all"
               >
                 Cancelar
               </button>
@@ -388,7 +405,7 @@ export function Entity() {
             <button
               onClick={handleCreateOrUpdate}
               disabled={loading}
-              className={`rounded-lg px-6 py-2.5 text-sm font-bold text-white shadow-lg transition-all ${
+              className={`w-full sm:w-auto rounded-lg px-6 py-2.5 text-sm font-bold text-white shadow-lg transition-all ${
                 editingId
                   ? "bg-amber-600 hover:bg-amber-700 shadow-amber-900/20"
                   : "bg-blue-600 hover:bg-blue-700 shadow-blue-900/20"

@@ -1,4 +1,3 @@
-// Navbar.tsx
 import { ReactNode } from "react";
 
 export interface Tab {
@@ -11,7 +10,7 @@ interface NavbarProps {
   tabs: Tab[];
   activeTab: string;
   onTabChange: (tabId: string) => void;
-  children: ReactNode; // Contenido del tab activo (ya filtrado afuera)
+  children: ReactNode;
 }
 
 export function Navbar({
@@ -21,30 +20,39 @@ export function Navbar({
   children,
 }: NavbarProps) {
   return (
-    <div className="flex flex-col h-full">
-      <nav className="flex gap-1 border-b border-zinc-800 bg-zinc-950 px-4 pt-3">
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => onTabChange(tab.id)}
-            className={`
-              relative px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors
-              ${
-                activeTab === tab.id
-                  ? "text-white bg-zinc-900 border-t border-x border-zinc-700 -mb-px"
-                  : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/50"
-              }
-            `}
-          >
-            <span className="flex items-center gap-2">
-              {tab.icon && <span>{tab.icon}</span>}
-              {tab.label}
-            </span>
-          </button>
-        ))}
-      </nav>
+    <div className="flex flex-col h-full w-full overflow-hidden select-none bg-zinc-950">
+      {/* Contenedor del Navbar con flex-wrap */}
+      <div className="w-full border-b border-zinc-800 bg-zinc-950 p-3 sm:px-4 sm:pt-3">
+        <nav className="flex flex-wrap gap-2 sm:gap-1.5 w-full">
+          {tabs.map((tab) => {
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => onTabChange(tab.id)}
+                className={`
+                  flex-1 sm:flex-none
+                  flex items-center justify-center gap-2 px-3.5 py-2 text-sm font-medium transition-all
+                  rounded-t-lg rounded-b-none
+                  ${
+                    isActive
+                      ? "text-white bg-zinc-900 border-b-2 border-indigo-500"
+                      : "text-zinc-400 hover:text-zinc-200 bg-zinc-900/40 hover:bg-zinc-900/60 border-b-2 border-transparent"
+                  }
+                `}
+              >
+                {tab.icon && <span className="text-base">{tab.icon}</span>}
+                <span className="truncate">{tab.label}</span>
+              </button>
+            );
+          })}
+        </nav>
+      </div>
 
-      <div className="flex-1 overflow-auto bg-zinc-950 p-4">{children}</div>
+      {/* Contenido principal */}
+      <div className="flex-1 w-full overflow-auto bg-zinc-950 p-4">
+        {children}
+      </div>
     </div>
   );
 }
