@@ -97,42 +97,53 @@ pub fn unlock_vault(
         .app_local_data_dir()
         .map_err(|e| format!("Error al obtener ruta del sistema: {}", e))?;
 
-    // El vault ahora devuelve 3 cosas: llave_cifrado, llave_firma, y llave_publica_opcional
+    // El vault devuelve: llave maestra, llave privada de firma y pública opcional
+    // (la pública solo viene en `Some` cuando el vault se crea en ESTA llamada).
     let (master_key, private_signing_key, public_key_opt) =
         vault::unlock_user_vault(app_dir.clone(), &user_id, &password)?;
 
-    // 1. Inyectamos la llave simétrica (AES) en CryptoState
-    let mut key_guard = crypto_state.0.lock().unwrap();
-    *key_guard = Some(master_key);
+    // 1. Sincronizar la llave pública en DB ANTES de resolve_data_key.
+    //    Si el primer intento falla con SEED_REQUIRED, el vault ya quedó creado
+    //    y el reintento (con seed) no recibiría `Some(...)` → la pública quedaría
+    //    vacía y TODAS las firmas de ese usuario verificarían como false.
+    let public_key_hex = match public_key_opt {
+        Some(pk) => pk,
+        None => crate::crypto::public_key_from_private(&private_signing_key),
+    };
+    super::with_conn(&db_state, |conn| {
+        conn.execute(
+            "UPDATE professional_profiles SET public_key = ?1, updated_at = ?2 WHERE user_id = ?3;",
+            rusqlite::params![
+                &public_key_hex,
+                &chrono::Utc::now().to_rfc3339(),
+                &user_id
+            ],
+        )
+        .map_err(|e| format!("Error al guardar llave pública: {}", e))
+    })?;
+    println!("🔑 [Core] Llave pública sincronizada en DB para: {}", user_id);
 
-    // 2. Inyectamos la llave asimétrica (Ed25519) en SigningState
-    let mut sign_guard = signing_state.0.lock().unwrap();
-    *sign_guard = Some(private_signing_key);
-
-    // 3. Resolver la data_key (cifrado de datos médicos) con master_key del usuario
+    // 2. Resolver la data_key (cifrado de datos médicos) con master_key del usuario
     //    - Fast path: wrap personal .data_key.{user_id}
     //    - Bootstrap: seed + .data_key.master (nuevos usuarios / recovery)
     //    - Legacy: migración de .data_key hex en claro
+    //    Puede fallar con SEED_REQUIRED → no inyectamos nada en RAM todavía.
     let resolved_data_key = data_key::resolve_data_key(
         &app_dir,
         &user_id,
         &master_key,
         seed_phrase.as_deref(),
     )?;
+
+    // 3. Inyectar llaves en RAM solo si TODO tuvo éxito
+    let mut key_guard = crypto_state.0.lock().unwrap();
+    *key_guard = Some(master_key);
+
+    let mut sign_guard = signing_state.0.lock().unwrap();
+    *sign_guard = Some(private_signing_key);
+
     let mut dk_guard = data_key_state.0.lock().unwrap();
     *dk_guard = Some(resolved_data_key);
-
-    // 4. Si es primer login, guardamos la llave pública en la DB
-    if let Some(pub_key) = public_key_opt {
-        super::with_conn(&db_state, |conn| {
-            conn.execute(
-                "UPDATE professional_profiles SET public_key = ?1 WHERE user_id = ?2;",
-                rusqlite::params![&pub_key, &user_id],
-            )
-            .map_err(|e| format!("Error al guardar llave pública: {}", e))
-        })?;
-        println!("🔑 [Core] Llave pública guardada en DB para: {}", user_id);
-    }
 
     println!("🔐 [Core] Bóveda desbloqueada. Llaves inyectadas en RAM.");
     Ok(true)

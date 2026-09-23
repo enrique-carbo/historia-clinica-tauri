@@ -108,6 +108,15 @@ pub fn generate_keypair() -> (SigningKey, VerifyingKey) {
     (signing_key, verifying_key)
 }
 
+/// Deriva la llave pública (hex) correspondiente a una llave privada Ed25519.
+/// Usada en `unlock_vault` para sincronizar `professional_profiles.public_key`
+/// incluso cuando el vault ya existía (segundo unlock no devuelve `Some`).
+pub fn public_key_from_private(private_key_bytes: &[u8; ED25519_SECRET_SIZE]) -> String {
+    let signing_key = SigningKey::from_bytes(private_key_bytes);
+    let verifying_key = VerifyingKey::from(&signing_key);
+    hex::encode(verifying_key.to_bytes())
+}
+
 pub fn hash_document(document_text: &str) -> [u8; 32] {
     let mut hasher = Sha256::new();
     hasher.update(document_text.as_bytes());
@@ -258,6 +267,18 @@ mod tests {
         let result =
             verify_signature(&hash, &signature, &hex::encode(verifying_key.as_bytes())).unwrap();
         assert!(result);
+    }
+
+    #[test]
+    fn test_public_key_from_private_matches_keypair() {
+        let (signing_key, verifying_key) = generate_keypair();
+        let derived = public_key_from_private(signing_key.as_bytes());
+        assert_eq!(derived, hex::encode(verifying_key.as_bytes()));
+
+        // Debe verificar firmas hechas con la privada original
+        let hash = hash_document("entry firmada");
+        let signature = sign_hash(&hash, signing_key.as_bytes()).unwrap();
+        assert!(verify_signature(&hash, &signature, &derived).unwrap());
     }
 
     #[test]
