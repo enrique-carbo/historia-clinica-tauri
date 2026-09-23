@@ -126,7 +126,7 @@ export function Entity() {
   const loadEntityForEdit = async (id: number) => {
     setLoading(true);
     try {
-      // Usar el store global para cargar paciente + clinical
+      // Usar el store global para cargar el paciente
       await selectPatient(id);
       setEditingId(id);
 
@@ -149,7 +149,7 @@ export function Entity() {
   };
 
   const handleSelect = async (id: number) => {
-    // Selección global: actualiza EHR, MedicalHistoryForm y este componente
+    // Selección global: actualiza EHR y este componente
     await selectPatient(id);
     setResult(`👁️ Seleccionado: ID=${id}. Haz clic en "Editar" para modificar.`);
   };

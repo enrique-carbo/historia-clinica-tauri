@@ -12,9 +12,30 @@ export function AuthBox() {
   const [role, setRole] = useState("medico");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [needsSeed, setNeedsSeed] = useState(false);
+  const [seedPhrase, setSeedPhrase] = useState("");
 
   // <-- Extraemos la función que actualiza el estado global
   const unlockVault = useAuthStore((state) => state.unlockVault);
+
+  const doLogin = async (seed?: string) => {
+    const user = await invoke<{
+      user_id: string;
+      username: string;
+      role: string;
+    }>("login_user", {
+      form: { username, password_plain: password },
+    });
+
+    await invoke("unlock_vault", {
+      userId: user.user_id,
+      password: password,
+      seedPhrase: seed ?? null,
+    });
+
+    // INYECTAMOS DIRECTAMENTE EN EL ESTADO GLOBAL:
+    unlockVault(user);
+  };
 
   const handleSubmit = async (e: React.SubmitEvent) => {
     e.preventDefault();
@@ -23,21 +44,16 @@ export function AuthBox() {
 
     try {
       if (isLogin) {
-        const user = await invoke<{
-          user_id: string;
-          username: string;
-          role: string;
-        }>("login_user", {
-          form: { username, password_plain: password },
-        });
-
-        await invoke("unlock_vault", {
-          userId: user.user_id,
-          password: password,
-        });
-
-        // INYECTAMOS DIRECTAMENTE EN EL ESTADO GLOBAL:
-        unlockVault(user);
+        try {
+          await doLogin();
+        } catch (err) {
+          if (String(err).includes("SEED_REQUIRED")) {
+            setNeedsSeed(true);
+            setError(null);
+            return;
+          }
+          throw err;
+        }
       } else {
         await invoke<string>("register_user", {
           form: { username, password_plain: password, role },
@@ -46,6 +62,21 @@ export function AuthBox() {
         setIsLogin(true);
         setPassword("");
       }
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSeedSubmit = async (e: React.SubmitEvent) => {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+
+    try {
+      await doLogin(seedPhrase.trim());
+      setNeedsSeed(false);
     } catch (err) {
       setError(String(err));
     } finally {
@@ -66,7 +97,42 @@ export function AuthBox() {
 
       {error && <Alert variant="error">{error}</Alert>}
 
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      {/* Formulario de seed (bootstrap / recovery) */}
+      {needsSeed && isLogin ? (
+        <form onSubmit={handleSeedSubmit} className="flex flex-col gap-4">
+          <div className="p-3 bg-yellow-950/30 border border-yellow-800/50 rounded-lg">
+            <p className="text-xs text-yellow-400">
+              🌱 Este usuario necesita la <strong>frase semilla</strong> (6 palabras del papel) para
+              acceder a los datos cifrados de esta instalación.
+            </p>
+          </div>
+          <div>
+            <Input
+              type="text"
+              label="Frase Semilla"
+              value={seedPhrase}
+              onChange={(e) => setSeedPhrase(e.target.value)}
+              required
+              placeholder="palabra1 palabra2 ... palabra6"
+            />
+          </div>
+          <Button type="submit" isLoading={loading} className="w-full">
+            Desbloquear con Seed
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              setNeedsSeed(false);
+              setSeedPhrase("");
+              setError(null);
+            }}
+            className="w-full underline text-center"
+          >
+            Volver
+          </Button>
+        </form>
+      ) : (
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         {/* Input Usuario */}
         <div>
           <Input
@@ -132,20 +198,23 @@ export function AuthBox() {
           {isLogin ? "Ingresar al Sistema" : "Crear Cuenta Local"}
         </Button>
       </form>
+      )}
 
-      {/* Toggle Login/Registro */}
-      <Button
-        variant="ghost"
-        onClick={() => {
-          setIsLogin(!isLogin);
-          setError(null);
-        }}
-        className="w-full mt-5 underline text-center"
-      >
-        {isLogin
-          ? "¿No tenés usuario local? Registrarse"
-          : "¿Ya tenés usuario? Iniciar Sesión"}
-      </Button>
+      {/* Toggle Login/Registro (solo cuando no hay seed pendiente) */}
+      {!needsSeed && (
+        <Button
+          variant="ghost"
+          onClick={() => {
+            setIsLogin(!isLogin);
+            setError(null);
+          }}
+          className="w-full mt-5 underline text-center"
+        >
+          {isLogin
+            ? "¿No tenés usuario local? Registrarse"
+            : "¿Ya tenés usuario? Iniciar Sesión"}
+        </Button>
+      )}
     </div>
   );
 }

@@ -1,0 +1,31 @@
+{
+  "category": "ALLERGY",
+  "label": "Alergia",
+  "description": "Registro de alergia del paciente",
+  "fields": [
+    {
+      "name": "sustancia",
+      "label": "Sustancia",
+      "type": "text",
+      "required": true,
+      "placeholder": "Ej: Penicilina, Polen, Mariscos..."
+    },
+    {
+      "name": "tipo_reaccion",
+      "label": "Tipo de Reacción",
+      "type": "select",
+      "required": true,
+      "options": ["Leve", "Moderada", "Severa", "Anafilaxia"]
+    },
+    {
+      "name": "descripcion",
+      "label": "Descripción",
+      "type": "textarea",
+      "required": false,
+      "placeholder": "Detalles de la reacción alérgica..."
+    }
+  ],
+  "signature_payload_order": ["sustancia", "tipo_reaccion"],
+  "immutable": true,
+  "requires_signature": true
+}

@@ -109,31 +109,7 @@ pub fn init_db(app_dir: PathBuf) -> Result<Connection, String> {
     )
     .map_err(|e| format!("Error al crear tabla notes: {}", e))?;
 
-    // 5. Tabla Medical History: antecedentes clínicos mutables por paciente
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS medical_history (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            external_id TEXT UNIQUE NOT NULL,
-            entity_id INTEGER NOT NULL,
-            created_by_user_id TEXT NOT NULL,
-            enc_fields BLOB NOT NULL,
-            updated_at TEXT NOT NULL,
-            FOREIGN KEY(entity_id) REFERENCES entities(id),
-            FOREIGN KEY(created_by_user_id) REFERENCES users(id)
-        );",
-        [],
-    )
-    .map_err(|e| format!("Error al crear tabla medical_history: {}", e))?;
-
-    // Un solo registro mutable por paciente
-    conn.execute(
-        "CREATE UNIQUE INDEX IF NOT EXISTS idx_medical_history_entity
-         ON medical_history(entity_id);",
-        [],
-    )
-    .map_err(|e| format!("Error al crear índice medical_history: {}", e))?;
-
-    // 6. Tabla entity_keys
+    // 5. Tabla entity_keys
     //    Cada entidad que sea usuario de telemedicina
     //    tiene su propia clave de datos, cifrada con la clave maestra
     //    del médico que la creó o con la que el usuario estableció.
@@ -150,7 +126,7 @@ pub fn init_db(app_dir: PathBuf) -> Result<Connection, String> {
     )
     .map_err(|e| format!("Error al crear tabla entity_keys: {}", e))?;
 
-    // 7. Tabla cola de sincronización: reemplazará 'is_synced' en tablas individuales
+    // 6. Tabla cola de sincronización: reemplazará 'is_synced' en tablas individuales
     conn.execute(
         "CREATE TABLE IF NOT EXISTS sync_queue (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -163,6 +139,50 @@ pub fn init_db(app_dir: PathBuf) -> Result<Connection, String> {
         [],
     )
     .map_err(|e| format!("Error al crear tabla sync_queue: {}", e))?;
+
+    // ============================================================
+    // TABLA CORE ENTITY-ENTRY (Append-Only)
+    // ============================================================
+
+    // 7. Tabla entries: hechos clínicos inmutables
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS entries (
+            id TEXT PRIMARY KEY NOT NULL,
+            category TEXT NOT NULL CHECK(category IN ('SOAP_NOTE', 'MEDICATION', 'ALLERGY', 'CONDITION')),
+            subject_id INTEGER NOT NULL,
+            author_id TEXT NOT NULL,
+            title TEXT NOT NULL,
+            status TEXT NOT NULL CHECK(status IN ('ACTIVE', 'RESOLVED', 'COMPLETED')),
+            timestamp TEXT NOT NULL,
+            payload BLOB NOT NULL,
+            signature TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            is_synced INTEGER NOT NULL DEFAULT 0 CHECK(is_synced IN (0, 1)),
+            FOREIGN KEY(subject_id) REFERENCES entities(id) ON DELETE RESTRICT,
+            FOREIGN KEY(author_id) REFERENCES users(id) ON DELETE RESTRICT
+        );",
+        [],
+    )
+    .map_err(|e| format!("Error al crear tabla entries: {}", e))?;
+
+    // Índices para entries
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_entries_subject ON entries(subject_id, timestamp DESC);",
+        [],
+    )
+    .ok();
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_entries_category ON entries(category);",
+        [],
+    )
+    .ok();
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_entries_sync ON entries(is_synced) WHERE is_synced = 0;",
+        [],
+    )
+    .ok();
 
     // ============================================================
     // ÍNDICES DE PERFORMANCE

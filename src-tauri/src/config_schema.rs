@@ -68,14 +68,6 @@ pub struct NoteFieldSchema {
     pub rows: Option<u32>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
-#[allow(dead_code)]
-pub struct MedicalHistorySchemaConfig {
-    pub version: i32,
-    pub label: String,
-    pub fields: Vec<FieldSchema>,
-}
-
 impl NoteTemplatesConfig {
     /// Valida que los campos requeridos del template estén presentes
     pub fn validate_note_fields(
@@ -152,20 +144,5 @@ impl SchemaConfig {
             .get(entity_type)
             .ok_or_else(|| format!("Tipo de entidad desconocido: {}", entity_type))?;
         Ok(schema.blind_index_field.clone())
-    }
-}
-
-impl MedicalHistorySchemaConfig {
-    /// Valida que los campos requeridos estén presentes
-    pub fn validate(&self, data: &HashMap<String, String>) -> Result<(), String> {
-        for field in &self.fields {
-            if field.required {
-                let value = data.get(&field.name).map(|s| s.trim()).unwrap_or("");
-                if value.is_empty() {
-                    return Err(format!("Campo requerido faltante: {}", field.label));
-                }
-            }
-        }
-        Ok(())
     }
 }

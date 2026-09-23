@@ -1,0 +1,38 @@
+{
+  "category": "SOAP_NOTE",
+  "label": "Nota SOAP",
+  "description": "Evolución médica estructurada (Subjetivo, Objetivo, Evaluación, Plan)",
+  "fields": [
+    {
+      "name": "subjetivo",
+      "label": "Subjetivo",
+      "type": "textarea",
+      "required": true,
+      "placeholder": "Síntomas y preocupaciones del paciente en sus propias palabras..."
+    },
+    {
+      "name": "objetivo",
+      "label": "Objetivo",
+      "type": "textarea",
+      "required": true,
+      "placeholder": "Signos vitales, hallazgos del examen físico, datos clínicos observables..."
+    },
+    {
+      "name": "evaluacion",
+      "label": "Evaluación",
+      "type": "textarea",
+      "required": true,
+      "placeholder": "Diagnóstico diferencial, impresión clínica, análisis..."
+    },
+    {
+      "name": "plan",
+      "label": "Plan",
+      "type": "textarea",
+      "required": true,
+      "placeholder": "Tratamiento, medicación, estudios solicitados, próxima consulta..."
+    }
+  ],
+  "signature_payload_order": ["subjetivo", "objetivo", "evaluacion", "plan"],
+  "immutable": true,
+  "requires_signature": true
+}

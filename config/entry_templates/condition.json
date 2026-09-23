@@ -1,0 +1,38 @@
+{
+  "category": "CONDITION",
+  "label": "Condición / Diagnóstico",
+  "description": "Registro de condición médica o diagnóstico",
+  "fields": [
+    {
+      "name": "diagnostico",
+      "label": "Diagnóstico",
+      "type": "text",
+      "required": true,
+      "placeholder": "Ej: Hipertensión arterial, Diabetes tipo 2..."
+    },
+    {
+      "name": "codigo_cie10",
+      "label": "Código CIE-10",
+      "type": "text",
+      "required": false,
+      "placeholder": "Ej: I10, E11.9"
+    },
+    {
+      "name": "estado",
+      "label": "Estado",
+      "type": "select",
+      "required": true,
+      "options": ["Activo", "En tratamiento", "Resuelto", "Crónico"]
+    },
+    {
+      "name": "observaciones",
+      "label": "Observaciones",
+      "type": "textarea",
+      "required": false,
+      "placeholder": "Notas adicionales sobre la condición..."
+    }
+  ],
+  "signature_payload_order": ["diagnostico", "estado"],
+  "immutable": true,
+  "requires_signature": true
+}

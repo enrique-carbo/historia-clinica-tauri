@@ -1,0 +1,45 @@
+{
+  "category": "MEDICATION",
+  "label": "Medicación",
+  "description": "Registro de medicación prescrita o actual",
+  "fields": [
+    {
+      "name": "medicamento",
+      "label": "Medicamento",
+      "type": "text",
+      "required": true,
+      "placeholder": "Ej: Enalapril, Ibuprofeno, Metformina..."
+    },
+    {
+      "name": "dosis",
+      "label": "Dosis",
+      "type": "text",
+      "required": true,
+      "placeholder": "Ej: 10mg, 500mg, 1 tableta..."
+    },
+    {
+      "name": "frecuencia",
+      "label": "Frecuencia",
+      "type": "select",
+      "required": true,
+      "options": ["Cada 8 horas", "Cada 12 horas", "Cada 24 horas", "Según necesidad", "Una vez"]
+    },
+    {
+      "name": "via_administracion",
+      "label": "Vía de Administración",
+      "type": "select",
+      "required": true,
+      "options": ["Oral", "Intravenosa", "Intramuscular", "Subcutánea", "Tópica", "Inhalatoria"]
+    },
+    {
+      "name": "indicacion",
+      "label": "Indicación",
+      "type": "textarea",
+      "required": false,
+      "placeholder": "Motivo de la prescripción..."
+    }
+  ],
+  "signature_payload_order": ["medicamento", "dosis", "frecuencia", "via_administracion"],
+  "immutable": true,
+  "requires_signature": true
+}

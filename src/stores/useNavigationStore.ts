@@ -6,8 +6,8 @@ export type ViewKey = "admin" | "medico" | "paciente";
 export type MedicoTab =
   | "perfil"
   | "paciente"
-  | "antecedentes"
-  | "ehr";
+  | "ehr"
+  | "entries";
 
 interface NavigationState {
   isDrawerOpen: boolean;

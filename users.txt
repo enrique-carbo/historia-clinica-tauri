@@ -9,3 +9,5 @@ pass: 12345678
 Admin
 user: enrique_adm
 pass: 12345678
+
+Frase: depend rafia borda nofre jabora hayal

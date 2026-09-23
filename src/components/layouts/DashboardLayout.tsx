@@ -1,11 +1,13 @@
-import { ReactNode } from "react";
+import { ReactNode, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useAuthStore } from "../../stores/useAuthStore";
 import { usePatientStore } from "../../stores/usePatientStore";
 import { useEntityStore } from "../../stores/useEntityStore";
 import { useNoteStore } from "../../stores/useNoteStore";
 import { useNavigationStore } from "../../stores/useNavigationStore";
+import { useSeedStore } from "../../stores/useSeedStore";
 import { NavigationDrawer } from "../ui/Drawer";
+import { SeedPhraseSetup } from "../SeedPhraseSetup";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -14,6 +16,8 @@ interface DashboardLayoutProps {
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const { activeUser: user, lockVault } = useAuthStore();
   const { openDrawer } = useNavigationStore();
+  const { isSeedConfigured, setSeedConfigured } = useSeedStore();
+  const [showSeedSetup, setShowSeedSetup] = useState(false);
 
   const handleLogout = async () => {
     try {
@@ -44,6 +48,18 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   };
 
   if (!user) return null;
+
+  // Mostrar SeedPhraseSetup como modal
+  if (showSeedSetup) {
+    return (
+      <SeedPhraseSetup
+        onComplete={() => {
+          setSeedConfigured(true);
+          setShowSeedSetup(false);
+        }}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-200 font-sans flex flex-col">
@@ -83,6 +99,16 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         </div>
 
         <div className="text-right flex items-center gap-2 sm:gap-4">
+          {/* Indicador de seed no configurada */}
+          {!isSeedConfigured && (
+            <button
+              onClick={() => setShowSeedSetup(true)}
+              className="px-3 py-1.5 bg-yellow-900/30 border border-yellow-700/50 text-yellow-400 rounded text-xs hover:bg-yellow-900/50 transition-colors cursor-pointer hidden sm:block"
+              title="Configurar frase semilla"
+            >
+              🔐 Configurar Seed
+            </button>
+          )}
           <span className="text-xs sm:text-sm text-zinc-500 hidden sm:inline">
             Usuario: <strong className="text-zinc-300">{user.username}</strong>
           </span>

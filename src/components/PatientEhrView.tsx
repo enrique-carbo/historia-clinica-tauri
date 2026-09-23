@@ -30,7 +30,7 @@ export function PatientEhrView() {
     return () => clearTimeout(timer);
   }, [searchQuery, searchEntities]);
 
-  // Selección unificada: carga patient + clinical + notas
+  // Selección unificada: carga paciente + notas
   const handleSelectPatient = useCallback(
     async (entityId: number) => {
       await selectPatient(entityId);
@@ -51,7 +51,6 @@ export function PatientEhrView() {
   };
 
   const patient = selected?.patient;
-  const clinical = selected?.clinical;
   const isLoading = patientLoading || entityLoading;
 
   return (
@@ -132,16 +131,6 @@ export function PatientEhrView() {
                     <h2 className="text-lg sm:text-xl font-bold text-zinc-100 tracking-tight truncate">
                       {patient.data.nombre} {patient.data.apellido}
                     </h2>
-                    {/* ALERTA DE ALERGIA */}
-                    {clinical?.alergias && clinical.alergias.trim() !== "" && (
-                      <div className="group relative flex items-center justify-center shrink-0">
-                        <span className="absolute inline-flex h-3 w-3 rounded-full bg-red-500 opacity-75 animate-ping"></span>
-                        <span className="relative inline-flex h-3 w-3 rounded-full bg-red-600"></span>
-                        <div className="absolute top-full mt-2 hidden group-hover:block w-48 p-2 bg-zinc-900 border border-red-900/50 rounded text-xs text-red-200 z-50 shadow-xl">
-                          ⚠️ {clinical.alergias}
-                        </div>
-                      </div>
-                    )}
                   </div>
                   <div className="flex items-center gap-2 sm:gap-3 mt-0.5 text-xs sm:text-sm text-zinc-400 flex-wrap">
                     <span className="font-mono bg-zinc-800 px-1.5 py-0.5 rounded text-xs">
@@ -167,7 +156,7 @@ export function PatientEhrView() {
               {isPatientDetailsOpen && (
                 <div className="p-4 sm:p-5 pt-4 border-t border-zinc-800 bg-zinc-950/30 animate-in slide-in-from-top-2 duration-200">
                   {/* Datos de contacto */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     {[
                       { label: "Teléfono", value: patient.data.telefono },
                       { label: "Email", value: patient.data.email },
@@ -178,50 +167,6 @@ export function PatientEhrView() {
                         <div className="text-sm text-zinc-300 mt-0.5 truncate">{item.value || "—"}</div>
                       </div>
                     ))}
-                  </div>
-
-                  {/* Antecedentes Clínicos */}
-                  <div className="space-y-3">
-                    <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-widest pl-1">
-                      Antecedentes Clínicos
-                    </h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {[
-                        { label: "Antecedentes Personales", value: clinical?.antecedentes_personales, color: "text-blue-400" },
-                        { label: "Antecedentes Familiares", value: clinical?.antecedentes_familiares, color: "text-blue-400" },
-                        { label: "Medicación habitual", value: clinical?.medicacion, color: "text-amber-400" },
-                        { label: "Alergias", value: clinical?.alergias, color: "text-red-400", highlight: true },
-                      ].map((item, idx) => (
-                        <div
-                          key={idx}
-                          className={`bg-zinc-900/50 rounded-lg p-4 border transition-all ${
-                            item.highlight && item.value
-                              ? "border-red-900/50 bg-red-950/10"
-                              : "border-zinc-800/60"
-                          }`}
-                        >
-                          <div className={`text-[10px] uppercase font-bold tracking-wider mb-2 flex items-center gap-2 ${item.color}`}>
-                            {item.highlight && item.value && (
-                              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-                            )}
-                            {item.label}
-                          </div>
-                          <p className="text-sm text-zinc-300 whitespace-pre-wrap leading-relaxed">
-                            {item.value || <span className="text-zinc-600 italic font-normal">Sin registros</span>}
-                          </p>
-                        </div>
-                      ))}
-
-                      {/* Grupo Sanguíneo: Ocupa las 2 columnas en Desktop (md:col-span-2) */}
-                      <div className="col-span-1 md:col-span-2 bg-zinc-900/50 rounded-lg p-4 border border-zinc-800/60 flex flex-col justify-center">
-                        <div className="text-[10px] uppercase font-bold tracking-wider mb-1 text-emerald-400">
-                          Grupo Sanguíneo
-                        </div>
-                        <div className="text-xl sm:text-2xl font-bold text-zinc-200">
-                          {clinical?.grupo_sanguineo || "Desconocido"}
-                        </div>
-                      </div>
-                    </div>
                   </div>
                 </div>
               )}

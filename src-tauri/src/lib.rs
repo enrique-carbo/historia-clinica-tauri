@@ -1,4 +1,3 @@
-use crate::config_schema::MedicalHistorySchemaConfig;
 use rand::RngCore;
 use std::sync::Mutex;
 use tauri::Manager;
@@ -7,8 +6,11 @@ mod auth;
 mod commands;
 mod config_schema;
 mod crypto;
+mod data_key;
 mod database;
 mod lib_types;
+mod seed;
+mod seed_commands;
 mod vault;
 
 use lib_types::{CryptoState, DataKey, DbState, SigningState};
@@ -32,11 +34,9 @@ pub fn run() {
             crypto::init_blind_index_salt(installation_salt)
                 .map_err(|e| format!("Error inicializando blind index salt: {}", e))?;
 
-            // ← NUEVO: Generar o leer llave de cifrado compartida para datos médicos
-            let data_key = get_or_create_data_key(&app_data_dir)?;
-            let data_key_state = app.state::<DataKey>();
-            *data_key_state.0.lock().unwrap() = Some(data_key);
-            println!("🔐 [Crypto] Llave de datos médicos inicializada");
+            // NOTA: La data_key YA NO se carga aquí en claro.
+            // Se resuelve en unlock_vault() con la master_key del usuario
+            // (o con la seed en el bootstrap de nuevos usuarios).
 
             let conn = database::init_db(app_data_dir)
                 .map_err(|e| format!("Fallo crítico de DB: {}", e))?;
@@ -49,19 +49,12 @@ pub fn run() {
             let schema: config_schema::SchemaConfig =
                 serde_json::from_str(SCHEMA_JSON).map_err(|e| format!("Schema inválido: {}", e))?;
 
-            const MEDICAL_HISTORY_SCHEMA_JSON: &str =
-                include_str!("../config/medical_history_schema.json");
-            let medical_history_schema: MedicalHistorySchemaConfig =
-                serde_json::from_str(MEDICAL_HISTORY_SCHEMA_JSON)
-                    .map_err(|e| format!("Error parseando medical_history_schema.json: {}", e))?;
-
             const NOTE_TEMPLATES_JSON: &str = include_str!("../config/note_templates/soap.json");
             let note_templates: config_schema::NoteTemplatesConfig =
                 serde_json::from_str(NOTE_TEMPLATES_JSON)
                     .map_err(|e| format!("Note templates inválidos: {}", e))?;
 
             app.manage(schema);
-            app.manage(medical_history_schema);
             app.manage(note_templates);
 
             Ok(())
@@ -84,8 +77,16 @@ pub fn run() {
             commands::is_vault_unlocked,
             commands::get_my_profile,
             commands::update_my_profile,
-            commands::upsert_medical_history,
-            commands::get_medical_history,
+            commands::setup_seed_master_wrap,
+            commands::create_entry,
+            commands::get_entry,
+            commands::get_entries_by_subject,
+            commands::get_entries_by_category,
+            commands::search_entries,
+            seed_commands::generate_seed,
+            seed_commands::verify_seed,
+            seed_commands::derive_key_from_seed,
+            seed_commands::hash_seed,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -104,29 +105,5 @@ fn get_or_create_installation_salt(app_dir: &std::path::PathBuf) -> Result<Vec<u
             .map_err(|e| format!("Error guardando sal de instalación: {}", e))?;
         println!("🔧 [Crypto] Nueva sal de instalación generada para blind index");
         Ok(salt)
-    }
-}
-
-/// ← NUEVO: Genera o lee la llave de cifrado compartida para datos médicos.
-/// Esta llave es compartida entre todos los usuarios de la misma instalación,
-/// permitiendo que cualquier médico descifre los datos de pacientes y notas.
-fn get_or_create_data_key(app_dir: &std::path::PathBuf) -> Result<[u8; 32], String> {
-    let key_path = app_dir.join(".data_key");
-
-    if key_path.exists() {
-        let hex = std::fs::read_to_string(&key_path)
-            .map_err(|e| format!("Error leyendo data key: {}", e))?;
-        let bytes = hex::decode(hex.trim()).map_err(|_| "Data key corrupta".to_string())?;
-        let mut key = [0u8; 32];
-        key.copy_from_slice(&bytes);
-        println!("🔐 [Crypto] Llave de datos médicos cargada");
-        Ok(key)
-    } else {
-        let mut key = [0u8; 32];
-        rand::rngs::OsRng.fill_bytes(&mut key);
-        std::fs::write(&key_path, hex::encode(key))
-            .map_err(|e| format!("Error guardando data key: {}", e))?;
-        println!("🔐 [Crypto] Nueva llave de datos médicos generada");
-        Ok(key)
     }
 }

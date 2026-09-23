@@ -1,5 +1,6 @@
 use crate::auth;
-use crate::lib_types::{CryptoState, DbState};
+use crate::data_key;
+use crate::lib_types::{CryptoState, DataKey, DbState};
 use crate::vault;
 use tauri::{Manager, State};
 use uuid::Uuid;
@@ -84,10 +85,12 @@ pub fn login_user(form: LoginInput, db_state: State<'_, DbState>) -> Result<Auth
 pub fn unlock_vault(
     user_id: String,
     password: String,
+    seed_phrase: Option<String>,
     app_handle: tauri::AppHandle,
     db_state: State<'_, crate::lib_types::DbState>,
     crypto_state: State<'_, CryptoState>,
     signing_state: State<'_, crate::lib_types::SigningState>,
+    data_key_state: State<'_, DataKey>,
 ) -> Result<bool, String> {
     let app_dir = app_handle
         .path()
@@ -96,7 +99,7 @@ pub fn unlock_vault(
 
     // El vault ahora devuelve 3 cosas: llave_cifrado, llave_firma, y llave_publica_opcional
     let (master_key, private_signing_key, public_key_opt) =
-        vault::unlock_user_vault(app_dir, &user_id, &password)?;
+        vault::unlock_user_vault(app_dir.clone(), &user_id, &password)?;
 
     // 1. Inyectamos la llave simétrica (AES) en CryptoState
     let mut key_guard = crypto_state.0.lock().unwrap();
@@ -106,14 +109,27 @@ pub fn unlock_vault(
     let mut sign_guard = signing_state.0.lock().unwrap();
     *sign_guard = Some(private_signing_key);
 
-    // 3. NUEVO: Si es primer login, guardamos la llave pública en la DB
+    // 3. Resolver la data_key (cifrado de datos médicos) con master_key del usuario
+    //    - Fast path: wrap personal .data_key.{user_id}
+    //    - Bootstrap: seed + .data_key.master (nuevos usuarios / recovery)
+    //    - Legacy: migración de .data_key hex en claro
+    let resolved_data_key = data_key::resolve_data_key(
+        &app_dir,
+        &user_id,
+        &master_key,
+        seed_phrase.as_deref(),
+    )?;
+    let mut dk_guard = data_key_state.0.lock().unwrap();
+    *dk_guard = Some(resolved_data_key);
+
+    // 4. Si es primer login, guardamos la llave pública en la DB
     if let Some(pub_key) = public_key_opt {
         super::with_conn(&db_state, |conn| {
             conn.execute(
                 "UPDATE professional_profiles SET public_key = ?1 WHERE user_id = ?2;",
                 rusqlite::params![&pub_key, &user_id],
             )
-            .map_err(|e| format!("Error al guardar llave pública: {}", e)) // <--- AÑADIR ESTO
+            .map_err(|e| format!("Error al guardar llave pública: {}", e))
         })?;
         println!("🔑 [Core] Llave pública guardada en DB para: {}", user_id);
     }
@@ -125,7 +141,8 @@ pub fn unlock_vault(
 #[tauri::command]
 pub fn lock_vault(
     crypto_state: State<'_, CryptoState>,
-    signing_state: State<'_, crate::lib_types::SigningState>, // <--- NUEVO PARÁMETRO
+    signing_state: State<'_, crate::lib_types::SigningState>,
+    data_key_state: State<'_, DataKey>,
 ) -> Result<(), String> {
     // Limpiamos la llave de cifrado
     let mut crypto_guard = crypto_state.0.lock().unwrap();
@@ -135,7 +152,34 @@ pub fn lock_vault(
     let mut sign_guard = signing_state.0.lock().unwrap();
     *sign_guard = None;
 
+    // Limpiamos la data_key (datos médicos)
+    let mut dk_guard = data_key_state.0.lock().unwrap();
+    *dk_guard = None;
+
     println!("🔒 [Core] Bóveda bloqueada. Llaves borradas de la RAM.");
+    Ok(())
+}
+
+/// Envuelve la data_key actual en memoria con la seed-derived key
+/// y persiste `.data_key.master` para bootstrap/recovery.
+/// Se llama desde SeedPhraseSetup después de verificar la frase.
+#[tauri::command]
+pub fn setup_seed_master_wrap(
+    phrase: String,
+    app_handle: tauri::AppHandle,
+    data_key_state: State<'_, DataKey>,
+) -> Result<(), String> {
+    let app_dir = app_handle
+        .path()
+        .app_local_data_dir()
+        .map_err(|e| format!("Error al obtener ruta del sistema: {}", e))?;
+
+    let dk_guard = data_key_state.0.lock().map_err(|_| "Lock poisoned")?;
+    let data_key = dk_guard
+        .ok_or("Data key no disponible. Abrí la bóveda primero.".to_string())?;
+
+    data_key::save_master_wrap(&app_dir, &data_key, &phrase)?;
+    println!("🌱 [Seed] Master wrap creado (.data_key.master)");
     Ok(())
 }
 
