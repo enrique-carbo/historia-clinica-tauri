@@ -170,6 +170,7 @@ export function AuthBox() {
               className="w-full bg-zinc-950 text-zinc-200 border border-zinc-800 rounded px-3 py-2.5 pr-8 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 appearance-none"
             >
               <option value="medico">Médico (Consultorio / SOAP)</option>
+              <option value="enfermeria">Enfermería (Mismos permisos que Médico)</option>
               <option value="admin">Administrador (Recepción / Altas)</option>
               <option value="paciente">
                 Paciente (Auto-registro / Métricas)

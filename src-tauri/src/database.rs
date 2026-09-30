@@ -31,7 +31,7 @@ pub fn init_db(app_dir: PathBuf) -> Result<Connection, String> {
                 id TEXT PRIMARY KEY,
                 username TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
-                role TEXT CHECK(role IN ('admin', 'medico', 'paciente')) NOT NULL,
+                role TEXT CHECK(role IN ('admin', 'medico', 'enfermeria', 'paciente')) NOT NULL,
                 entity_id INTEGER,
                 created_at TEXT NOT NULL,
                 FOREIGN KEY(entity_id) REFERENCES entities(id)

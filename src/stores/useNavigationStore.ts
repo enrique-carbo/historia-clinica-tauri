@@ -1,7 +1,7 @@
 // src/stores/useNavigationStore.ts
 import { create } from "zustand";
 
-export type ViewKey = "admin" | "medico" | "paciente";
+export type ViewKey = "admin" | "medico" | "enfermeria" | "paciente";
 
 export type MedicoTab =
   | "perfil"
