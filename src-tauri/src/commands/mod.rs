@@ -2,12 +2,14 @@
 mod auth_commands;
 mod entity_commands;
 mod entry_commands;
+mod export_commands;
 mod professional_profile_commands;
 
 // Re-exportamos todo al exterior
 pub use auth_commands::*;
 pub use entity_commands::*;
 pub use entry_commands::*;
+pub use export_commands::*;
 pub use professional_profile_commands::*;
 
 // --- HELPERS ---

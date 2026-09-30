@@ -8,6 +8,7 @@ mod config_schema;
 mod crypto;
 mod data_key;
 mod database;
+mod export_render;
 mod lib_types;
 mod seed;
 mod seed_commands;
@@ -75,6 +76,8 @@ pub fn run() {
             commands::get_entries_by_subject,
             commands::get_entries_by_category,
             commands::search_entries,
+            commands::get_export_snapshot,
+            commands::export_history,
             seed_commands::generate_seed,
             seed_commands::verify_seed,
             seed_commands::derive_key_from_seed,
