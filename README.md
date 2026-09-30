@@ -223,17 +223,20 @@ CREATE INDEX idx_entries_sync ON entries(is_synced) WHERE is_synced = 0;
 
 ## 🧪 Tests Automatizados
 
-El Core cuenta con 39 tests unitarios que cubren:
+El Core cuenta con 54 tests unitarios que cubren:
 | Módulo | Tests | Cobertura |
 |---|---|---|
 | `crypto.rs` | 13 | AES-GCM roundtrip, nonces únicos, clave incorrecta, manipulación, Blind Index, Firma Ed25519, derivación de pública desde privada |
 | `vault.rs` | 4 | Creación, desbloqueo, contraseña incorrecta, sal única por usuario |
 | `seed.rs` | 12 | Generación mnemonic, unicidad, derivación SHA-256, verificación, edge cases, word list sin duplicados ni tildes |
 | `data_key.rs` | 10 | Wrap/unwrap AES-GCM, prioridades de resolución, `SEED_REQUIRED`, migración legacy |
+| `entry_commands.rs` | 15 | CRUD completo end-to-end con DB real (roundtrip cifrado→descifrado, payload sin texto plano en DB, validaciones de categoría/status, states obligatorios, firma rota por manipulación, wrong data key, autor sin perfil, paginación e isolación por paciente, filtro por categoría, búsqueda case-insensitive, `decrypt_payload` |
 
 ```bash
-cargo test --lib  # 39 passed; 0 failed
+cargo test --lib  # 54 passed; 0 failed
 ```
+
+> Los tests de `entry_commands` usan `tauri::test` (feature habilitada solo en `[dev-dependencies]`; el binario de producción no la incluye).
 
 ## 🗺️ Mapa de Ruta del Desarrollo (Roadmap)
 
@@ -295,7 +298,7 @@ cargo test --lib  # 39 passed; 0 failed
 - [x] **Frontend limpio**: eliminados `useNoteStore.ts`, `note_templates/soap.json` (ambas copias), uso en `PatientEhrView` y `DashboardLayout`
 - [x] **Único sistema clínico**: `PatientEhrView` + `EntryTimeline` consumen solo `entries` (paradigma Entity-Entry)
 - [x] **Fix firma multi-usuario**: `unlock_vault` sincroniza `professional_profiles.public_key` siempre (derivada desde la privada si el vault ya existía), antes de `resolve_data_key`
-- [x] 39 tests pasando
+- [x] 54 tests pasando
 
 ### 🟧 Fase 4: Infraestructura y Sincronización Híbrida (Próximo paso)
 - [ ] Despliegue de VPS con Dokploy y PocketBase
@@ -321,6 +324,6 @@ pnpm tauri dev          # Levanta el entorno (Rust + React HMR)
 pnpm tauri build        # Compila en modo release para producción
 npx tsc --noEmit        # Verifica TypeScript sin generar archivos
 cargo check             # Verifica compilación Rust
-cargo test --lib        # Ejecuta los 39 tests unitarios del Core
+cargo test --lib        # Ejecuta los 54 tests unitarios del Core
 cargo add <crate>       # Añade dependencias al backend (desde src-tauri)
 ```

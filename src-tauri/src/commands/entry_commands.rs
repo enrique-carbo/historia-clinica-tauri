@@ -10,7 +10,7 @@ use super::{get_data_key, with_conn};
 
 pub type EntryPayload = HashMap<String, String>;
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 pub struct EntryRecord {
     pub id: String,
     pub category: String,
@@ -660,4 +660,487 @@ fn decrypt_payload(
     }
 
     Ok(payload)
+}
+
+// =======================================================================
+// TESTS
+// =======================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::database::init_db;
+    use std::sync::Mutex;
+    use std::thread;
+    use std::time::Duration;
+    use tauri::Manager;
+
+    const DATA_KEY: [u8; 32] = [7u8; 32];
+
+    /// Entorno de prueba: DB temporal real con schema completo, app mock de
+    /// Tauri con los 3 states gestionados (DbState, DataKey, SigningState).
+    struct TestEnv {
+        app: tauri::App<tauri::test::MockRuntime>,
+        author_id: String,
+        entity_id: i64,
+        _dir: tempfile::TempDir,
+    }
+
+    fn setup_with(data_key_present: bool, signing_present: bool) -> TestEnv {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = init_db(dir.path().to_path_buf()).expect("init_db");
+
+        let (signing_key, verifying_key) = crypto::generate_keypair();
+        let private_bytes = signing_key.to_bytes();
+        let public_hex = hex::encode(verifying_key.to_bytes());
+
+        let author_id = "author-test-1".to_string();
+        let now = chrono::Utc::now().to_rfc3339();
+
+        conn.execute(
+            "INSERT INTO users (id, username, password_hash, role, created_at)
+             VALUES (?1, ?2, 'hash_test', 'medico', ?3)",
+            params![author_id, "dra.test", now],
+        )
+        .expect("insert user");
+
+        let name_enc = crypto::encrypt_text("Dra. Test", &DATA_KEY).expect("encrypt name");
+        conn.execute(
+            "INSERT INTO professional_profiles
+                (user_id, full_name_ciphertext, full_name_nonce,
+                 license_number_ciphertext, license_number_nonce,
+                 specialty_ciphertext, specialty_nonce,
+                 public_key, updated_at)
+             VALUES (?1, ?2, ?3, '', '', '', '', ?4, ?5)",
+            params![
+                author_id,
+                name_enc.ciphertext,
+                name_enc.nonce,
+                public_hex,
+                now
+            ],
+        )
+        .expect("insert profile");
+
+        conn.execute(
+            "INSERT INTO entities (entity_type, created_by_user_id, enc_data_blob, created_at)
+             VALUES ('paciente', ?1, x'00', ?2)",
+            params![author_id, now],
+        )
+        .expect("insert entity");
+        let entity_id = conn.last_insert_rowid();
+
+        let app = tauri::test::mock_app();
+        app.manage(DbState(Mutex::new(Some(conn))));
+        app.manage(DataKey(Mutex::new(if data_key_present {
+            Some(DATA_KEY)
+        } else {
+            None
+        })));
+        app.manage(SigningState(Mutex::new(if signing_present {
+            Some(private_bytes)
+        } else {
+            None
+        })));
+
+        TestEnv {
+            app,
+            author_id,
+            entity_id,
+            _dir: dir,
+        }
+    }
+
+    fn setup() -> TestEnv {
+        setup_with(true, true)
+    }
+
+    fn payload_sample() -> EntryPayload {
+        let mut p = EntryPayload::new();
+        p.insert("subjetivo".to_string(), "Dolor de cabeza".to_string());
+        p.insert("objetivo".to_string(), "TA 120/80".to_string());
+        p
+    }
+
+    fn create_with(
+        env: &TestEnv,
+        category: &str,
+        status: &str,
+        subject_id: i64,
+        title: &str,
+    ) -> Result<String, String> {
+        create_entry(
+            category.to_string(),
+            subject_id,
+            env.author_id.clone(),
+            title.to_string(),
+            status.to_string(),
+            payload_sample(),
+            env.app.state::<DbState>(),
+            env.app.state::<DataKey>(),
+            env.app.state::<SigningState>(),
+        )
+    }
+
+    fn create(env: &TestEnv, subject_id: i64, title: &str) -> Result<String, String> {
+        create_with(env, "SOAP_NOTE", "ACTIVE", subject_id, title)
+    }
+
+    fn get(env: &TestEnv, id: &str) -> Result<EntryRecord, String> {
+        get_entry(id.to_string(), env.app.state::<DbState>(), env.app.state::<DataKey>())
+    }
+
+    fn list_subject(
+        env: &TestEnv,
+        subject_id: i64,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<EntryRecord>, String> {
+        get_entries_by_subject(
+            subject_id,
+            limit,
+            offset,
+            env.app.state::<DbState>(),
+            env.app.state::<DataKey>(),
+        )
+    }
+
+    fn list_category(
+        env: &TestEnv,
+        subject_id: i64,
+        category: &str,
+    ) -> Result<Vec<EntryRecord>, String> {
+        get_entries_by_category(
+            subject_id,
+            category.to_string(),
+            50,
+            0,
+            env.app.state::<DbState>(),
+            env.app.state::<DataKey>(),
+        )
+    }
+
+    fn search(
+        env: &TestEnv,
+        subject_id: i64,
+        query: &str,
+        category: Option<&str>,
+    ) -> Result<Vec<EntryRecord>, String> {
+        search_entries(
+            subject_id,
+            query.to_string(),
+            category.map(|c| c.to_string()),
+            50,
+            0,
+            env.app.state::<DbState>(),
+            env.app.state::<DataKey>(),
+        )
+    }
+
+    fn insert_entity(env: &TestEnv) -> i64 {
+        let db = env.app.state::<DbState>();
+        with_conn(&db, |conn| {
+            conn.execute(
+                "INSERT INTO entities (entity_type, created_by_user_id, enc_data_blob, created_at)
+                 VALUES ('paciente', ?1, x'00', ?2)",
+                params![env.author_id, chrono::Utc::now().to_rfc3339()],
+            )
+            .map_err(|e| e.to_string())?;
+            Ok(conn.last_insert_rowid())
+        })
+        .expect("insert entity")
+    }
+
+    // --- create_entry ---
+
+    #[test]
+    fn test_create_and_get_entry_roundtrip() {
+        let env = setup();
+        let id = create(&env, env.entity_id, "Control general").expect("create");
+
+        let entry = get(&env, &id).expect("get");
+
+        assert_eq!(entry.category, "SOAP_NOTE");
+        assert_eq!(entry.subject_id, env.entity_id);
+        assert_eq!(entry.author_id, env.author_id);
+        assert_eq!(entry.title, "Control general");
+        assert_eq!(entry.status, "ACTIVE");
+        assert_eq!(entry.payload.len(), 2);
+        assert_eq!(
+            entry.payload.get("subjetivo").unwrap(),
+            "Dolor de cabeza"
+        );
+        assert_eq!(entry.payload.get("objetivo").unwrap(), "TA 120/80");
+        assert!(
+            entry.is_verified,
+            "la firma debió verificar con la pública registrada del autor"
+        );
+        assert_eq!(entry.author_name, "Dra. Test");
+    }
+
+    #[test]
+    fn test_create_entry_persists_encrypted_payload() {
+        let env = setup();
+        let id = create_with(&env, "ALLERGY", "ACTIVE", env.entity_id, "Alergia penicilina")
+            .expect("create");
+
+        let raw: Vec<u8> = {
+            let db = env.app.state::<DbState>();
+            with_conn(&db, |conn| {
+                conn.query_row(
+                    "SELECT payload FROM entries WHERE id = ?1",
+                    params![id],
+                    |r| r.get::<_, Vec<u8>>(0),
+                )
+                .map_err(|e| e.to_string())
+            })
+            .expect("select payload")
+        };
+
+        let as_text = String::from_utf8(raw).expect("payload utf8");
+        assert!(
+            !as_text.contains("Dolor de cabeza"),
+            "el payload en DB no debe contener texto plano"
+        );
+
+        let map: HashMap<String, String> = serde_json::from_str(&as_text).expect("json");
+        assert_eq!(map.len(), 2);
+        for value in map.values() {
+            let parts: Vec<&str> = value.split(':').collect();
+            assert_eq!(parts.len(), 2, "formato debe ser ciphertext:nonce");
+            assert!(hex::decode(parts[0]).is_ok(), "ciphertext hex");
+            assert!(hex::decode(parts[1]).is_ok(), "nonce hex");
+        }
+    }
+
+    #[test]
+    fn test_create_entry_rejects_invalid_category() {
+        let env = setup();
+        let err = create_with(&env, "NOTES", "ACTIVE", env.entity_id, "x").unwrap_err();
+        assert!(err.contains("Categoría inválida"), "err: {}", err);
+    }
+
+    #[test]
+    fn test_create_entry_rejects_invalid_status() {
+        let env = setup();
+        let err = create_with(&env, "SOAP_NOTE", "BORRADOR", env.entity_id, "x").unwrap_err();
+        assert!(err.contains("Status inválido"), "err: {}", err);
+    }
+
+    #[test]
+    fn test_create_entry_requires_data_key() {
+        let env = setup_with(false, true);
+        let err = create(&env, env.entity_id, "x").unwrap_err();
+        assert!(err.contains("Data key no inicializada"), "err: {}", err);
+    }
+
+    #[test]
+    fn test_create_entry_requires_signing_key() {
+        let env = setup_with(true, false);
+        let err = create(&env, env.entity_id, "x").unwrap_err();
+        assert!(err.contains("llave de firma"), "err: {}", err);
+    }
+
+    // --- get_entry ---
+
+    #[test]
+    fn test_get_entry_not_found() {
+        let env = setup();
+        assert!(get(&env, "no-existe").is_err());
+    }
+
+    #[test]
+    fn test_get_entry_tampered_title_breaks_signature() {
+        let env = setup();
+        let id = create(&env, env.entity_id, "Original").expect("create");
+
+        let db = env.app.state::<DbState>();
+        with_conn(&db, |conn| {
+            conn.execute(
+                "UPDATE entries SET title = 'Manipulado' WHERE id = ?1",
+                params![id],
+            )
+            .map_err(|e| e.to_string())
+        })
+        .expect("update title");
+
+        let entry = get(&env, &id).expect("get");
+        assert_eq!(entry.title, "Manipulado");
+        assert!(
+            !entry.is_verified,
+            "alterar el título debe romper la verificación de firma"
+        );
+    }
+
+    #[test]
+    fn test_get_entry_with_wrong_data_key_fails() {
+        let env = setup();
+        let id = create(&env, env.entity_id, "Secreta").expect("create");
+
+        {
+            let dk = env.app.state::<DataKey>();
+            let mut guard = dk.0.lock().unwrap();
+            *guard = Some([0u8; 32]);
+        }
+
+        let err = get(&env, &id).unwrap_err();
+        assert!(err.contains("descifrando"), "err: {}", err);
+    }
+
+    #[test]
+    fn test_entry_without_profile_shows_unknown_author() {
+        let env = setup();
+
+        let db = env.app.state::<DbState>();
+        with_conn(&db, |conn| {
+            conn.execute(
+                "INSERT INTO users (id, username, password_hash, role, created_at)
+                 VALUES ('author-2', 'sin.perfil', 'hash', 'medico', ?1)",
+                params![chrono::Utc::now().to_rfc3339()],
+            )
+            .map_err(|e| e.to_string())
+        })
+        .expect("insert user");
+
+        let id = create_entry(
+            "SOAP_NOTE".to_string(),
+            env.entity_id,
+            "author-2".to_string(),
+            "Nota sin perfil".to_string(),
+            "ACTIVE".to_string(),
+            payload_sample(),
+            env.app.state::<DbState>(),
+            env.app.state::<DataKey>(),
+            env.app.state::<SigningState>(),
+        )
+        .expect("create");
+
+        let entry = get(&env, &id).expect("get");
+        assert_eq!(entry.author_name, "Autor desconocido");
+        assert!(!entry.is_verified, "sin pública registrada no verifica");
+    }
+
+    // --- listados y paginación ---
+
+    #[test]
+    fn test_get_entries_by_subject_pagination_and_isolation() {
+        let env = setup();
+
+        let a = create(&env, env.entity_id, "Primera").expect("a");
+        thread::sleep(Duration::from_millis(5));
+        let b = create(&env, env.entity_id, "Segunda").expect("b");
+        thread::sleep(Duration::from_millis(5));
+        let c = create(&env, env.entity_id, "Tercera").expect("c");
+
+        let other_entity = insert_entity(&env);
+        let d = create(&env, other_entity, "De otro paciente").expect("d");
+
+        let page1 = list_subject(&env, env.entity_id, 2, 0).expect("page1");
+        let titles1: Vec<&str> = page1.iter().map(|e| e.title.as_str()).collect();
+        assert_eq!(titles1, vec!["Tercera", "Segunda"], "orden DESC por timestamp");
+
+        let page2 = list_subject(&env, env.entity_id, 2, 2).expect("page2");
+        assert_eq!(page2.len(), 1);
+        assert_eq!(page2[0].id, a);
+
+        let all = list_subject(&env, env.entity_id, 10, 0).expect("all");
+        assert_eq!(all.len(), 3);
+        let ids: Vec<&str> = all.iter().map(|e| e.id.as_str()).collect();
+        assert!(ids.contains(&b.as_str()) && ids.contains(&c.as_str()));
+
+        let other = list_subject(&env, other_entity, 10, 0).expect("other");
+        assert_eq!(other.len(), 1);
+        assert_eq!(other[0].id, d);
+    }
+
+    #[test]
+    fn test_get_entries_by_category_filters() {
+        let env = setup();
+
+        let soap = create(&env, env.entity_id, "Nota clínica").expect("soap");
+        thread::sleep(Duration::from_millis(5));
+        let allergy =
+            create_with(&env, "ALLERGY", "ACTIVE", env.entity_id, "Alergia marisco").expect("alg");
+        thread::sleep(Duration::from_millis(5));
+        let med =
+            create_with(&env, "MEDICATION", "COMPLETED", env.entity_id, "Analgesico").expect("med");
+
+        let allergies = list_category(&env, env.entity_id, "ALLERGY").expect("allergies");
+        assert_eq!(allergies.len(), 1);
+        assert_eq!(allergies[0].id, allergy);
+        assert_eq!(allergies[0].category, "ALLERGY");
+
+        let soap_only = list_category(&env, env.entity_id, "SOAP_NOTE").expect("soap only");
+        assert_eq!(soap_only.len(), 1);
+        assert_eq!(soap_only[0].id, soap);
+
+        let meds = list_category(&env, env.entity_id, "MEDICATION").expect("meds");
+        assert_eq!(meds.len(), 1);
+        assert_eq!(meds[0].id, med);
+        assert_eq!(meds[0].status, "COMPLETED");
+    }
+
+    // --- búsqueda ---
+
+    #[test]
+    fn test_search_entries_case_insensitive_and_scoped() {
+        let env = setup();
+
+        let e1 = create(&env, env.entity_id, "Control mensual").expect("e1");
+        thread::sleep(Duration::from_millis(5));
+        let e2 =
+            create_with(&env, "ALLERGY", "ACTIVE", env.entity_id, "Alergia a penicilina").expect("e2");
+
+        let other_entity = insert_entity(&env);
+        let e3 = create(&env, other_entity, "Control inicial").expect("e3");
+
+        // case-insensitive + parcial
+        let hits = search(&env, env.entity_id, "CONTROL", None).expect("control");
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].id, e1);
+
+        let hits = search(&env, env.entity_id, "penic", None).expect("penic");
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].id, e2);
+
+        // con filtro de categoría
+        let hits = search(&env, env.entity_id, "control", Some("ALLERGY")).expect("cat miss");
+        assert!(hits.is_empty(), "control es SOAP, no ALLERGY");
+
+        let hits = search(&env, env.entity_id, "control", Some("SOAP_NOTE")).expect("cat hit");
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].id, e1);
+
+        // aislamiento por subject
+        let hits = search(&env, other_entity, "control", None).expect("other subject");
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].id, e3);
+
+        // sin coincidencias
+        let hits = search(&env, env.entity_id, "zzz-no-existe", None).expect("empty");
+        assert!(hits.is_empty());
+    }
+
+    // --- decrypt_payload (unidad) ---
+
+    #[test]
+    fn test_decrypt_payload_roundtrip() {
+        let enc = crypto::encrypt_text("valor sensible", &DATA_KEY).expect("encrypt");
+        let map = serde_json::json!({ "campo": format!("{}:{}", enc.ciphertext, enc.nonce) });
+        let blob = serde_json::to_vec(&map).expect("to_vec");
+
+        let out = decrypt_payload(&blob, &DATA_KEY).expect("decrypt");
+        assert_eq!(out.get("campo").unwrap(), "valor sensible");
+    }
+
+    #[test]
+    fn test_decrypt_payload_rejects_bad_format() {
+        let map = serde_json::json!({ "campo": "sin_delimitador" });
+        let blob = serde_json::to_vec(&map).expect("to_vec");
+        let err = decrypt_payload(&blob, &DATA_KEY).unwrap_err();
+        assert!(err.contains("Formato inválido"), "err: {}", err);
+
+        let err = decrypt_payload(b"no-es-json", &DATA_KEY).unwrap_err();
+        assert!(err.contains("parseando"), "err: {}", err);
+    }
 }
