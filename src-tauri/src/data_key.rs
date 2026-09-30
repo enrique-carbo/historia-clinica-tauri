@@ -149,12 +149,26 @@ pub fn resolve_data_key(
 ) -> Result<[u8; 32], String> {
     let user_path = user_wrap_path(app_dir, user_id);
 
-    // 1. Fast path: wrap personal del usuario
+    // 1. Fast path: wrap personal del usuario.
+    //    Si existe pero NO se puede desenvolver con la master actual (wrap huérfano:
+    //    p.ej. un cambio de contraseña se interrumpió antes de re-envolver), NO
+    //    abortamos ni generamos una data_key nueva (eso perdería los datos viejos).
+    //    Caemos al recovery por seed y, si no hay seed, devolvemos SEED_REQUIRED
+    //    para que el frontend pida la frase en papel.
+    let mut orphaned_wrap: Option<String> = None;
     if user_path.exists() {
         let blob = std::fs::read(&user_path)
             .map_err(|e| format!("Error leyendo wrap personal: {}", e))?;
-        let data_key = unwrap_key(&blob, master_key)?;
-        return Ok(data_key);
+        match unwrap_key(&blob, master_key) {
+            Ok(data_key) => return Ok(data_key),
+            Err(e) => {
+                println!(
+                    "⚠️ [DataKey] Wrap personal no desbloqueable con la master actual para: {}",
+                    user_id
+                );
+                orphaned_wrap = Some(e);
+            }
+        }
     }
 
     // 2. Bootstrap con seed + master wrap
@@ -166,7 +180,7 @@ pub fn resolve_data_key(
                     .map_err(|e| format!("Error leyendo master wrap: {}", e))?;
                 let seed_key = seed::derive_key_from_seed(phrase)?;
                 let data_key = unwrap_key(&blob, &seed_key)?;
-                // Crear wrap personal para próximos logins (sin pedir seed)
+                // Re-envolver con la master ACTUAL → cura el wrap huérfano
                 save_user_wrap(app_dir, user_id, &data_key, master_key)?;
                 println!("🌱 [DataKey] Bootstrapped desde master wrap para: {}", user_id);
                 return Ok(data_key);
@@ -183,7 +197,17 @@ pub fn resolve_data_key(
         return Ok(data_key);
     }
 
-    // 4. Primera instalación: generar data_key nueva
+    // 4. Wrap personal huérfano sin recovery disponible → error explícito.
+    //    NUNCA generamos una data_key nueva acá: reemplazar el wrap significaría
+    //    perder el acceso a todo lo cifrado con la data_key anterior.
+    if let Some(e) = orphaned_wrap {
+        return Err(format!(
+            "Wrap personal de datos ilegible con la contraseña actual ({}). Usá la frase semilla para recuperar.",
+            e
+        ));
+    }
+
+    // 5. Primera instalación: generar data_key nueva
     let mut data_key = [0u8; 32];
     OsRng.fill_bytes(&mut data_key);
     save_user_wrap(app_dir, user_id, &data_key, master_key)?;

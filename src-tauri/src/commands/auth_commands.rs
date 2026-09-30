@@ -149,6 +149,76 @@ pub fn unlock_vault(
     Ok(true)
 }
 
+/// Cambia la contraseña del usuario.
+///
+/// Orden de persistencia (falla más probable primero → fs antes que sqlite;
+/// verificación completa antes de la primera escritura):
+/// 1. Sesión desbloqueada (data_key en RAM) — sin esto, no se puede re-envolver.
+/// 2. Vault: verifica contraseña actual y re-cifra (vault.rs).
+/// 3. Re-envuelve `.data_key.{user_id}` con la nueva master (si falla, el wrap
+///    huérfano se recupera con seed — ver resolve_data_key).
+/// 4. Actualiza `users.password_hash` en DB.
+/// 5. Actualiza la master en RAM (la llave de firma no cambia: mismo keypair).
+///
+/// No toca `.data_key.master` (deriva de la seed, independiente de la contraseña).
+#[tauri::command]
+pub fn change_password(
+    user_id: String,
+    current_password: String,
+    new_password: String,
+    app_handle: tauri::AppHandle,
+    db_state: State<'_, DbState>,
+    crypto_state: State<'_, CryptoState>,
+    data_key_state: State<'_, DataKey>,
+) -> Result<(), String> {
+    if new_password.len() < 8 {
+        return Err("La nueva contraseña debe tener al menos 8 caracteres".to_string());
+    }
+    if new_password == current_password {
+        return Err("La nueva contraseña debe ser distinta a la actual".to_string());
+    }
+
+    let app_dir = app_handle
+        .path()
+        .app_local_data_dir()
+        .map_err(|e| format!("Error al obtener ruta del sistema: {}", e))?;
+
+    // 1. Sesión desbloqueada ANTES de tocar disco: sin data_key en RAM no se
+    //    puede re-envolver el wrap personal.
+    let data_key = {
+        let guard = data_key_state.0.lock().map_err(|_| "Lock poisoned")?;
+        guard.ok_or("La bóveda está cerrada. Abrila antes de cambiar la contraseña.".to_string())?
+    };
+
+    // 2. Verifica contraseña actual + re-cifra vault → nueva master
+    let new_master = vault::change_vault_password(
+        app_dir.clone(),
+        &user_id,
+        &current_password,
+        &new_password,
+    )?;
+
+    // 3. Re-envolver data_key con la nueva master (cura el fast path)
+    data_key::save_user_wrap(&app_dir, &user_id, &data_key, &new_master)?;
+
+    // 4. Actualizar hash de login en DB
+    let hashed = auth::hash_password(&new_password)?;
+    super::with_conn(&db_state, |conn| {
+        conn.execute(
+            "UPDATE users SET password_hash = ?1 WHERE id = ?2;",
+            rusqlite::params![&hashed, &user_id],
+        )
+        .map_err(|e| format!("Error actualizando contraseña en DB: {}", e))
+    })?;
+
+    // 5. Actualizar master en RAM (sesión sigue abierta)
+    let mut key_guard = crypto_state.0.lock().map_err(|_| "Lock poisoned")?;
+    *key_guard = Some(new_master);
+
+    println!("🔑 [Auth] Contraseña cambiada para: {}", user_id);
+    Ok(())
+}
+
 #[tauri::command]
 pub fn lock_vault(
     crypto_state: State<'_, CryptoState>,

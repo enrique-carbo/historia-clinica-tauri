@@ -59,6 +59,7 @@ pub fn run() {
             commands::login_user,
             commands::unlock_vault,
             commands::lock_vault,
+            commands::change_password,
             commands::create_entity,
             commands::find_entity_by_blind_index,
             commands::get_entity,
