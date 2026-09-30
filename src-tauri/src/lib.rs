@@ -49,13 +49,7 @@ pub fn run() {
             let schema: config_schema::SchemaConfig =
                 serde_json::from_str(SCHEMA_JSON).map_err(|e| format!("Schema inválido: {}", e))?;
 
-            const NOTE_TEMPLATES_JSON: &str = include_str!("../config/note_templates/soap.json");
-            let note_templates: config_schema::NoteTemplatesConfig =
-                serde_json::from_str(NOTE_TEMPLATES_JSON)
-                    .map_err(|e| format!("Note templates inválidos: {}", e))?;
-
             app.manage(schema);
-            app.manage(note_templates);
 
             Ok(())
         })
@@ -69,11 +63,8 @@ pub fn run() {
             commands::find_entity_by_blind_index,
             commands::get_entity,
             commands::update_entity,
-            commands::create_note,
-            commands::get_note,
             commands::list_entities,
             commands::search_entities,
-            commands::get_notes_by_entity,
             commands::is_vault_unlocked,
             commands::get_my_profile,
             commands::update_my_profile,

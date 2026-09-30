@@ -91,25 +91,7 @@ pub fn init_db(app_dir: PathBuf) -> Result<Connection, String> {
     )
     .ok();
 
-    // 4. Tabla notas genéricas
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS notes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            external_id TEXT UNIQUE,
-            entity_id INTEGER NOT NULL,
-            template_id TEXT NOT NULL,
-            created_by_user_id TEXT NOT NULL,
-            enc_fields BLOB NOT NULL,
-            signature BLOB NOT NULL,
-            created_at TEXT NOT NULL,
-            FOREIGN KEY(entity_id) REFERENCES entities(id),
-            FOREIGN KEY(created_by_user_id) REFERENCES users(id)
-        );",
-        [],
-    )
-    .map_err(|e| format!("Error al crear tabla notes: {}", e))?;
-
-    // 5. Tabla entity_keys
+    // 4. Tabla entity_keys
     //    Cada entidad que sea usuario de telemedicina
     //    tiene su propia clave de datos, cifrada con la clave maestra
     //    del médico que la creó o con la que el usuario estableció.
@@ -126,7 +108,7 @@ pub fn init_db(app_dir: PathBuf) -> Result<Connection, String> {
     )
     .map_err(|e| format!("Error al crear tabla entity_keys: {}", e))?;
 
-    // 6. Tabla cola de sincronización: reemplazará 'is_synced' en tablas individuales
+    // 5. Tabla cola de sincronización: reemplazará 'is_synced' en tablas individuales
     conn.execute(
         "CREATE TABLE IF NOT EXISTS sync_queue (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -144,7 +126,7 @@ pub fn init_db(app_dir: PathBuf) -> Result<Connection, String> {
     // TABLA CORE ENTITY-ENTRY (Append-Only)
     // ============================================================
 
-    // 7. Tabla entries: hechos clínicos inmutables
+    // 6. Tabla entries: hechos clínicos inmutables
     conn.execute(
         "CREATE TABLE IF NOT EXISTS entries (
             id TEXT PRIMARY KEY NOT NULL,
@@ -187,18 +169,6 @@ pub fn init_db(app_dir: PathBuf) -> Result<Connection, String> {
     // ============================================================
     // ÍNDICES DE PERFORMANCE
     // ============================================================
-
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_notes_entity_id ON notes(entity_id);",
-        [],
-    )
-    .ok();
-
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_notes_created_by ON notes(created_by_user_id);",
-        [],
-    )
-    .ok();
 
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_sync_queue_table ON sync_queue(table_name);",

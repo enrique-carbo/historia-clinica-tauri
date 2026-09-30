@@ -2,26 +2,26 @@
 import { useState, useCallback, useEffect } from "react";
 import { useEntityStore } from "../stores/useEntityStore";
 import { usePatientStore } from "../stores/usePatientStore";
-import { useNoteStore } from "../stores/useNoteStore";
-import { useAuthStore } from "../stores/useAuthStore";
+import { useEntryStore } from "../stores/useEntryStore";
+import { SoapCard } from "./SoapCard";
+import { AllergyCard } from "./AllergyCard";
 import { calculateAge } from "../utils/dateUtils";
 
 export function PatientEhrView() {
-  const { activeUser } = useAuthStore();
   const { entities, isLoading: entityLoading, searchEntities } = useEntityStore();
   const { selected, isLoading: patientLoading, selectPatient } = usePatientStore();
-  const { notes, selectedNote, isLoading: noteLoading, fetchNotes, createNote, selectNote } =
-    useNoteStore();
+  const {
+    entries: soapEntries,
+    isLoading: entriesLoading,
+    error: entriesError,
+    fetchEntries,
+    selectEntry,
+    clearError,
+  } = useEntryStore();
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [showNewNote, setShowNewNote] = useState(false);
   const [isPatientDetailsOpen, setIsPatientDetailsOpen] = useState(false);
-  const [noteFields, setNoteFields] = useState({
-    subjetivo: "",
-    objetivo: "",
-    evaluacion: "",
-    plan: "",
-  });
+
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -34,24 +34,19 @@ export function PatientEhrView() {
   const handleSelectPatient = useCallback(
     async (entityId: number) => {
       await selectPatient(entityId);
-      fetchNotes(entityId);
-      setShowNewNote(false);
-      selectNote(null);
-    },
-    [selectPatient, fetchNotes, selectNote],
-  );
 
-  const handleCreateNote = async () => {
-    if (!selected?.patient || !activeUser) return;
-    const res = await createNote(selected.patient.id, "soap_v1", noteFields, activeUser.user_id);
-    if (res) {
-      setNoteFields({ subjetivo: "", objetivo: "", evaluacion: "", plan: "" });
-      setShowNewNote(false);
-    }
-  };
+    },
+    [selectPatient],
+  );
 
   const patient = selected?.patient;
   const isLoading = patientLoading || entityLoading;
+
+  useEffect(() => {
+    if (!patient) return;
+    clearError();
+    fetchEntries(patient.id, "SOAP_NOTE");
+  }, [patient, fetchEntries, clearError]);
 
   return (
   <div className="grid grid-cols-1 md:grid-cols-12 gap-6 h-auto md:h-[calc(100vh-180px)]">
@@ -112,7 +107,7 @@ export function PatientEhrView() {
 
     {/* PANEL DERECHO: FICHA + HISTORIAL */}
     <div className="col-span-1 md:col-span-8 flex flex-col gap-4">
-      {patient ? (
+      {patient && (
         <>
           {/* FICHA COLAPSABLE */}
           <div className="border border-zinc-800 rounded-xl bg-zinc-900/50 shadow-lg overflow-hidden transition-all duration-300">
@@ -151,7 +146,10 @@ export function PatientEhrView() {
                   </svg>
                 </div>
               </div>
-            </div>
+              </div>
+
+              {/* Alergias: siempre visible, sin importar el colapso de la ficha */}
+              <AllergyCard subjectId={patient.id} />
 
               {isPatientDetailsOpen && (
                 <div className="p-4 sm:p-5 pt-4 border-t border-zinc-800 bg-zinc-950/30 animate-in slide-in-from-top-2 duration-200">
@@ -170,96 +168,61 @@ export function PatientEhrView() {
                   </div>
                 </div>
               )}
-
           </div>
 
-          {/* EVOLUCIONES / HISTORIAL CLÍNICO */}
-          <div className="flex-1 border border-zinc-800 rounded-xl bg-zinc-900/50 overflow-hidden flex flex-col shadow-lg min-h-100">
-            <div className="p-4 border-b border-zinc-800 flex justify-between items-center bg-zinc-900 gap-2">
-              <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest truncate">
-                Historial Clínico ({notes.length})
+          {/* HISTORIAL: ENTRADAS SOAP */}
+          <div className="border border-zinc-800 rounded-xl bg-zinc-900/50 backdrop-blur-sm shadow-lg flex-1 flex flex-col overflow-hidden min-h-0">
+            <div className="p-4 border-b border-zinc-800 bg-zinc-900 flex items-center justify-between gap-3">
+              <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest">
+                Historial — Notas SOAP
               </h3>
-              <button
-                onClick={() => setShowNewNote(!showNewNote)}
-                className={`shrink-0 rounded-lg px-3.5 py-2 text-xs sm:text-sm font-medium transition-colors ${
-                  showNewNote ? "bg-zinc-800 text-zinc-300 hover:bg-zinc-700" : "bg-blue-600 text-white hover:bg-blue-700 shadow-md shadow-blue-900/20"
-                }`}
-              >
-                {showNewNote ? "Cancelar Nota" : "+ Nueva Nota"}
-              </button>
+              {!entriesLoading && !entriesError && soapEntries.length > 0 && (
+                <span className="text-[10px] font-mono bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded">
+                  {soapEntries.length}
+                </span>
+              )}
             </div>
 
-            {/* Formulario SOAP de Nueva Nota */}
-            {showNewNote && (
-              <div className="p-4 border-b border-zinc-800 bg-zinc-950/80 space-y-4 animate-in slide-in-from-top-2 duration-200">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-blue-400 uppercase">Subjetivo (S)</label>
-                    <textarea value={noteFields.subjetivo} onChange={(e) => setNoteFields((p) => ({ ...p, subjetivo: e.target.value }))} rows={3} className="w-full rounded-lg bg-zinc-900 border border-zinc-700 px-3 py-2 text-sm text-zinc-200 focus:border-blue-500 outline-none resize-none" placeholder="Motivo de consulta y síntomas..." />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-emerald-400 uppercase">Objetivo (O)</label>
-                    <textarea value={noteFields.objetivo} onChange={(e) => setNoteFields((p) => ({ ...p, objetivo: e.target.value }))} rows={3} className="w-full rounded-lg bg-zinc-900 border border-zinc-700 px-3 py-2 text-sm text-zinc-200 focus:border-emerald-500 outline-none resize-none" placeholder="Signos vitales y examen físico..." />
-                  </div>
+            <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+              {entriesLoading && soapEntries.length === 0 ? (
+                <div className="flex justify-center py-10">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-amber-400 uppercase">Evaluación (A)</label>
-                    <textarea value={noteFields.evaluacion} onChange={(e) => setNoteFields((p) => ({ ...p, evaluacion: e.target.value }))} rows={3} className="w-full rounded-lg bg-zinc-900 border border-zinc-700 px-3 py-2 text-sm text-zinc-200 focus:border-amber-500 outline-none resize-none" placeholder="Diagnóstico presuntivo..." />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-purple-400 uppercase">Plan (P)</label>
-                    <textarea value={noteFields.plan} onChange={(e) => setNoteFields((p) => ({ ...p, plan: e.target.value }))} rows={3} className="w-full rounded-lg bg-zinc-900 border border-zinc-700 px-3 py-2 text-sm text-zinc-200 focus:border-purple-500 outline-none resize-none" placeholder="Tratamiento y estudios..." />
-                  </div>
+              ) : entriesError ? (
+                <div className="p-4 rounded-lg bg-red-950/30 border border-red-800/50 text-red-400 text-sm">
+                  {entriesError}
                 </div>
-                <div className="flex justify-end pt-2">
-                  <button onClick={handleCreateNote} disabled={noteLoading || !activeUser} className="w-full sm:w-auto rounded-lg bg-emerald-600 px-6 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-emerald-900/20 transition-all flex items-center justify-center gap-2">
-                    {noteLoading ? (<><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>Firmando...</>) : (<>Guardar + Firmar</>)}
-                  </button>
+              ) : soapEntries.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-10 text-zinc-500">
+                  <svg
+                    className="w-10 h-10 mb-3 text-zinc-700"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.5}
+                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                    />
+                  </svg>
+                  <p className="text-sm">Sin notas SOAP registradas</p>
+                  <p className="text-xs text-zinc-600 mt-1">
+                    Se crean desde la pestaña Entries
+                  </p>
                 </div>
-              </div>
-            )}
-
-            {/* Listado de Evoluciones Guardadas */}
-            <div className="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar">
-              {noteLoading && !showNewNote ? (
-                <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div></div>
-              ) : notes.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full min-h-50 text-zinc-600"><span className="text-4xl mb-2 opacity-20">📝</span><p>No hay evoluciones registradas</p></div>
               ) : (
-                notes.map((note) => (
-                  <div key={note.id} onClick={() => selectNote(note.id === selectedNote?.id ? null : note)} className={`p-4 rounded-xl border cursor-pointer transition-all duration-200 ${selectedNote?.id === note.id ? "bg-blue-900/10 border-blue-500/30 shadow-md" : "bg-zinc-950/50 border-zinc-800 hover:bg-zinc-800/50 hover:border-zinc-700"}`}>
-                    <div className="flex justify-between items-start mb-2 gap-2">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-bold text-zinc-200">Nota #{note.id}</span>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold uppercase ${note.is_verified ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20" : "bg-red-500/10 text-red-500 border border-red-500/20"}`}>{note.is_verified ? "Firmada" : "Sin firma"}</span>
-                      </div>
-                      <span className="text-xs text-zinc-500 font-mono bg-zinc-900 px-2 py-1 rounded shrink-0">{new Date(note.created_at).toLocaleString([], { dateStyle: "short", timeStyle: "short", hour12: false })}</span>
-                    </div>
-                    <div className="text-xs text-zinc-400 mb-2 flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-zinc-600"></span>Por: <span className="text-zinc-300 font-medium">{note.created_by_name}</span></div>
-                    {selectedNote?.id === note.id && note.fields && (
-                      <div className="mt-4 pt-4 border-t border-zinc-800 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 animate-in fade-in slide-in-from-top-1 duration-200">
-                        {[{ k: "subjetivo", l: "S", c: "blue" }, { k: "objetivo", l: "O", c: "emerald" }, { k: "evaluacion", l: "A", c: "amber" }, { k: "plan", l: "P", c: "purple" }].map((s) => (
-                          <div key={s.k} className="col-span-1 space-y-1">
-                            <div className="flex items-center gap-2"><span className={`text-[10px] font-bold uppercase tracking-wider text-${s.c}-400 bg-${s.c}-900/20 px-1.5 py-0.5 rounded`}>{s.l}</span><span className="text-xs font-semibold text-zinc-400 capitalize">{s.k}</span></div>
-                            <p className={`text-sm text-zinc-300 whitespace-pre-wrap leading-relaxed pl-1 border-l-2 border-${s.c}-900/50 min-h-5`}>{(note.fields as any)[s.k] || "—"}</p>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))
+                <div className="space-y-4">
+                  {soapEntries.map((entry) => (
+                    <SoapCard key={entry.id} entry={entry} onClick={() => selectEntry(entry)} />
+                  ))}
+                </div>
               )}
             </div>
           </div>
         </>
-      ) : (
-        <div className="flex-1 flex flex-col items-center justify-center border border-zinc-800 rounded-xl bg-zinc-900/30 border-dashed min-h-75 p-6 text-center">
-          <div className="text-zinc-700 text-5xl sm:text-6xl mb-4 opacity-50">🩺</div>
-          <p className="text-zinc-500 font-medium text-sm sm:text-base">Selecciona un paciente para comenzar la atención</p>
-        </div>
       )}
     </div>
   </div>
-  );
-}
+)}

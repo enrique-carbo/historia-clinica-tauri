@@ -3,11 +3,11 @@ import { invoke } from "@tauri-apps/api/core";
 import { useAuthStore } from "../../stores/useAuthStore";
 import { usePatientStore } from "../../stores/usePatientStore";
 import { useEntityStore } from "../../stores/useEntityStore";
-import { useNoteStore } from "../../stores/useNoteStore";
 import { useNavigationStore } from "../../stores/useNavigationStore";
 import { useSeedStore } from "../../stores/useSeedStore";
 import { NavigationDrawer } from "../ui/Drawer";
 import { SeedPhraseSetup } from "../SeedPhraseSetup";
+import { useEntryStore } from "../../stores/useEntryStore";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -31,14 +31,16 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         isLoading: false,
         error: null,
       });
-      useNoteStore.setState({
-        notes: [],
-        selectedNote: null,
+
+      usePatientStore.setState({
+        selected: null,
         isLoading: false,
         error: null,
       });
-      usePatientStore.setState({
-        selected: null,
+
+      useEntryStore.setState({
+        entries: [],
+        selectedEntry: null,
         isLoading: false,
         error: null,
       });

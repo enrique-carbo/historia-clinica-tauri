@@ -36,7 +36,7 @@ src-tauri/src/
  ├── lib.rs               # Orquestador de Tauri, inyección de estados globales (DbState, CryptoState, SigningState, DataKey).
  ├── lib_types.rs         # Contenedores de estado seguro (Mutex<Option<T>>).
  │
- ├── config_schema.rs     # Structs para parsear schema.json y note_templates dinámicamente.
+ ├── config_schema.rs     # Structs para parsear schema.json dinámicamente.
  ├── vault.rs             # Gestión de Bóvedas criptográficas por usuario (Cold Start + Llave Privada de Firma).
  ├── data_key.rs          # ← NUEVO: Envoltorio AES-GCM de la DataKey (wrap por usuario + master wrap con seed) + migración legacy.
  ├── seed.rs              # Generación de mnemonic (6 palabras) y derivación de key con SHA-256.
@@ -48,7 +48,6 @@ src-tauri/src/
      ├── mod.rs           # Exportación plana y Helpers (`with_conn`, `get_data_key`).
      ├── auth_commands.rs # Registro, login, unlock_vault (resuelve DataKey), lock_vault, setup_seed_master_wrap.
      ├── entity_commands.rs    # Endpoints genéricos de entidades (Template v1).
-     ├── note_commands.rs      # Endpoints genéricos de notas con firma digital (Template v1).
      ├── entry_commands.rs     # CRUD append-only de entries (inmutables, con firma + búsqueda).
      └── professional_profile_commands.rs # Endpoints de perfil profesional.
 ```
@@ -61,7 +60,6 @@ src/
  ├── stores/                 # Capa de Estado Global (Zustand)
  │   ├── useAuthStore.ts     # Estado de la Bóveda (Cold Start UI, cierre seguro de sesión).
  │   ├── useEntityStore.ts   # CRUD genérico de entidades (listado, búsqueda, creación).
- │   ├── useNoteStore.ts     # Evoluciones clínicas con firma digital.
  │   ├── useEntryStore.ts    # Gestión de entries con paginación y búsqueda.
  │   ├── useNavigationStore.ts # Estado de navegación (tabs, drawer).
  │   ├── useSeedStore.ts     # Flag de seed configurada (persistido; la frase NO se persiste).
@@ -69,7 +67,6 @@ src/
  │
  ├── config/
  │   ├── schema.json              # Definición de entidades (solo filiación en patient).
- │   ├── note_templates/soap.json # Template de notas SOAP con firma.
  │   └── entry_templates/         # Templates de entries por categoría
  │       ├── soap.json
  │       ├── allergy.json
@@ -148,8 +145,7 @@ La DataKey (llave que cifra todos los datos médicos) **nunca se persiste en cla
 | Capa | Tabla/Archivo | Llave | Propósito |
 |---|---|---|---|
 | Filiación | `entities.enc_data_blob` | `DataKey` | Datos demográficos cifrados campo a campo |
-| Notas SOAP | `notes.enc_fields` | `DataKey` | Evoluciones clínicas cifradas + firma Ed25519 |
-| Entries | `entries.payload` | `DataKey` | Entries inmutables cifradas + firma Ed25519 |
+| Entries | `entries.payload` | `DataKey` | Entries clínicas inmutables cifradas + firma Ed25519 |
 | Perfil Profesional | `professional_profiles.*_ciphertext` | `DataKey` | Datos del médico cifrados individualmente |
 | Vault | `vault_{user_id}.bin` | Master Key (derivada) | Llave privada de firma cifrada |
 | DataKey | `.data_key.{user_id}` / `.data_key.master` | Password / Seed | Envoltorio de la DataKey (ver §3.1) |
@@ -158,7 +154,7 @@ La DataKey (llave que cifra todos los datos médicos) **nunca se persiste en cla
 Hash determinista SHA-256 (DNI normalizado + sal de instalación) para búsqueda exacta sin exponer el dato real. La sal es global a la instalación (`/.installation_salt`) para permitir búsqueda compartida entre médicos de la misma máquina.
 
 ### 5. Firma Digital y No-Repudio
-Cada nota SOAP y cada entry se firma con Ed25519 usando la llave privada del médico en RAM. El template define `signature_payload_order` para garantizar consistencia en la verificación. La llave pública se almacena en `professional_profiles` para verificación futura.
+Cada entry se firma con Ed25519 usando la llave privada del médico en RAM. El payload de firma es `category|subject_id|title|status|timestamp` (consistente entre creación y verificación). La llave pública se almacena en `professional_profiles.public_key` y se sincroniza en cada `unlock_vault` (derivada desde la privada si el vault ya existía).
 
 ### 6. Seed Phrase (Frase Semilla) — Bootstrap y Recovery
 Sistema de recuperación que protege el master wrap de la DataKey:
@@ -177,36 +173,36 @@ Sistema de recuperación que protege el master wrap de la DataKey:
 | `users` | Autenticación (Médicos, Admins, Pacientes) | PK `id TEXT` |
 | `professional_profiles` | Perfil profesional + llave pública Ed25519 | FK → `users(id)` |
 | `entities` | Entidades genéricas (filiación de pacientes) | PK `id INTEGER` |
-| `notes` | Notas clínicas con firma digital | FK → `entities(id)`, FK → `users(id)` |
-| `entries` | Entries inmutables (append-only) | FK → `entities(id)`, FK → `users(id)` |
+| `entries` | Entries clínicas inmutables (append-only) — único sistema clínico | FK → `entities(id)`, FK → `users(id)` |
 | `entity_keys` | Claves de datos por entidad-usuario (telemedicina) | FK → `entities(id)` |
 | `sync_queue` | Cola FIFO de sincronización | Reemplaza `is_synced` |
 
-> **Nota**: La tabla legacy `medical_history` fue eliminada del esquema. Sus datos clínicos ahora viven en `entries` (categorías `CONDITION`, `ALLERGY`, `MEDICATION`). En dev, borrá `historia_clinica.db` para limpiar tablas obsoletas.
+> **Nota**: Las tablas legacy `medical_history` y `notes` fueron eliminadas del esquema. Todo el dato clínico vive en `entries` (categorías `SOAP_NOTE`, `CONDITION`, `ALLERGY`, `MEDICATION`). En dev, borrá `historia_clinica.db` para limpiar tablas obsoletas.
 
-### Tabla `entries` (Nueva — Entity-Entry Paradigm)
+### Tabla `entries` (Entity-Entry Paradigm — única tabla clínica)
 ```sql
 CREATE TABLE entries (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    external_id TEXT UNIQUE NOT NULL,
-    subject_id INTEGER NOT NULL,           -- FK → entities(id)
-    author_id TEXT NOT NULL,               -- FK → users(id)
-    category TEXT NOT NULL,                -- SOAP_NOTE, ALLERGY, MEDICATION, CONDITION
+    id TEXT PRIMARY KEY NOT NULL,
+    category TEXT NOT NULL CHECK(category IN ('SOAP_NOTE', 'MEDICATION', 'ALLERGY', 'CONDITION')),
+    subject_id INTEGER NOT NULL,            -- FK → entities(id)
+    author_id TEXT NOT NULL,                -- FK → users(id)
     title TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'active', -- active, corrected, superseded
-    payload BLOB NOT NULL,                 -- Cifrado con DataKey (AES-GCM-256)
-    signature TEXT NOT NULL,               -- Firma Ed25519
+    status TEXT NOT NULL CHECK(status IN ('ACTIVE', 'RESOLVED', 'COMPLETED')),
     timestamp TEXT NOT NULL,
+    payload BLOB NOT NULL,                  -- Cifrado con DataKey (AES-GCM-256)
+    signature TEXT NOT NULL,                -- Firma Ed25519
     created_at TEXT NOT NULL,
-    FOREIGN KEY(subject_id) REFERENCES entities(id),
-    FOREIGN KEY(author_id) REFERENCES users(id)
+    is_synced INTEGER NOT NULL DEFAULT 0 CHECK(is_synced IN (0, 1)),
+    FOREIGN KEY(subject_id) REFERENCES entities(id) ON DELETE RESTRICT,
+    FOREIGN KEY(author_id) REFERENCES users(id) ON DELETE RESTRICT
 );
 
 CREATE INDEX idx_entries_subject ON entries(subject_id, timestamp DESC);
-CREATE INDEX idx_entries_category ON entries(subject_id, category, timestamp DESC);
+CREATE INDEX idx_entries_category ON entries(category);
+CREATE INDEX idx_entries_sync ON entries(is_synced) WHERE is_synced = 0;
 ```
 
-**Nota**: Las entries son **inmutables**. No existen `update_entry` ni `delete_entry`. La corrección se realiza creando una nueva entry con `status = 'superseded'` o `'corrected'`.
+**Nota**: Las entries son **inmutables**. No existen `update_entry` ni `delete_entry`.
 
 ## 🏗️ Arquitectura de Template (v1)
 
@@ -216,28 +212,27 @@ CREATE INDEX idx_entries_category ON entries(subject_id, category, timestamp DES
 | Archivo | Propósito | Consumidor |
 |---|---|---|
 | `config/schema.json` | Define entidades y campos de filiación | `entity_commands.rs` + `Entity.tsx` |
-| `config/note_templates/soap.json` | Define estructura y orden de firma de notas SOAP | `note_commands.rs` + `useNoteStore.ts` |
 | `config/entry_templates/soap.json` | Template de entry SOAP | `EntryForm.tsx` |
 | `config/entry_templates/allergy.json` | Template de alergia | `EntryForm.tsx` |
 | `config/entry_templates/medication.json` | Template de medicación | `EntryForm.tsx` |
 | `config/entry_templates/condition.json` | Template de condición médica | `EntryForm.tsx` |
 
-Todos se empaquetan en el binario con `include_str!` en `lib.rs`, garantizando funcionamiento offline total e inmutabilidad en runtime.
+`schema.json` se empaqueta en el binario con `include_str!` en `lib.rs`; los `entry_templates/` se cargan en el frontend. Todo funciona offline y es inmutable en runtime.
 
 **Paradigma Entity-Entry**: El core no conoce el significado clínico de cada campo. Simplemente almacena `entries` cifradas con su categoría y las presenta según el template JSON correspondiente. Agregar nuevos tipos de entries solo requiere crear un nuevo archivo JSON en `entry_templates/`.
 
 ## 🧪 Tests Automatizados
 
-El Core cuenta con 36 tests unitarios que cubren:
+El Core cuenta con 37 tests unitarios que cubren:
 | Módulo | Tests | Cobertura |
 |---|---|---|
-| `crypto.rs` | 14 | AES-GCM roundtrip, nonces únicos, clave incorrecta, manipulación, Blind Index, Firma Ed25519 |
+| `crypto.rs` | 15 | AES-GCM roundtrip, nonces únicos, clave incorrecta, manipulación, Blind Index, Firma Ed25519, derivación de pública desde privada |
 | `vault.rs` | 4 | Creación, desbloqueo, contraseña incorrecta, sal única por usuario |
 | `seed.rs` | 10 | Generación mnemonic, unicidad, derivación SHA-256, verificación, edge cases |
 | `data_key.rs` | 10 | Wrap/unwrap AES-GCM, prioridades de resolución, `SEED_REQUIRED`, migración legacy |
 
 ```bash
-cargo test --lib  # 36 passed; 0 failed
+cargo test --lib  # 37 passed; 0 failed
 ```
 
 ## 🗺️ Mapa de Ruta del Desarrollo (Roadmap)
@@ -295,6 +290,13 @@ cargo test --lib  # 36 passed; 0 failed
 - [x] **Seed en papel**: frase no persistida en `localStorage`, solo flag `isSeedConfigured`
 - [x] 36 tests pasando
 
+### 🟩 Fase 3.8: Unificación del Sistema Clínico (✅ Completado)
+- [x] **Eliminado el sistema SOAP viejo (`notes`)**: tabla, índices, `note_commands.rs`, `NoteTemplatesConfig`, `include_str!(soap.json)`, comandos `create_note`/`get_note`/`get_notes_by_entity`
+- [x] **Frontend limpio**: eliminados `useNoteStore.ts`, `note_templates/soap.json` (ambas copias), uso en `PatientEhrView` y `DashboardLayout`
+- [x] **Único sistema clínico**: `PatientEhrView` + `EntryTimeline` consumen solo `entries` (paradigma Entity-Entry)
+- [x] **Fix firma multi-usuario**: `unlock_vault` sincroniza `professional_profiles.public_key` siempre (derivada desde la privada si el vault ya existía), antes de `resolve_data_key`
+- [x] 37 tests pasando
+
 ### 🟧 Fase 4: Infraestructura y Sincronización Híbrida (Próximo paso)
 - [ ] Despliegue de VPS con Dokploy y PocketBase
 - [ ] Sync Engine (`tokio`): background worker polling `sync_queue`
@@ -319,6 +321,6 @@ pnpm tauri dev          # Levanta el entorno (Rust + React HMR)
 pnpm tauri build        # Compila en modo release para producción
 npx tsc --noEmit        # Verifica TypeScript sin generar archivos
 cargo check             # Verifica compilación Rust
-cargo test --lib        # Ejecuta los 36 tests unitarios del Core
+cargo test --lib        # Ejecuta los 37 tests unitarios del Core
 cargo add <crate>       # Añade dependencias al backend (desde src-tauri)
 ```

@@ -65,7 +65,7 @@ export function EntryTimeline({ subjectId }: EntryTimelineProps) {
   return (
     <div className="space-y-3">
       {/* Barra de herramientas: filtros + búsqueda */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-4">
+      <div className="flex flex-col md:flex-row gap-3 mb-4">
         {/* Filtros por categoría */}
         <div className="flex flex-wrap gap-2 flex-1">
           {CATEGORIES.map((cat) => (
@@ -85,9 +85,9 @@ export function EntryTimeline({ subjectId }: EntryTimelineProps) {
         </div>
 
         {/* Búsqueda por título */}
-        <div className="relative w-full sm:w-64">
+        <div className="relative w-full sm:w-64 self-start shrink-0">
           <svg
-            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500"
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 z-10 w-4 h-4 text-zinc-500"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -104,12 +104,12 @@ export function EntryTimeline({ subjectId }: EntryTimelineProps) {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Buscar por título..."
-            className="w-full pl-9 pr-8 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-blue-600"
+            className="relative w-full pl-9 pr-8 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-blue-600"
           />
           {searchQuery && (
             <button
               onClick={handleClearSearch}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
+              className="absolute right-2 top-1/2 -translate-y-1/2 z-10 text-zinc-500 hover:text-zinc-300"
               aria-label="Limpiar búsqueda"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
