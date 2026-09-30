@@ -10,4 +10,4 @@ Admin
 user: enrique_adm
 pass: 12345678
 
-Frase: puzle aloha roces helio exise roble
+Frase: jauri gobio ejote pague mocito pieza
