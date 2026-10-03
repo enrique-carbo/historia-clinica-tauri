@@ -5,12 +5,14 @@ import { useNavigationStore, AdminTab } from "../../stores/useNavigationStore";
 import { AdminUsersPanel } from "./AdminUsersPanel";
 import { AdminAuditPanel } from "./AdminAuditPanel";
 import { AdminSeedPanel } from "./AdminSeedPanel";
+import { AdminBackupPanel } from "./AdminBackupPanel";
 
 const ADMIN_TABS: Tab[] = [
   { id: "usuarios", label: "Usuarios", icon: "👥" },
   { id: "paciente", label: "Admisión", icon: "👤" },
   { id: "auditoria", label: "Auditoría", icon: "📋" },
   { id: "semilla", label: "Frase Semilla", icon: "🌱" },
+  { id: "respaldos", label: "Respaldos", icon: "💾" },
 ];
 
 const ASISTENTE_TABS: Tab[] = [{ id: "paciente", label: "Admisión de Pacientes", icon: "👤" }];
@@ -45,6 +47,8 @@ export function AdminView() {
       {activeTab === "auditoria" && <AdminAuditPanel />}
 
       {activeTab === "semilla" && <AdminSeedPanel />}
+
+      {activeTab === "respaldos" && <AdminBackupPanel />}
     </Navbar>
   );
 }

@@ -105,11 +105,12 @@ Lo que el modelo Zero-Knowledge protege de verdad es el **disco**: sin la contra
 * **Cambio de contraseña propio:** mismo keypair → nada cambia en las firmas.
 * **Reset por el administrador** (`admin_reset_password`, sin contraseña previa): regenera el vault con keypair **nuevo**, re-envuelve el wrap personal, actualiza la pública vigente y cierra el rango anterior en `signing_keys` — las entries viejas siguen verificando con la clave que les corresponde por fecha.
 
-### 4.5 Frase semilla (recovery y continuidad)
+### 4.5 Frase semilla (recovery, continuidad y break-glass)
 
 * 6 palabras generadas en el dispositivo, mostradas una sola vez, **jamás persistidas en disco ni en la base**.
-* Deriva únicamente `.data_key.master`; **no sustituye a la contraseña** — si se olvida la contraseña, el login falla antes de pedirla, para eso existe el reset del administrador.
+* Deriva únicamente `.data_key.master`; **no sustituye a la contraseña** en el login normal.
 * **Rotación** (tab del administrador): generar → anotar → re-escribir para verificar → recién entonces `admin_rotate_seed` reenvuelve `.data_key.master`. Hasta el último paso la frase anterior sigue siendo válida, y la acción queda registrada en `audit_log`.
+* **Break-glass** (`seed_recovery`, desde el enlace de login): sí permite recuperar el acceso cuando se olvidó **todas** las contraseñas. La frase se verifica contra `.data_key.master` (mismo `unwrap` del recovery de datos — poseer la frase ya es poder descifrar todo, así que este paso solo lo formaliza y audita). Se restablece la contraseña del administrador activo más antiguo con vault y keypair nuevos, se rota `signing_keys` (las firmas históricas siguen verificando por fecha) y la acción queda en `audit_log` con acción `seed_recovery`. La DataKey no cambia.
 
 ### 4.6 Custodia: roles y autorización en backend
 
@@ -135,3 +136,30 @@ Cuando se implemente el puente de sincronización, el servidor remoto actuará c
     * Nonces públicos.
     * El `blind_index` para indexación y búsquedas opacas.
 3. **Filosofía Zero-Knowledge:** El proveedor de la nube (o cualquier atacante que acceda al servidor central) solo verá metadatos correlativos, haciendo imposible la reconstrucción de la historia clínica de un paciente o su identificación legal.
+
+---
+
+## 💾 6. Respaldo y Restauración Local
+
+El mecanismo de respaldo no introduce claves nuevas: copia los archivos que **ya están cifrados** y les agrega una huella de integridad.
+
+### Contenido de un respaldo (`respaldo-{timestamp}/`)
+
+| Archivo | Rol en la recuperación |
+| :--- | :--- |
+| `historia_clinica.db` (con `wal_checkpoint(TRUNCATE)` previo) | Todos los datos (cifrados por campo/payload) |
+| `.data_key.master` | Recuperación con la **frase semilla** |
+| `.data_key.{user}` | Recuperación con la **contraseña** del usuario (fast path) |
+| `vault_*.{bin,salt}` | Llaves de firma por usuario (si faltan, se regeneran al hacer login sin perder verificabilidad histórica) |
+| `.installation_salt` | Sin ella los `blind_index` restaurados no coincidirían con los nuevos |
+| `manifest.json` | `schema_version` + **SHA-256 por archivo** (integridad al restaurar) |
+
+### Reglas
+
+1. **Nada en claro**: el manifest solo contiene nombres, tamaños y hashes; todo lo demás es ciphertext envuelto. Un respaldo robado es tan inútil como la base sin contraseña ni frase.
+2. **Validación antes de tocar nada**: `validate_backup` verifica cada SHA-256, rechaza `schema_version` más nuevo que la app y nombres con separadores de ruta (path traversal).
+3. **Orden destructivo del restore**: validar → auditar (`backup_restored`) → cerrar llaves, sesión y conexión SQLite → copiar archivos → reabrir con `run_migrations` → recargar la sal de blind index. Si la copia falla, se reintenta abrir la base previa.
+4. **Matriz de recuperación tras restaurar**:
+   * Contraseña conocida → login normal → wrap personal (o semilla si no hay wrap) → todo.
+   * Sin contraseñas → break-glass con frase semilla (§4.5).
+   * Sin frase ni ninguna contraseña → los datos son irrecuperables por diseño (*crypto-shredding*): por eso el respaldo y la frase se guardan juntos y separados del equipo.

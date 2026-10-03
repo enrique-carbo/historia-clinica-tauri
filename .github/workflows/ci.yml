@@ -56,7 +56,7 @@ jobs:
             libayatana-appindicator3-dev \
             libssl-dev
 
-      - name: Tests (70 unitarios)
+      - name: Tests (91 unitarios)
         run: cargo test
 
       - name: Check (compilación sin warnings)

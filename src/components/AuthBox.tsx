@@ -14,6 +14,12 @@ export function AuthBox() {
   const [needsSeed, setNeedsSeed] = useState(false);
   const [seedPhrase, setSeedPhrase] = useState("");
 
+  // Break-glass: recuperar el acceso con la frase semilla (resetea la
+  // contraseña del administrador, queda en audit_log)
+  const [recovering, setRecovering] = useState(false);
+  const [recoverSeed, setRecoverSeed] = useState("");
+  const [recoverPassword, setRecoverPassword] = useState("");
+
   // <-- Extraemos la función que actualiza el estado global
   const unlockVault = useAuthStore((state) => state.unlockVault);
 
@@ -92,6 +98,34 @@ export function AuthBox() {
     }
   };
 
+  const handleRecoverSubmit = async (e: React.SubmitEvent) => {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    try {
+      const user = await invoke<{
+        user_id: string;
+        username: string;
+        role: string;
+      }>("seed_recovery", {
+        seedPhrase: recoverSeed.trim(),
+        newPassword: recoverPassword,
+      });
+      unlockVault(user);
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const backToLogin = () => {
+    setRecovering(false);
+    setRecoverSeed("");
+    setRecoverPassword("");
+    setError(null);
+  };
+
   if (bootstrap === null) {
     return (
       <div className="w-full max-w-md mx-auto mt-24 bg-zinc-900 p-8 rounded-lg border border-zinc-800 text-center text-zinc-500 text-sm">
@@ -105,18 +139,64 @@ export function AuthBox() {
       <h2 className="text-xl font-bold text-zinc-100 mb-1">
         {bootstrap
           ? "🌱 Crear Primer Administrador"
-          : "🔑 Iniciar Sesión Core"}
+          : recovering
+            ? "🚨 Recuperar Acceso"
+            : "🔑 Iniciar Sesión Core"}
       </h2>
       <p className="text-xs text-zinc-500 mb-6">
         {bootstrap
           ? "Esta instalación no tiene usuarios. Creá la cuenta administradora (será la dueña de la gestión técnica)."
-          : "Acceso local encriptado mediante Argon2id"}
+          : recovering
+            ? "Recuperación de emergencia: restablecé la contraseña del administrador con la frase semilla."
+            : "Acceso local encriptado mediante Argon2id"}
       </p>
 
       {error && <Alert variant="error" className="my-3">{error}</Alert>}
 
-      {/* Formulario de seed (bootstrap / recovery) */}
-      {!bootstrap && needsSeed ? (
+      {/* Recuperación break-glass con frase semilla */}
+      {!bootstrap && recovering ? (
+        <form onSubmit={handleRecoverSubmit} className="flex flex-col gap-4">
+          <div className="p-3 bg-purple-950/30 border border-purple-800/50 rounded-lg">
+            <p className="text-xs text-purple-300">
+              🚨 Esto <strong>restablece la contraseña del administrador</strong> y entra
+              directamente al sistema. Requiere la <strong>frase semilla</strong> (6 palabras del
+              papel) y queda registrado en la auditoría. Si solo olvidaste tu contraseña personal,
+              pedile al administrador que te la resetee.
+            </p>
+          </div>
+          <div>
+            <Input
+              type="text"
+              label="Frase Semilla"
+              value={recoverSeed}
+              onChange={(e) => setRecoverSeed(e.target.value)}
+              required
+              placeholder="palabra1 palabra2 ... palabra6"
+            />
+          </div>
+          <div>
+            <Input
+              type="password"
+              label="Nueva contraseña del administrador (mínimo 8)"
+              value={recoverPassword}
+              onChange={(e) => setRecoverPassword(e.target.value)}
+              required
+              placeholder="••••••••"
+              minLength={8}
+            />
+          </div>
+          <Button type="submit" isLoading={loading} className="w-full">
+            Restablecer y entrar
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={backToLogin}
+            className="w-full underline text-center"
+          >
+            Volver
+          </Button>
+        </form>
+      ) : !bootstrap && needsSeed ? (
         <form onSubmit={handleSeedSubmit} className="flex flex-col gap-4">
           <div className="p-3 bg-yellow-950/30 border border-yellow-800/50 rounded-lg">
             <p className="text-xs text-yellow-400">
@@ -190,6 +270,20 @@ export function AuthBox() {
         <Button type="submit" isLoading={loading} className="w-full mt-2">
           {bootstrap ? "Crear Administrador" : "Ingresar al Sistema"}
         </Button>
+
+        {!bootstrap && (
+          <button
+            type="button"
+            onClick={() => {
+              setRecovering(true);
+              setNeedsSeed(false);
+              setError(null);
+            }}
+            className="text-xs text-zinc-500 hover:text-zinc-300 underline text-center mt-1"
+          >
+            ¿Olvidaste la contraseña? → Recuperar con frase semilla
+          </button>
+        )}
       </form>
       )}
     </div>

@@ -14,6 +14,7 @@ use types::{CryptoState, DataKey, DbState, SessionState, SigningState};
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(DbState(Mutex::new(None)))
         .manage(CryptoState(Mutex::new(None)))
         .manage(SigningState(Mutex::new(None)))
@@ -84,6 +85,10 @@ pub fn run() {
             commands::verify_seed,
             commands::derive_key_from_seed,
             commands::hash_seed,
+            commands::create_backup,
+            commands::validate_backup,
+            commands::restore_backup,
+            commands::seed_recovery,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

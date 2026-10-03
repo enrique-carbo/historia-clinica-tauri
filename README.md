@@ -10,13 +10,14 @@ La arquitectura está dividida de forma estricta en dos capas de alto rendimient
 
 ### Backend Nativo (Core - Rust)
 - **Rust**: Motor principal encargado de la criptografía, seguridad y acceso a datos.
-- **Tauri v2**: Puente IPC multiplataforma de consumo ultra-bajo.
+- **Tauri v2**: Puente IPC multiplataforma de consumo ultra-bajo (plugins: `opener` para revelar archivos, `dialog` para elegir carpetas de respaldo).
 - **SQLite (`rusqlite`)**: Base de datos relacional embebida (acceso directo sin plugins de Tauri para mantener el patrón `with_conn`), garantizando autonomía total offline.
 - **AES-GCM-256**: Cifrado autenticado para texto médico (entries, nombres, perfil) y para envolver la DataKey en disco.
 - **Ed25519 (Dalek)**: Firma digital asimétrica para garantizar el No-Repudio y validez legal de las notas médicas.
 - **SHA-256**: Hashing determinista para Índices Ciegos, huellas digitales de documentos y derivación de Seed Phrase.
 - **Argon2id**: Hashing de contraseñas y derivación de claves (KDF) — incluye el envoltorio de la DataKey.
-- **Seed Phrase**: Frase mnemotécnica de 6 palabras en papel para bootstrap y recovery de la DataKey (no se persiste en disco).
+- **Seed Phrase**: Frase mnemotécnica de 6 palabras en papel para bootstrap y recovery de la DataKey — y para el **break-glass** de recuperación de la contraseña del administrador (auditado). No se persiste en disco.
+- **Respaldos locales**: carpeta `respaldo-{timestamp}/` con `manifest.json` (SHA-256 por archivo); todo el contenido ya va cifrado en reposo.
 
 ### Frontend (UI)
 - **React 19 + TypeScript (Strict)**: Interfaz declarativa con tipado extremo a extremo (los structs de Rust se espejan en TS).
@@ -38,6 +39,7 @@ src-tauri/src/
  │
  ├── security/            # Núcleo criptográfico (stateless respecto al IPC).
  │   ├── auth.rs          # Hashing Argon2id para autenticación de usuarios.
+ │   ├── backup.rs        # Respaldo/restore de la instalación (manifest SHA-256, validación de integridad y esquema).
  │   ├── crypto.rs        # Motor matemático puro (AES-GCM, Ed25519, Nonces OsRng, SHA-256 Blind Index).
  │   ├── data_key.rs      # Envoltorio AES-GCM de la DataKey (wrap por usuario + master wrap con seed) + migración legacy.
  │   ├── seed.rs          # Generación de mnemonic (6 palabras) y derivación de key con SHA-256.
@@ -45,7 +47,9 @@ src-tauri/src/
  │
  ├── db/                  # Capa de persistencia.
  │   ├── config_schema.rs # Structs para parsear schema.json dinámicamente.
- │   └── database.rs      # Inicialización física de SQLite (WAL Mode activado) y esquemas relacionales.
+ │   ├── database.rs      # Apertura de SQLite (WAL) + delegación en `run_migrations`.
+ │   └── migrations/      # Migraciones append-only versionadas con `PRAGMA user_version`
+ │       └── mod.rs       # (v001 baseline, transacción por migración, guard de downgrade).
  │
  ├── export/              # Motor de exportación de historias clínicas.
  │   └── render.rs        # Snapshot tipado + render puro a Markdown (filiación, perfil, entries cronológicas, footer SHA-256).
@@ -53,7 +57,8 @@ src-tauri/src/
  └── commands/            # Controladores de API interna (Aduana de peticiones de React).
      ├── mod.rs           # Exportación plana y Helpers (`with_conn`, `get_data_key`).
      ├── admin_commands.rs    # Gestión técnica (solo administrador): `require_admin`, usuarios, reset de contraseña, rotación de seed, auditoría.
-     ├── auth_commands.rs # Registro (solo bootstrap), login (is_active + last_login_at + sesión), unlock_vault (resuelve DataKey + rota signing_keys), lock_vault, setup_seed_master_wrap.
+     ├── auth_commands.rs # Registro (solo bootstrap), login (is_active + last_login_at + sesión), unlock_vault (resuelve DataKey + rota signing_keys), lock_vault, setup_seed_master_wrap, **`seed_recovery`** (break-glass con frase semilla).
+     ├── backup_commands.rs   # Respaldo/restore de la instalación (solo administrador, auditado; cierra y reabre la DB).
      ├── entity_commands.rs    # Endpoints genéricos de entidades (Template v1).
      ├── entry_commands.rs     # CRUD append-only de entries (inmutables, con firma + búsqueda + verificación histórica).
      ├── export_commands.rs    # `get_export_snapshot` (descifrado completo) + `export_history` (escritura en `exports/`).
@@ -84,10 +89,11 @@ src/
  │   │   ├── Button.tsx, Card.tsx, Input.tsx, Navbar.tsx, Textarea.tsx, Alert.tsx
  │   │   └── Drawer.tsx      # NavigationDrawer con menú por roles.
  │   ├── views/
- │   │   ├── AdminView.tsx  # Tabs por rol: Usuarios, Admisión, Auditoría, Frase Semilla (asistente: solo Admisión).
+ │   │   ├── AdminView.tsx  # Tabs por rol: Usuarios, Admisión, Auditoría, Frase Semilla, Respaldos (asistente: solo Admisión).
  │   │   ├── AdminUsersPanel.tsx  # Listado, alta, baja lógica y reset de contraseñas.
  │   │   ├── AdminAuditPanel.tsx  # Registro de acciones sensibles (audit_log).
  │   │   ├── AdminSeedPanel.tsx   # Rotación de frase: generar → anotar → re-escribir → persistir.
+ │   │   ├── AdminBackupPanel.tsx # Generar respaldo (diálogo de carpeta) y restaurar (valida manifest → confirma → cierra sesión).
  │   │   ├── MedicoView.tsx  # Tabs: Perfil, Paciente, EHR, Entries (+ export .md).
  │   │   └── PacienteView.tsx
  │   │
@@ -98,7 +104,7 @@ src/
  │   ├── EntryForm.tsx       # Formulario dinámico por categoría de entry.
  │   ├── SeedPhraseSetup.tsx # UI de configuración de seed (4 pasos + master wrap).
  │   ├── ProfileView.tsx
- │   └── AuthBox.tsx         # Solo login. Si la instalación está vacía → bootstrap del primer administrador (registro público cerrado).
+ │   └── AuthBox.tsx         # Solo login. Si la instalación está vacía → bootstrap del primer administrador (registro público cerrado). Incluye el enlace de recuperación break-glass con frase semilla.
 ```
 
 > 🎨 Las reglas visuales del frontend (tokens de color, tipografía, radios, estados interactivos, semántica de color y estrategia de temas claro/oscuro) están definidas en **[DESIGN.md](./DESIGN.md)**.
@@ -106,7 +112,7 @@ src/
 ## Principios de Diseño del Core & Frontend
 
 - **Patrón `with_conn`**: Ningún comando saca la conexión a la base de datos de su `Mutex`. Se le inyecta un closure para garantizar que el lock se libere instantáneamente, evitando congelamientos de UI.
-- **Autorización en Backend (`SessionState`)**: Ningún command sensible confía en el frontend. `login_user` registra la sesión activa en Rust y `require_admin()` (en `admin_commands.rs`) exige rol `administrador` antes de tocar usuarios, contraseñas o la semilla. `lock_vault` limpia la sesión.
+- **Autorización en Backend (`SessionState`)**: Ningún command sensible confía en el frontend. `login_user` registra la sesión activa en Rust y `require_admin()` (en `admin_commands.rs`) exige rol `administrador` antes de tocar usuarios, contraseñas, la semilla o los respaldos. `lock_vault` limpia la sesión.
 - **Inyección de Dependencias**: Los comandos que requieren cifrado reciben `State<'_, DataKey>` o `State<'_, SigningState>`, extraen la llave y fallan de forma segura si no está inicializada.
 - **Estado Reactivo Seguro (Zustand)**: El Frontend jamás almacena contraseñas ni claves de cifrado en JavaScript. Los Stores solo contienen booleanos de estado y datos descifrados para renderizar.
 - **Store Unificado de Paciente**: `usePatientStore` es la fuente única de verdad para la selección de paciente. `PatientEhrView`, `Entity`, `EntryForm` y `EntryTimeline` consumen el mismo estado, garantizando sincronización instantánea sin props-drilling.
@@ -193,10 +199,12 @@ Sistema de recuperación que protege el master wrap de la DataKey:
 
 - **Alta de cuentas**: solo el administrador, desde su panel (`admin_create_user`). El registro público solo existe cuando la instalación **no tiene usuarios** y siempre crea un `administrador` (bootstrap) — después queda cerrado.
 - **Baja lógica**: `is_active = 0` bloquea el próximo login; la fila y el historial permanecen. No se puede desactivar a uno mismo ni dejar la instalación sin administradores activos.
-- **Dos caminos para cambiar una contraseña**: (1) el usuario con su contraseña previa (`change_password` — conserva la llave de firma), (2) el administrador sin la previa (`admin_reset_password` — regenera el vault con keypair nuevo; el histórico `signing_keys` mantiene verificadas las entries anteriores).
+- **Tres caminos para cambiar una contraseña**: (1) el usuario con su contraseña previa (`change_password` — conserva la llave de firma), (2) el administrador sin la previa (`admin_reset_password` — regenera el vault con keypair nuevo; el histórico `signing_keys` mantiene verificadas las entries anteriores), (3) el **break-glass con frase semilla** (`seed_recovery` desde el login — verifica la posesión de la frase contra `.data_key.master`, restablece la contraseña del administrador activo más antiguo y queda en `audit_log`; la DataKey no cambia).
 - **Reparto deliberado de confidencialidad**: la DataKey es única por instalación, así que cualquier usuario logueado ya accede a los mismos datos cifrados (el filtrado es de UI por rol). El rol `administrador` añade poder sobre **cuentas y credenciales**, no sobre los datos clínicos — y cada uso de ese poder queda en `audit_log`.
 
 ## 🗄️ Estructura de la Base de Datos
+
+> **Versionado**: el esquema se migra con `db/migrations/` usando `PRAGMA user_version`. Cada migración corre en su propia transacción (append-only), y una base creada por una versión *más nueva* de la app se rechaza en el arranque.
 
 ### Tablas Principales
 | Tabla | Propósito | Relación |
@@ -276,7 +284,7 @@ MedicoView (tab Entries) ─ "Exportar .md"
 
 | Aspecto | Decisión | Razón |
 |---|---|---|
-| Destino | Carpeta fija `exports/` de la app | Sin `tauri-plugin-dialog` — compatible con el futuro build mobile |
+| Destino | Carpeta fija `exports/` de la app | Sin diálogos en el flujo de export — compatible con el futuro build mobile (`plugin-dialog` se usa solo en Respaldos) |
 | Nombre de archivo | `HistoriaClinica_Apellido_Nombre_YYYY-MM-DD_HHMMSS.md` (sanitizado, único por timestamp) | Sin conflictos de sobrescritura ni diálogos |
 | Campos por categoría | Labels canónicos de `config/entry_templates/*.json` (orden y nombre) | El `.md` es espejo del formulario clínico |
 | Orden | Cronológico ascendente | Lectura continua de la evolución |
@@ -288,19 +296,22 @@ Los commands se registran en `lib.rs` (`get_export_snapshot`, `export_history`),
 
 ## 🧪 Tests Automatizados
 
-El Core cuenta con 75 tests unitarios que cubren:
+El Core cuenta con 91 tests unitarios que cubren:
 | Módulo | Tests | Cobertura |
 |---|---|---|
 | `security/crypto.rs` | 13 | AES-GCM roundtrip, nonces únicos, clave incorrecta, manipulación, Blind Index, Firma Ed25519, derivación de pública desde privada |
 | `security/vault.rs` | 12 | Creación, desbloqueo, contraseña incorrecta, sal única por usuario, `change_password` (vault re-cifrado, invariante data_key resolvable, wrap huérfano recupera con seed), `reset_user_vault` (keypair nuevo, contraseña vieja muerta, data_key preservada) |
 | `security/seed.rs` | 12 | Generación mnemonic, unicidad, derivación SHA-256, verificación, edge cases, word list sin duplicados ni tildes |
 | `security/data_key.rs` | 10 | Wrap/unwrap AES-GCM, prioridades de resolución, `SEED_REQUIRED`, migración legacy |
+| `security/backup.rs` | 6 | Creación de respaldo (manifest + copias idénticas), hash alterado rechazado, archivo faltante rechazado, schema más nuevo rechazado, path traversal rechazado, roundtrip restauración → DB con datos |
+| `db/migrations.rs` | 5 | DB nueva migra al latest, re-ejecución no-op con datos preservados, DB legacy sin versión migra idempotente, downgrade rechazado, migración fallida con rollback |
+| `commands/auth_commands.rs` | 5 | **Break-glass `seed_recovery`**: happy path (vault nuevo, hash nuevo, firma rotada, auditoría, data_key intacta), frase incorrecta sin side-effects, contraseña corta, sin admin activo, sin master wrap |
 | `commands/entry_commands.rs` | 18 | CRUD completo end-to-end con DB real (roundtrip cifrado→descifrado, payload sin texto plano en DB, validaciones de categoría/status, states obligatorios, firma rota por manipulación, wrong data key, autor sin perfil, paginación e isolación por paciente, filtro por categoría, búsqueda case-insensitive, `decrypt_payload`, **histórico `public_key_at`** — clave vigente por timestamp, fallback sin histórico, usuario inexistente) |
 | `commands/export_commands.rs` | 4 | Snapshot descifrado (paciente + perfil), bóveda cerrada, escritura del `.md` (heading, filename, footer) y rechazo con 0 entries |
 | `export/render.rs` | 6 | Header con paciente/perfil, orden cronológico, orden/labels canónicos de campos, footer SHA-256 + aviso, filename sanitizado y fallback sin nombre |
 
 ```bash
-cargo test --lib  # 75 passed; 0 failed
+cargo test --lib  # 91 passed; 0 failed
 ```
 
 > Los tests de `entry_commands` usan `tauri::test` (feature habilitada solo en `[dev-dependencies]`; el binario de producción no la incluye).
@@ -389,6 +400,16 @@ cargo test --lib  # 75 passed; 0 failed
 - [x] **`AdminView`** con tabs por rol (Usuarios, Admisión, Auditoría, Frase Semilla) + menús de `Drawer` para `administrador`/`asistente`
 - [x] 75 tests pasando
 
+### 🟩 Fase 3.11: Respaldo, Recuperación y Migraciones (✅ Completado)
+- [x] **Migraciones de esquema** (`db/migrations/`): `PRAGMA user_version` + catálogo append-only; v001 = baseline (schema actual), transacción por migración con rollback, guard de downgrade (DB de una app más nueva no abre); `init_db` delega en `run_migrations`
+- [x] **`security/backup.rs`**: `create_backup` (checkpoint WAL → copia DB + `.data_key.*` + `vault_*` + `.installation_salt` → `manifest.json` con SHA-256 por archivo), `validate_backup` (integridad + `schema_version` + defensa contra path traversal), `restore_backup`
+- [x] **`backup_commands.rs`**: `create_backup` / `validate_backup` / `restore_backup` — solo administrador, auditados (`backup_created`, `backup_restored`); el restore cierra sesión y llaves, reemplaza archivos, reabre la DB (migraciones) y recarga la sal de blind index
+- [x] **`AdminBackupPanel`** (tab "Respaldos"): generar con diálogo de carpeta + "Revelar en carpeta"; restaurar con resumen del manifest + confirmación → vuelve al login
+- [x] **Break-glass `seed_recovery`**: enlace "¿Olvidaste la contraseña?" en `AuthBox`; verifica la frase contra `.data_key.master` → resetea la contraseña del administrador activo más antiguo (vault con keypair nuevo, rotación de `signing_keys`, re-envuelve el wrap personal) → sesión abierta directa + `audit_log`
+- [x] **Sal de blind index re-settable** (`OnceLock` → `Mutex<Option<..>>`): un restore desde otra instalación puede cambiarla en caliente
+- [x] **Plugin `tauri-plugin-dialog`** (+ capability `dialog:default`) para elegir carpetas de respaldo
+- [x] 91 tests pasando
+
 ### 🟧 Fase 4: Infraestructura y Sincronización Híbrida (Próximo paso)
 - [ ] Despliegue de VPS con Dokploy y PocketBase
 - [ ] Sync Engine (`tokio`): background worker polling `sync_queue`
@@ -413,6 +434,6 @@ pnpm tauri dev          # Levanta el entorno (Rust + React HMR)
 pnpm tauri build        # Compila en modo release para producción
 npx tsc --noEmit        # Verifica TypeScript sin generar archivos
 cargo check             # Verifica compilación Rust
-cargo test --lib        # Ejecuta los 75 tests unitarios del Core
+cargo test --lib        # Ejecuta los 91 tests unitarios del Core
 cargo add <crate>       # Añade dependencias al backend (desde src-tauri)
 ```

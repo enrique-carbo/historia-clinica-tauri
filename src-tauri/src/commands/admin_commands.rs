@@ -5,9 +5,9 @@ use tauri::{Manager, State};
 use uuid::Uuid;
 
 /// Exige una sesión activa con rol `administrador`.
-/// Toda gestión sensible (usuarios, contraseñas, semilla) pasa por aquí —
-/// el rol nunca se confía en el frontend.
-fn require_admin(session_state: &State<'_, SessionState>) -> Result<SessionUser, String> {
+/// Toda gestión sensible (usuarios, contraseñas, semilla, respaldos) pasa por
+/// aquí — el rol nunca se confía en el frontend.
+pub fn require_admin(session_state: &State<'_, SessionState>) -> Result<SessionUser, String> {
     let guard = session_state.0.lock().map_err(|_| "Lock poisoned")?;
     let session = guard.as_ref().ok_or("Sesión no iniciada. Ingresá de nuevo.")?;
     if session.role != "administrador" {

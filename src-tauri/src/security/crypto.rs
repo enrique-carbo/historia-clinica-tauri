@@ -5,15 +5,17 @@ use aes_gcm::{
 use rand::rngs::OsRng;
 use rand::RngCore;
 use sha2::{Digest, Sha256};
-use std::sync::OnceLock;
+use std::sync::Mutex;
 
 pub const AES_KEY_SIZE: usize = 32;
 pub const AES_NONCE_SIZE: usize = 12;
 pub const ED25519_SECRET_SIZE: usize = 32;
 pub const ED25519_SIGNATURE_SIZE: usize = 64;
 
-/// Sal de instalación para blind index (compartida entre todos los usuarios de la misma instancia)
-static INSTALLATION_SALT: OnceLock<Vec<u8>> = OnceLock::new();
+/// Sal de instalación para blind index (compartida entre todos los usuarios de la misma instancia).
+/// `Mutex<Option<..>>` (y no `OnceLock`) porque un restore de respaldo puede
+/// traer la sal de OTRA instalación: `init_blind_index_salt` debe poder sobreescribirla.
+static INSTALLATION_SALT: Mutex<Option<Vec<u8>>> = Mutex::new(None);
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct EncryptedData {
@@ -64,11 +66,12 @@ pub fn decrypt_text(
 }
 
 /// Inicializa la sal de instalación para blind index.
-/// Debe llamarse una sola vez al iniciar la aplicación.
+/// Se llama al iniciar la aplicación y tras un restore de respaldo (puede sobreescribir).
 pub fn init_blind_index_salt(salt: Vec<u8>) -> Result<(), String> {
-    INSTALLATION_SALT
-        .set(salt)
-        .map_err(|_| "Blind index salt ya inicializado".to_string())
+    *INSTALLATION_SALT
+        .lock()
+        .map_err(|_| "Lock de blind index salt envenenado".to_string())? = Some(salt);
+    Ok(())
 }
 
 /// Genera hash determinista para búsqueda sin revelar dato real.
@@ -81,8 +84,11 @@ pub fn generate_blind_index(identity_doc: &str) -> String {
         .replace(" ", "")
         .to_lowercase();
 
-    let salt = INSTALLATION_SALT
-        .get()
+    let guard = INSTALLATION_SALT
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    let salt = guard
+        .as_ref()
         .expect("Blind index salt no inicializado. ¿Se llamó init_blind_index_salt?");
 
     let mut hasher = Sha256::new();
@@ -175,7 +181,7 @@ mod tests {
     use super::*;
 
     fn init_test_salt() {
-        let _ = INSTALLATION_SALT.set(vec![0u8; 32]);
+        *INSTALLATION_SALT.lock().unwrap() = Some(vec![0u8; 32]);
     }
 
     fn random_key() -> [u8; AES_KEY_SIZE] {

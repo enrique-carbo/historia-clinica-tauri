@@ -2,7 +2,10 @@ use rusqlite::{Connection, Result};
 use std::fs;
 use std::path::PathBuf;
 
-/// Inicializa la base de datos local y crea las tablas si no existen
+use crate::db::migrations::run_migrations;
+
+/// Inicializa la base de datos local: abre SQLite, activa PRAGMAs y
+/// aplica las migraciones pendientes (`db::migrations`).
 pub fn init_db(app_dir: PathBuf) -> Result<Connection, String> {
     // Asegurar que la carpeta de la app exista en el sistema de archivos del usuario
     fs::create_dir_all(&app_dir)
@@ -12,7 +15,7 @@ pub fn init_db(app_dir: PathBuf) -> Result<Connection, String> {
     let db_path = app_dir.join("historia_clinica.db");
     println!("Conectando a la base de datos local en: {:?}", db_path);
 
-    let conn = Connection::open(db_path).map_err(|e| format!("Error al abrir SQLite: {}", e))?;
+    let mut conn = Connection::open(db_path).map_err(|e| format!("Error al abrir SQLite: {}", e))?;
 
     // Habilitar Llaves Foráneas y Modo WAL (Concurrencia segura para múltiples médicos)
     conn.execute_batch(
@@ -21,215 +24,9 @@ pub fn init_db(app_dir: PathBuf) -> Result<Connection, String> {
     )
     .map_err(|e| format!("Error al activar PRAGMAs: {}", e))?;
 
-    // ============================================================
-    // TABLAS PADRE (se crean primero, son referenciadas por hijas)
-    // ============================================================
+    // Migraciones (schema_version via PRAGMA user_version)
+    run_migrations(&mut conn)?;
 
-    // 1. Tabla de Usuarios (Administrador, Asistente, Médicos, Enfermería, Pacientes)
-    //    - administrador: gestión técnica (usuarios, contraseñas, semilla, auditoría)
-    //    - asistente:     recepción (admisión de pacientes) — el ex-rol "admin"
-    //    - is_active:     baja lógica (el historial de usuarios debe permanecer)
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS users (
-                id TEXT PRIMARY KEY,
-                username TEXT UNIQUE NOT NULL,
-                password_hash TEXT NOT NULL,
-                role TEXT CHECK(role IN ('administrador', 'asistente', 'medico', 'enfermeria', 'paciente')) NOT NULL,
-                entity_id INTEGER,
-                created_at TEXT NOT NULL,
-                is_active INTEGER NOT NULL DEFAULT 1 CHECK(is_active IN (0, 1)),
-                last_login_at TEXT,
-                FOREIGN KEY(entity_id) REFERENCES entities(id)
-            );",
-        [],
-    )
-    .map_err(|e| format!("Error al crear tabla users: {}", e))?;
-
-    // 2. Tabla de Perfiles Profesionales (Datos del Médico/Admin + Llave Pública para Firmas)
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS professional_profiles (
-                user_id TEXT PRIMARY KEY,
-                full_name_ciphertext TEXT NOT NULL,
-                full_name_nonce TEXT NOT NULL,
-                license_number_ciphertext TEXT NOT NULL,
-                license_number_nonce TEXT NOT NULL,
-                specialty_ciphertext TEXT NOT NULL,
-                specialty_nonce TEXT NOT NULL,
-                public_key TEXT NOT NULL,
-                address_ciphertext TEXT NOT NULL DEFAULT '',
-                address_nonce TEXT NOT NULL DEFAULT '',
-                phone_ciphertext TEXT NOT NULL DEFAULT '',
-                phone_nonce TEXT NOT NULL DEFAULT '',
-                email_ciphertext TEXT NOT NULL DEFAULT '',
-                email_nonce TEXT NOT NULL DEFAULT '',
-                website_ciphertext TEXT NOT NULL DEFAULT '',
-                website_nonce TEXT NOT NULL DEFAULT '',
-                updated_at TEXT NOT NULL,
-                FOREIGN KEY(user_id) REFERENCES users(id)
-            );",
-        [],
-    )
-    .map_err(|e| format!("Error al crear tabla professional_profiles: {}", e))?;
-
-    // 3. Histórico de llaves públicas de firma (Ed25519) por usuario.
-    //    Permite verificar entries firmadas ANTES de un reset de contraseña
-    //    o una rotación de llave: cada entry se contrasta contra la clave
-    //    vigente en su timestamp, no contra la actual.
-    //    valid_to NULL = clave vigente.
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS signing_keys (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id TEXT NOT NULL,
-            public_key TEXT NOT NULL,
-            valid_from TEXT NOT NULL,
-            valid_to TEXT,
-            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE RESTRICT
-        );",
-        [],
-    )
-    .map_err(|e| format!("Error al crear tabla signing_keys: {}", e))?;
-
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_signing_keys_lookup
-         ON signing_keys(user_id, valid_from DESC);",
-        [],
-    )
-    .ok();
-
-    // 4. Auditoría: acciones sensibles del rol administrador
-    //    (reset de contraseña, baja de usuarios, rotación de semilla…).
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS audit_log (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            actor_user_id TEXT,
-            action TEXT NOT NULL,
-            target_user_id TEXT,
-            detail TEXT,
-            created_at TEXT NOT NULL,
-            FOREIGN KEY(actor_user_id) REFERENCES users(id) ON DELETE SET NULL,
-            FOREIGN KEY(target_user_id) REFERENCES users(id) ON DELETE SET NULL
-        );",
-        [],
-    )
-    .map_err(|e| format!("Error al crear tabla audit_log: {}", e))?;
-
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at DESC);",
-        [],
-    )
-    .ok();
-
-    // ============================================================
-    // TABLAS GENÉRICAS (Template v1)
-    // ============================================================
-
-    // 3. Tabla Entidades genéricas: pacientes humanos o animales según corresponda
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS entities (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            external_id TEXT UNIQUE,
-            entity_type TEXT NOT NULL,
-            created_by_user_id TEXT NOT NULL,
-            blind_index TEXT UNIQUE,
-            enc_data_blob BLOB NOT NULL,
-            created_at TEXT NOT NULL
-        );",
-        [],
-    )
-    .map_err(|e| format!("Error al crear tabla entities: {}", e))?;
-
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_entities_type ON entities(entity_type);",
-        [],
-    )
-    .ok();
-
-    // 4. Tabla entity_keys
-    //    Cada entidad que sea usuario de telemedicina
-    //    tiene su propia clave de datos, cifrada con la clave maestra
-    //    del médico que la creó o con la que el usuario estableció.
-    //    Permite compartir datos cifrados con múltiples médicos.
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS entity_keys (
-            entity_id INTEGER PRIMARY KEY,
-            entity_data_key_ciphertext TEXT NOT NULL,
-            entity_data_key_nonce TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            FOREIGN KEY(entity_id) REFERENCES entities(id)
-        );",
-        [],
-    )
-    .map_err(|e| format!("Error al crear tabla entity_keys: {}", e))?;
-
-    // 5. Tabla cola de sincronización: reemplazará 'is_synced' en tablas individuales
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS sync_queue (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            table_name TEXT NOT NULL,
-            local_record_id INTEGER NOT NULL,
-            external_record_id TEXT,
-            operation TEXT NOT NULL,
-            created_at TEXT NOT NULL
-        );",
-        [],
-    )
-    .map_err(|e| format!("Error al crear tabla sync_queue: {}", e))?;
-
-    // ============================================================
-    // TABLA CORE ENTITY-ENTRY (Append-Only)
-    // ============================================================
-
-    // 6. Tabla entries: hechos clínicos inmutables
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS entries (
-            id TEXT PRIMARY KEY NOT NULL,
-            category TEXT NOT NULL CHECK(category IN ('SOAP_NOTE', 'MEDICATION', 'ALLERGY', 'CONDITION')),
-            subject_id INTEGER NOT NULL,
-            author_id TEXT NOT NULL,
-            title TEXT NOT NULL,
-            status TEXT NOT NULL CHECK(status IN ('ACTIVE', 'RESOLVED', 'COMPLETED')),
-            timestamp TEXT NOT NULL,
-            payload BLOB NOT NULL,
-            signature TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            is_synced INTEGER NOT NULL DEFAULT 0 CHECK(is_synced IN (0, 1)),
-            FOREIGN KEY(subject_id) REFERENCES entities(id) ON DELETE RESTRICT,
-            FOREIGN KEY(author_id) REFERENCES users(id) ON DELETE RESTRICT
-        );",
-        [],
-    )
-    .map_err(|e| format!("Error al crear tabla entries: {}", e))?;
-
-    // Índices para entries
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_entries_subject ON entries(subject_id, timestamp DESC);",
-        [],
-    )
-    .ok();
-
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_entries_category ON entries(category);",
-        [],
-    )
-    .ok();
-
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_entries_sync ON entries(is_synced) WHERE is_synced = 0;",
-        [],
-    )
-    .ok();
-
-    // ============================================================
-    // ÍNDICES DE PERFORMANCE
-    // ============================================================
-
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_sync_queue_table ON sync_queue(table_name);",
-        [],
-    )
-    .ok();
-
-    println!("¡Tablas de la base de datos local verificadas/creadas con éxito!");
-
+    println!("¡Base de datos local verificada y al día!");
     Ok(conn)
 }

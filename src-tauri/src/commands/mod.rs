@@ -1,6 +1,7 @@
 // Traemos los sub-módulos
 mod admin_commands;
 mod auth_commands;
+mod backup_commands;
 mod entity_commands;
 mod entry_commands;
 mod export_commands;
@@ -10,6 +11,7 @@ mod seed_commands;
 // Re-exportamos todo al exterior
 pub use admin_commands::*;
 pub use auth_commands::*;
+pub use backup_commands::*;
 pub use entity_commands::*;
 pub use entry_commands::*;
 pub use export_commands::*;
