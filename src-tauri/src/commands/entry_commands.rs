@@ -193,14 +193,9 @@ pub fn get_entry(
     );
     let hash = crypto::hash_document(&signature_payload);
 
-    // Obtener llave pública del autor para verificar firma
-    let pub_key_result: Result<String, _> = with_conn(&db_state, |conn| {
-        conn.query_row(
-            "SELECT public_key FROM professional_profiles WHERE user_id = ?1",
-            params![&author_id],
-            |r| r.get(0),
-        )
-        .map_err(|e| e.to_string())
+    // Obtener la llave pública del autor vigente en la fecha de la entry
+    let pub_key_result = with_conn(&db_state, |conn| {
+        public_key_at(conn, &author_id, &timestamp)
     });
 
     let is_verified = match pub_key_result {
@@ -311,13 +306,8 @@ pub fn get_entries_by_subject(
         );
         let hash = crypto::hash_document(&signature_payload);
 
-        let pub_key_result: Result<String, _> = with_conn(&db_state, |conn| {
-            conn.query_row(
-                "SELECT public_key FROM professional_profiles WHERE user_id = ?1",
-                params![&author_id],
-                |r| r.get(0),
-            )
-            .map_err(|e| e.to_string())
+        let pub_key_result = with_conn(&db_state, |conn| {
+            public_key_at(conn, &author_id, &timestamp)
         });
 
         let is_verified = match pub_key_result {
@@ -432,13 +422,8 @@ pub fn get_entries_by_category(
         );
         let hash = crypto::hash_document(&signature_payload);
 
-        let pub_key_result: Result<String, _> = with_conn(&db_state, |conn| {
-            conn.query_row(
-                "SELECT public_key FROM professional_profiles WHERE user_id = ?1",
-                params![&author_id],
-                |r| r.get(0),
-            )
-            .map_err(|e| e.to_string())
+        let pub_key_result = with_conn(&db_state, |conn| {
+            public_key_at(conn, &author_id, &timestamp)
         });
 
         let is_verified = match pub_key_result {
@@ -599,13 +584,8 @@ pub fn search_entries(
         );
         let hash = crypto::hash_document(&signature_payload);
 
-        let pub_key_result: Result<String, _> = with_conn(&db_state, |conn| {
-            conn.query_row(
-                "SELECT public_key FROM professional_profiles WHERE user_id = ?1",
-                params![&author_id],
-                |r| r.get(0),
-            )
-            .map_err(|e| e.to_string())
+        let pub_key_result = with_conn(&db_state, |conn| {
+            public_key_at(conn, &author_id, &timestamp)
         });
 
         let is_verified = match pub_key_result {
@@ -630,6 +610,38 @@ pub fn search_entries(
     }
 
     Ok(entries)
+}
+
+/// Llave pública del autor vigente en `entry_timestamp`, según el histórico
+/// `signing_keys`. Permite verificar entries firmadas antes de un reset de
+/// contraseña o una rotación de llave. Fallback a `professional_profiles`
+/// para registros previos al histórico.
+fn public_key_at(
+    conn: &rusqlite::Connection,
+    author_id: &str,
+    entry_timestamp: &str,
+) -> Result<String, String> {
+    let historical: Option<String> = conn
+        .query_row(
+            "SELECT public_key FROM signing_keys
+             WHERE user_id = ?1 AND valid_from <= ?2 AND (valid_to IS NULL OR valid_to > ?2)
+             ORDER BY valid_from DESC
+             LIMIT 1",
+            params![author_id, entry_timestamp],
+            |r| r.get(0),
+        )
+        .ok();
+
+    match historical {
+        Some(pk) => Ok(pk),
+        None => conn
+            .query_row(
+                "SELECT public_key FROM professional_profiles WHERE user_id = ?1",
+                params![author_id],
+                |r| r.get(0),
+            )
+            .map_err(|e| e.to_string()),
+    }
 }
 
 /// Descifra el payload de una entry
@@ -1142,5 +1154,88 @@ mod tests {
 
         let err = decrypt_payload(b"no-es-json", &DATA_KEY).unwrap_err();
         assert!(err.contains("parseando"), "err: {}", err);
+    }
+
+    // --- Histórico de claves de firma (public_key_at) ---
+
+    fn insert_user_with_profile(conn: &rusqlite::Connection, user_id: &str, public_key: &str) {
+        let now = chrono::Utc::now().to_rfc3339();
+        conn.execute(
+            "INSERT INTO users (id, username, password_hash, role, created_at)
+             VALUES (?1, ?2, 'hash', 'medico', ?3)",
+            params![user_id, user_id, now],
+        )
+        .expect("insert user");
+        conn.execute(
+            "INSERT INTO professional_profiles
+                (user_id, full_name_ciphertext, full_name_nonce,
+                 license_number_ciphertext, license_number_nonce,
+                 specialty_ciphertext, specialty_nonce, public_key, updated_at)
+             VALUES (?1, '', '', '', '', '', '', ?2, ?3)",
+            params![user_id, public_key, now],
+        )
+        .expect("insert profile");
+    }
+
+    #[test]
+    fn test_public_key_at_returns_key_vigente_en_el_timestamp() {
+        let dir = tempfile::tempdir().unwrap();
+        let conn = init_db(dir.path().to_path_buf()).unwrap();
+
+        insert_user_with_profile(&conn, "u-hist", "PK_PROFILE_ACTUAL");
+
+        // Historial: clave vieja hasta 2026-01-01, nueva desde entonces.
+        conn.execute(
+            "INSERT INTO signing_keys (user_id, public_key, valid_from, valid_to)
+             VALUES ('u-hist', 'PK_VIEJA', '2025-01-01T00:00:00+00:00', '2026-01-01T00:00:00+00:00')",
+            [],
+        )
+        .expect("insert key vieja");
+        conn.execute(
+            "INSERT INTO signing_keys (user_id, public_key, valid_from)
+             VALUES ('u-hist', 'PK_NUEVA', '2026-01-01T00:00:00+00:00')",
+            [],
+        )
+        .expect("insert key nueva");
+
+        // Entry firmada en 2025 → la clave de esa época
+        assert_eq!(
+            public_key_at(&conn, "u-hist", "2025-06-15T10:00:00+00:00").unwrap(),
+            "PK_VIEJA"
+        );
+
+        // Entry firmada hoy → la clave vigente
+        assert_eq!(
+            public_key_at(&conn, "u-hist", "2026-10-03T10:00:00+00:00").unwrap(),
+            "PK_NUEVA"
+        );
+
+        // Exactamente en el instante del cierre → ya cuenta la nueva
+        assert_eq!(
+            public_key_at(&conn, "u-hist", "2026-01-01T00:00:00+00:00").unwrap(),
+            "PK_NUEVA"
+        );
+    }
+
+    #[test]
+    fn test_public_key_at_falls_back_a_profile_sin_historico() {
+        let dir = tempfile::tempdir().unwrap();
+        let conn = init_db(dir.path().to_path_buf()).unwrap();
+
+        insert_user_with_profile(&conn, "u-nuevo", "PK_PROFILE");
+
+        // Sin filas en signing_keys → se usa professional_profiles
+        assert_eq!(
+            public_key_at(&conn, "u-nuevo", "2026-10-03T10:00:00+00:00").unwrap(),
+            "PK_PROFILE"
+        );
+    }
+
+    #[test]
+    fn test_public_key_at_sin_usuario_devuelve_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let conn = init_db(dir.path().to_path_buf()).unwrap();
+
+        assert!(public_key_at(&conn, "no-existe", "2026-10-03T10:00:00+00:00").is_err());
     }
 }

@@ -1,6 +1,6 @@
 use crate::security::auth;
 use crate::security::data_key;
-use crate::types::{CryptoState, DataKey, DbState};
+use crate::types::{CryptoState, DataKey, DbState, SessionState, SessionUser};
 use crate::security::vault;
 use tauri::{Manager, State};
 use uuid::Uuid;
@@ -9,7 +9,6 @@ use uuid::Uuid;
 pub struct RegisterInput {
     pub username: String,
     pub password_plain: String,
-    pub role: String,
 }
 
 #[derive(serde::Deserialize)]
@@ -25,6 +24,9 @@ pub struct AuthResponse {
     pub role: String,
 }
 
+/// Alta pública SOLO en bootstrap: crea el primer usuario de la instalación
+/// y siempre con rol `administrador`. A partir de ahí, las altas las hace el
+/// administrador desde su panel (`admin_create_user`).
 #[tauri::command]
 pub fn register_user(form: RegisterInput, db_state: State<'_, DbState>) -> Result<String, String> {
     let hashed = auth::hash_password(&form.password_plain)?;
@@ -32,11 +34,28 @@ pub fn register_user(form: RegisterInput, db_state: State<'_, DbState>) -> Resul
     let now = chrono::Utc::now().to_rfc3339();
 
     super::with_conn(&db_state, |conn| {
-        // 1. Insertamos el usuario
+        let existing: i64 = conn
+            .query_row("SELECT COUNT(*) FROM users", [], |r| r.get(0))
+            .map_err(|e| e.to_string())?;
+
+        if existing > 0 {
+            return Err(
+                "El registro está cerrado. Un administrador debe darte de alta desde el panel."
+                    .to_string(),
+            );
+        }
+
+        // 1. Insertamos el PRIMER usuario como administrador
         conn.execute(
-            "INSERT INTO users (id, username, password_hash, role, created_at) VALUES (?1, ?2, ?3, ?4, ?5);",
-            rusqlite::params![&user_id, &form.username, &hashed, &form.role, &now],
-        ).map_err(|e| format!("Error al registrar usuario: {}", e))?;
+            "INSERT INTO users (id, username, password_hash, role, created_at) VALUES (?1, ?2, ?3, 'administrador', ?4);",
+            rusqlite::params![&user_id, &form.username, &hashed, &now],
+        ).map_err(|e| {
+            if e.to_string().contains("UNIQUE") {
+                "Ya existe un usuario con ese nombre.".to_string()
+            } else {
+                format!("Error al registrar usuario: {}", e)
+            }
+        })?;
 
         // 2. Insertamos un perfil profesional VACÍO (sin llaves todavía)
         conn.execute(
@@ -45,15 +64,20 @@ pub fn register_user(form: RegisterInput, db_state: State<'_, DbState>) -> Resul
             rusqlite::params![&user_id, &now],
         ).map_err(|e| format!("Error al crear el perfil: {}", e))?;
 
+        println!("🌱 [Auth] Primer usuario (administrador) creado: {}", form.username);
         Ok(user_id)
     })
 }
 
 #[tauri::command]
-pub fn login_user(form: LoginInput, db_state: State<'_, DbState>) -> Result<AuthResponse, String> {
+pub fn login_user(
+    form: LoginInput,
+    db_state: State<'_, DbState>,
+    session_state: State<'_, SessionState>,
+) -> Result<AuthResponse, String> {
     super::with_conn(&db_state, |conn| {
         let mut stmt = conn
-            .prepare("SELECT id, password_hash, role FROM users WHERE username = ?1;")
+            .prepare("SELECT id, password_hash, role, is_active FROM users WHERE username = ?1;")
             .map_err(|e| e.to_string())?;
 
         let mut rows = stmt.query([&form.username]).map_err(|e| e.to_string())?;
@@ -62,11 +86,32 @@ pub fn login_user(form: LoginInput, db_state: State<'_, DbState>) -> Result<Auth
             let user_id: String = row.get(0).map_err(|e| e.to_string())?;
             let hash_guardado: String = row.get(1).map_err(|e| e.to_string())?;
             let role: String = row.get(2).map_err(|e| e.to_string())?;
+            let is_active: i64 = row.get(3).map_err(|e| e.to_string())?;
+
+            if is_active == 0 {
+                return Err("Usuario desactivado. Contactá al administrador.".to_string());
+            }
 
             let is_valid = auth::verify_password(&form.password_plain, &hash_guardado)?;
 
             if is_valid {
+                let now = chrono::Utc::now().to_rfc3339();
+                conn.execute(
+                    "UPDATE users SET last_login_at = ?1 WHERE id = ?2;",
+                    rusqlite::params![&now, &user_id],
+                )
+                .map_err(|e| e.to_string())?;
+
                 println!("🔓 [Auth] Login exitoso para el usuario: {}", form.username);
+
+                // Registrar la sesión activa (los commands de administración
+                // verifican el rol desde este estado, no desde el frontend).
+                *session_state.0.lock().map_err(|_| "Lock poisoned")? = Some(SessionUser {
+                    user_id: user_id.clone(),
+                    username: form.username.clone(),
+                    role: role.clone(),
+                });
+
                 Ok(AuthResponse {
                     user_id,
                     username: form.username,
@@ -119,7 +164,45 @@ pub fn unlock_vault(
                 &user_id
             ],
         )
-        .map_err(|e| format!("Error al guardar llave pública: {}", e))
+        .map_err(|e| format!("Error al guardar llave pública: {}", e))?;
+
+        // Histórico de claves de firma: si esta es una clave nueva (reset de
+        // contraseña, rotación), cerrar la vigente y abrir la nueva. Así las
+        // entries firmadas antes siguen verificándose contra su clave de época.
+        let current: Option<String> = conn
+            .query_row(
+                "SELECT public_key FROM signing_keys WHERE user_id = ?1 AND valid_to IS NULL",
+                rusqlite::params![&user_id],
+                |r| r.get(0),
+            )
+            .ok();
+
+        let now = chrono::Utc::now().to_rfc3339();
+        match current {
+            None => {
+                conn.execute(
+                    "INSERT INTO signing_keys (user_id, public_key, valid_from) VALUES (?1, ?2, ?3);",
+                    rusqlite::params![&user_id, &public_key_hex, &now],
+                )
+                .map_err(|e| format!("Error registrando clave de firma: {}", e))?;
+            }
+            Some(pk) if pk != public_key_hex => {
+                conn.execute(
+                    "UPDATE signing_keys SET valid_to = ?1 WHERE user_id = ?2 AND valid_to IS NULL;",
+                    rusqlite::params![&now, &user_id],
+                )
+                .map_err(|e| format!("Error cerrando clave de firma: {}", e))?;
+                conn.execute(
+                    "INSERT INTO signing_keys (user_id, public_key, valid_from) VALUES (?1, ?2, ?3);",
+                    rusqlite::params![&user_id, &public_key_hex, &now],
+                )
+                .map_err(|e| format!("Error registrando clave de firma: {}", e))?;
+                println!("🔄 [Auth] Rotación de llave de firma registrada para: {}", user_id);
+            }
+            _ => {}
+        }
+
+        Ok(())
     })?;
     println!("🔑 [Core] Llave pública sincronizada en DB para: {}", user_id);
 
@@ -224,6 +307,7 @@ pub fn lock_vault(
     crypto_state: State<'_, CryptoState>,
     signing_state: State<'_, crate::types::SigningState>,
     data_key_state: State<'_, DataKey>,
+    session_state: State<'_, SessionState>,
 ) -> Result<(), String> {
     // Limpiamos la llave de cifrado
     let mut crypto_guard = crypto_state.0.lock().unwrap();
@@ -236,6 +320,10 @@ pub fn lock_vault(
     // Limpiamos la data_key (datos médicos)
     let mut dk_guard = data_key_state.0.lock().unwrap();
     *dk_guard = None;
+
+    // Limpiamos la sesión activa
+    let mut session_guard = session_state.0.lock().map_err(|_| "Lock poisoned")?;
+    *session_guard = None;
 
     println!("🔒 [Core] Bóveda bloqueada. Llaves borradas de la RAM.");
     Ok(())

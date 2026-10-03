@@ -130,8 +130,7 @@ pub fn change_vault_password(
     // 1. Verificar contraseña actual (solo lectura)
     let salt = get_or_create_kdf_salt(&app_dir, user_id)?;
     let old_master = derive_key_from_password(current_password, &salt)?;
-    let vault_data =
-        fs::read(&vault_path).map_err(|e| format!("Error leyendo vault: {}", e))?;
+    let vault_data = fs::read(&vault_path).map_err(|e| format!("Error leyendo vault: {}", e))?;
     let json_bytes = decrypt_vault_data(&vault_data, &old_master)
         .map_err(|_| "La contraseña actual es incorrecta".to_string())?;
     let payload: VaultPayload = serde_json::from_slice(&json_bytes)
@@ -145,11 +144,51 @@ pub fn change_vault_password(
 
     // 3. Re-cifrar y persistir (mismo payload: private_key intacta)
     let encrypted = encrypt_vault_data(&json_bytes, &new_master)?;
-    fs::write(&vault_path, encrypted)
-        .map_err(|e| format!("Error re-guardando vault: {}", e))?;
+    fs::write(&vault_path, encrypted).map_err(|e| format!("Error re-guardando vault: {}", e))?;
 
     println!("🔑 [Vault] Contraseña cambiada para: {}", user_id);
     Ok(new_master)
+}
+
+/// Regenera el vault de un usuario SIN conocer la contraseña previa
+/// (reset ejecutado por el administrador). Genera un keypair NUEVO —
+/// la llave de firma anterior queda perdida.
+///
+/// Devuelve (nueva master key, nueva llave privada, nueva llave pública hex)
+/// para que el caller actualice `users.password_hash`, re-envuelva
+/// `.data_key.{user_id}`, sincronice `professional_profiles.public_key`
+/// y registre la rotación en `signing_keys` (el histórico preserva la
+/// verificación de las entries firmadas con la llave anterior).
+pub fn reset_user_vault(
+    app_dir: PathBuf,
+    user_id: &str,
+    new_password: &str,
+) -> Result<([u8; 32], [u8; 32], String), String> {
+    let vault_path = app_dir.join(format!("vault_{}.bin", user_id));
+
+    let salt = get_or_create_kdf_salt(&app_dir, user_id)?;
+    let new_master = derive_key_from_password(new_password, &salt)?;
+
+    let (signing_key, verifying_key) = crate::security::crypto::generate_keypair();
+    let priv_key_bytes = signing_key.to_bytes();
+    let pub_key_hex = hex::encode(verifying_key.to_bytes());
+
+    let payload = VaultPayload {
+        magic: VAULT_MAGIC_BYTES.to_string(),
+        private_key: BASE64.encode(priv_key_bytes),
+    };
+    let json_bytes =
+        serde_json::to_vec(&payload).map_err(|e| format!("Error serializando vault: {}", e))?;
+
+    let encrypted = encrypt_vault_data(&json_bytes, &new_master)?;
+    fs::write(&vault_path, encrypted)
+        .map_err(|e| format!("Error guardando vault regenerado: {}", e))?;
+
+    println!(
+        "⚠️ [Vault] Vault regenerado (reset administrador) para: {}",
+        user_id
+    );
+    Ok((new_master, priv_key_bytes, pub_key_hex))
 }
 
 fn derive_key_from_password(password: &str, salt: &SaltString) -> Result<[u8; 32], String> {
@@ -329,11 +368,7 @@ mod tests {
         assert!(pub_after.is_none(), "vault existente no devuelve pública");
 
         // La contraseña vieja ya no abre
-        let result = unlock_user_vault(
-            temp_dir.path().to_path_buf(),
-            user_id,
-            test_password(),
-        );
+        let result = unlock_user_vault(temp_dir.path().to_path_buf(), user_id, test_password());
         assert!(result.is_err(), "la contraseña vieja debe fallar");
 
         // La sal no rotó (es por usuario, no por contraseña)
@@ -394,6 +429,74 @@ mod tests {
     }
 
     #[test]
+    fn test_reset_vault_regenerates_keypair_and_password() {
+        let temp_dir = TempDir::new().unwrap();
+        let user_id = test_user_id();
+        let new_password = "ResetPassword456!";
+
+        let (old_master, old_priv, _) =
+            unlock_user_vault(temp_dir.path().to_path_buf(), user_id, test_password()).unwrap();
+
+        let (new_master, _new_priv, new_pub) =
+            reset_user_vault(temp_dir.path().to_path_buf(), user_id, new_password).unwrap();
+
+        // La master cambió y la contraseña vieja ya no abre
+        assert_ne!(old_master, new_master);
+        assert!(
+            unlock_user_vault(temp_dir.path().to_path_buf(), user_id, test_password()).is_err(),
+            "la contraseña vieja debe fallar tras el reset"
+        );
+
+        // La contraseña nueva abre con el keypair NUEVO
+        let (master_after, priv_after, _) =
+            unlock_user_vault(temp_dir.path().to_path_buf(), user_id, new_password).unwrap();
+        assert_eq!(master_after, new_master);
+        assert_ne!(priv_after, old_priv, "el reset debe generar llave nueva");
+        assert_eq!(
+            crate::security::crypto::public_key_from_private(&priv_after),
+            new_pub
+        );
+    }
+
+    #[test]
+    fn test_reset_keeps_data_key_resolvable_with_new_password() {
+        // INVARIANTE: tras el reset, resolve_data_key con la nueva master
+        // (re-envolviendo el wrap personal como hace admin_reset_password)
+        // devuelve la MISMA data_key → los datos clínicos siguen legibles.
+        let temp_dir = TempDir::new().unwrap();
+        let user_id = test_user_id();
+        let new_password = "ResetPassword456!";
+
+        let (old_master, _, _) =
+            unlock_user_vault(temp_dir.path().to_path_buf(), user_id, test_password()).unwrap();
+        let data_key = crate::security::data_key::resolve_data_key(
+            temp_dir.path(),
+            user_id,
+            &old_master,
+            None,
+        )
+        .unwrap();
+
+        let (new_master, _, _) =
+            reset_user_vault(temp_dir.path().to_path_buf(), user_id, new_password).unwrap();
+
+        // Simula admin_reset_password: re-envolver con la nueva master
+        crate::security::data_key::save_user_wrap(temp_dir.path(), user_id, &data_key, &new_master)
+            .unwrap();
+
+        let (master_check, _, _) =
+            unlock_user_vault(temp_dir.path().to_path_buf(), user_id, new_password).unwrap();
+        let recovered = crate::security::data_key::resolve_data_key(
+            temp_dir.path(),
+            user_id,
+            &master_check,
+            None,
+        )
+        .unwrap();
+        assert_eq!(recovered, data_key, "la data_key no debe cambiar");
+    }
+
+    #[test]
     fn test_change_password_keeps_data_key_resolvable() {
         // INVARIANTE CRÍTICO: tras cambiar la contraseña, resolve_data_key con la
         // nueva master devuelve la MISMA data_key (los datos siguen descifrables).
@@ -403,9 +506,13 @@ mod tests {
 
         let (old_master, _, _) =
             unlock_user_vault(temp_dir.path().to_path_buf(), user_id, test_password()).unwrap();
-        let data_key =
-            crate::security::data_key::resolve_data_key(temp_dir.path(), user_id, &old_master, None)
-                .unwrap();
+        let data_key = crate::security::data_key::resolve_data_key(
+            temp_dir.path(),
+            user_id,
+            &old_master,
+            None,
+        )
+        .unwrap();
 
         let new_master = change_vault_password(
             temp_dir.path().to_path_buf(),
@@ -416,14 +523,19 @@ mod tests {
         .unwrap();
 
         // Simula el paso 3 del comando: re-envolver con la nueva master
-        crate::security::data_key::save_user_wrap(temp_dir.path(), user_id, &data_key, &new_master).unwrap();
+        crate::security::data_key::save_user_wrap(temp_dir.path(), user_id, &data_key, &new_master)
+            .unwrap();
 
         // Con la contraseña nueva todo resuelve igual
         let (master_check, _, _) =
             unlock_user_vault(temp_dir.path().to_path_buf(), user_id, new_password).unwrap();
-        let recovered =
-            crate::security::data_key::resolve_data_key(temp_dir.path(), user_id, &master_check, None)
-                .unwrap();
+        let recovered = crate::security::data_key::resolve_data_key(
+            temp_dir.path(),
+            user_id,
+            &master_check,
+            None,
+        )
+        .unwrap();
         assert_eq!(recovered, data_key, "la data_key no debe cambiar");
     }
 
@@ -438,9 +550,13 @@ mod tests {
 
         let (old_master, _, _) =
             unlock_user_vault(temp_dir.path().to_path_buf(), user_id, test_password()).unwrap();
-        let data_key =
-            crate::security::data_key::resolve_data_key(temp_dir.path(), user_id, &old_master, None)
-                .unwrap();
+        let data_key = crate::security::data_key::resolve_data_key(
+            temp_dir.path(),
+            user_id,
+            &old_master,
+            None,
+        )
+        .unwrap();
         crate::security::data_key::save_master_wrap(temp_dir.path(), &data_key, phrase).unwrap();
 
         // Cambio de contraseña SIN re-envolver (simula crash entre pasos 2 y 3)
@@ -453,9 +569,13 @@ mod tests {
         .unwrap();
 
         // Sin seed → SEED_REQUIRED (el frontend pide la frase), no pérdida de datos
-        let err =
-            crate::security::data_key::resolve_data_key(temp_dir.path(), user_id, &new_master, None)
-                .unwrap_err();
+        let err = crate::security::data_key::resolve_data_key(
+            temp_dir.path(),
+            user_id,
+            &new_master,
+            None,
+        )
+        .unwrap_err();
         assert_eq!(err, crate::security::data_key::SEED_REQUIRED);
 
         // Con seed → recupera la MISMA data_key y CURA el wrap huérfano
@@ -469,9 +589,13 @@ mod tests {
         assert_eq!(recovered, data_key);
 
         // Cura: ahora el fast path funciona sin seed
-        let healed =
-            crate::security::data_key::resolve_data_key(temp_dir.path(), user_id, &new_master, None)
-                .unwrap();
+        let healed = crate::security::data_key::resolve_data_key(
+            temp_dir.path(),
+            user_id,
+            &new_master,
+            None,
+        )
+        .unwrap();
         assert_eq!(healed, data_key);
     }
 }

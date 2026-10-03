@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Button } from "./ui/Button";
 import { Alert } from "./ui/Alert";
@@ -6,10 +6,9 @@ import { Input } from "./ui/Input";
 import { useAuthStore } from "../stores/useAuthStore";
 
 export function AuthBox() {
-  const [isLogin, setIsLogin] = useState(true);
+  const [bootstrap, setBootstrap] = useState<boolean | null>(null);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState("medico");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [needsSeed, setNeedsSeed] = useState(false);
@@ -17,6 +16,14 @@ export function AuthBox() {
 
   // <-- Extraemos la función que actualiza el estado global
   const unlockVault = useAuthStore((state) => state.unlockVault);
+
+  // ¿La instalación no tiene usuarios? → modo bootstrap (crear el primer
+  // administrador). Si ya hay usuarios, el registro está cerrado.
+  useEffect(() => {
+    invoke<number>("count_users")
+      .then((count) => setBootstrap(count === 0))
+      .catch(() => setBootstrap(false));
+  }, []);
 
   const doLogin = async (seed?: string) => {
     const user = await invoke<{
@@ -43,7 +50,15 @@ export function AuthBox() {
     setLoading(true);
 
     try {
-      if (isLogin) {
+      if (bootstrap) {
+        // Bootstrap: crea el primer usuario como administrador (el backend
+        // fuerza el rol y rechaza si ya existe algún usuario).
+        await invoke<string>("register_user", {
+          form: { username, password_plain: password },
+        });
+        // Pasamos al login con las credenciales recién creadas
+        await doLogin();
+      } else {
         try {
           await doLogin();
         } catch (err) {
@@ -54,13 +69,6 @@ export function AuthBox() {
           }
           throw err;
         }
-      } else {
-        await invoke<string>("register_user", {
-          form: { username, password_plain: password, role },
-        });
-
-        setIsLogin(true);
-        setPassword("");
       }
     } catch (err) {
       setError(String(err));
@@ -84,21 +92,31 @@ export function AuthBox() {
     }
   };
 
+  if (bootstrap === null) {
+    return (
+      <div className="w-full max-w-md mx-auto mt-24 bg-zinc-900 p-8 rounded-lg border border-zinc-800 text-center text-zinc-500 text-sm">
+        Verificando instalación…
+      </div>
+    );
+  }
+
   return (
     <div className="w-full max-w-md mx-auto mt-24 bg-zinc-900 p-8 rounded-lg border border-zinc-800 shadow-2xl">
       <h2 className="text-xl font-bold text-zinc-100 mb-1">
-        {isLogin ? "🔑 Iniciar Sesión Core" : "👤 Registrar Nuevo Usuario"}
+        {bootstrap
+          ? "🌱 Crear Primer Administrador"
+          : "🔑 Iniciar Sesión Core"}
       </h2>
       <p className="text-xs text-zinc-500 mb-6">
-        {isLogin
-          ? "Acceso local encriptado mediante Argon2id"
-          : "El hash se calculará de forma aislada en la RAM"}
+        {bootstrap
+          ? "Esta instalación no tiene usuarios. Creá la cuenta administradora (será la dueña de la gestión técnica)."
+          : "Acceso local encriptado mediante Argon2id"}
       </p>
 
       {error && <Alert variant="error" className="my-3">{error}</Alert>}
 
       {/* Formulario de seed (bootstrap / recovery) */}
-      {needsSeed && isLogin ? (
+      {!bootstrap && needsSeed ? (
         <form onSubmit={handleSeedSubmit} className="flex flex-col gap-4">
           <div className="p-3 bg-yellow-950/30 border border-yellow-800/50 rounded-lg">
             <p className="text-xs text-yellow-400">
@@ -141,7 +159,7 @@ export function AuthBox() {
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             required
-            placeholder="ej: enrique_dev"
+            placeholder={bootstrap ? "ej: admin_principal" : "ej: enrique_dev"}
           />
         </div>
 
@@ -149,7 +167,7 @@ export function AuthBox() {
         <div>
           <Input
             type="password"
-            label="Contraseña"
+            label={bootstrap ? "Contraseña (mínimo 8)" : "Contraseña"}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
@@ -158,63 +176,21 @@ export function AuthBox() {
           />
         </div>
 
-        {/* Select Rol (Solo en Registro) */}
-        {!isLogin && (
-          <div className="relative">
-            <label className="block text-xs text-zinc-500 mb-1 font-semibold">
-              Rol Asignado
-            </label>
-            <select
-              value={role}
-              onChange={(e) => setRole(e.target.value)}
-              className="w-full bg-zinc-950 text-zinc-200 border border-zinc-800 rounded px-3 py-2.5 pr-8 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 appearance-none"
-            >
-              <option value="medico">Médico (Consultorio / SOAP)</option>
-              <option value="enfermeria">Enfermería (Mismos permisos que Médico)</option>
-              <option value="admin">Administrador (Recepción / Altas)</option>
-              <option value="paciente">
-                Paciente (Auto-registro / Métricas)
-              </option>
-            </select>
-            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 top-7">
-              <svg
-                className="h-4 w-4 text-zinc-500"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M19 9l-7 7-7-7"
-                />
-              </svg>
-            </div>
+        {bootstrap && (
+          <div className="p-3 bg-blue-950/30 border border-blue-800/50 rounded-lg">
+            <p className="text-xs text-blue-400">
+              Esta cuenta quedará con rol <strong>Administrador</strong>: podrá dar de
+              alta al resto de los usuarios, resetear contraseñas y rotar la frase
+              semilla. Después de crearla no habrá más registro libre.
+            </p>
           </div>
         )}
 
         {/* Botón Principal */}
         <Button type="submit" isLoading={loading} className="w-full mt-2">
-          {isLogin ? "Ingresar al Sistema" : "Crear Cuenta Local"}
+          {bootstrap ? "Crear Administrador" : "Ingresar al Sistema"}
         </Button>
       </form>
-      )}
-
-      {/* Toggle Login/Registro (solo cuando no hay seed pendiente) */}
-      {!needsSeed && (
-        <Button
-          variant="ghost"
-          onClick={() => {
-            setIsLogin(!isLogin);
-            setError(null);
-          }}
-          className="w-full mt-5 underline text-center"
-        >
-          {isLogin
-            ? "¿No tenés usuario local? Registrarse"
-            : "¿Ya tenés usuario? Iniciar Sesión"}
-        </Button>
       )}
     </div>
   );

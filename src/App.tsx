@@ -40,7 +40,9 @@ export default function App() {
   // 3. App principal
   return (
     <DashboardLayout>
-      {activeUser.role === "admin" && <AdminView />}
+      {(activeUser.role === "administrador" || activeUser.role === "asistente") && (
+        <AdminView />
+      )}
 
       {(activeUser.role === "medico" || activeUser.role === "enfermeria") && <MedicoView />}
 

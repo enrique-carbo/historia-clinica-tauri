@@ -6,42 +6,43 @@ Este documento detalla la arquitectura de seguridad, los algoritmos criptográfi
 
 ## 🏗️ 1. Pilares Criptográficos
 
-El Core de Rust utiliza librerías de nivel de producción (`aes-gcm`, `argon2`, `sha2`) para ejecutar tres tipos de operaciones criptográficas complementarias en la memoria RAM:
+El Core de Rust utiliza librerías de nivel de producción (`aes-gcm`, `argon2`, `sha2`, `ed25519-dalek`) para ejecutar cuatro tipos de operaciones criptográficas complementarias en la memoria RAM:
 
 | Operación | Algoritmo | Propósito | Implementación |
 | :--- | :--- | :--- | :--- |
-| **Cifrado Simétrico** | `AES-GCM-256` | Blindar textos clínicos (SOAP) y datos filiatorios (Nombres). | Cifrado Autenticado con datos asociados (AEAD). |
+| **Cifrado Simétrico** | `AES-GCM-256` | Blindar textos clínicos (entries), filiación (nombres) y el payload del perfil. | Cifrado Autenticado con datos asociados (AEAD). |
+| **Firma Digital** | `Ed25519` | No-repudio y validez legal de cada entry clínica. | Firma determinística (RFC 8032) sobre SHA-256 del payload de firma; verificación con la llave pública del autor. |
 | **Derivación de Claves (KDF) / Hashing** | `Argon2id` | Hasheo de contraseñas locales (Auth) y derivación de la Clave Maestra desde la contraseña del usuario. | Ganador de la Password Hashing Competition (PHC). |
 | **Índice Ciego (Blind Index)** | `SHA-256 + Salt` | Búsqueda y prevención de registros duplicados de forma anónima. | Hashing determinista e irreversible. |
 
 ---
 
-## 🔒 2. Ciclo de Vida de los Datos Clínicos (SOAP)
+## 🔒 2. Ciclo de Vida de los Datos Clínicos (Entries Append-Only)
 
-Cada vez que un médico redacta una evolución en el formulario, el Core de Rust fragmenta el registro para evitar ataques de análisis de frecuencia o patrones.
+El sistema clínico vive en la tabla `entries` (paradigma Entity-Entry): un registro **inmutable** por hecho clínico — SOAP, medicación, alergia o condición. No existen operaciones de update ni delete; las correcciones se hacen con entries nuevas.
 
 ```text
-[ React Frontend ] (Texto Plano en RAM)
+[ React Frontend ] (Payload JSON en RAM, armado según config/entry_templates/*.json)
        │
        ▼ (IPC - Tauri Bridge)
-[ Rust Core Engine ] 
-       │──► 1. Extrae la Clave Maestra del CryptoState (Mutex en RAM).
-       │──► 2. Genera un Nonce criptográfico de 12 bytes por cada campo (S, O, A, P) vía OsRng.
-       │──► 3. Ejecuta AES-GCM-256 Cipher.
+[ Rust Core Engine ]
+       │──► 1. Extrae la DataKey del estado `DataKey` (Mutex en RAM).
+       │──► 2. Serializa el payload y genera un Nonce de 12 bytes (OsRng).
+       │──► 3. AES-GCM-256 sobre el payload → `entries.payload` (BLOB cifrado).
+       │──► 4. Hash SHA-256 de `category|subject_id|title|status|timestamp`.
+       │──► 5. Firma Ed25519 del hash con la llave privada del autor → `entries.signature`.
        ▼
-[ SQLite Local ] (Cifrado Hexadecimal + Nonce en Disco)
+[ SQLite Local ] (Solo texto cifrado + firma — nunca payload legible)
 ```
 
-### Reglas de Implementación en Disco (Esquema SQLite)
+### Reglas de Implementación en Disco
 
-Para garantizar la inmutabilidad de los datos, las columnas se almacenan emparejadas con su respectivo vector de inicialización (`nonce`):
+* `entries.payload`: JSON completo de la entry cifrado con la **DataKey** (nonce incluido en el blob).
+* `entities.enc_data_blob`: filiación del paciente cifrada campo a campo con la DataKey.
+* `professional_profiles.*_ciphertext`: cada dato del perfil cifrado individualmente (nombre, matrícula, especialidad, contacto).
+* `entries.signature`: firma Ed25519 en hex — verificable con la llave pública del autor (ver §4.4).
 
-* `subjetivo_ciphertext` + `subjetivo_nonce`
-* `objetivo_ciphertext` + `objetivo_nonce`
-* `analisis_ciphertext` + `analisis_nonce`
-* `plan_ciphertext` + `plan_nonce`
-
-> ⚠️ **Nota de Seguridad:** Dos campos con el mismo texto (por ejemplo, dos análisis que digan *"Paciente estable"*) generarán cadenas de bytes completamente diferentes en la base de datos debido a que los `nonces` se generan mediante un generador de números aleatorios criptográficamente seguro (`rand::rngs::OsRng`) en cada guardado.
+> ⚠️ **Nota de Seguridad:** Dos payloads con el mismo texto generarán cadenas de bytes completamente diferentes en la base de datos, porque el `nonce` se genera con un generador criptográficamente seguro (`rand::rngs::OsRng`) en cada escritura. Los tests del Core verifican además que ninguna palabra en claro del payload aparezca en la DB.
 
 ---
 
@@ -59,25 +60,67 @@ Para resolver esto sin romper el modelo Zero-Knowledge, el Core implementa un **
 $$\text{Blind Index} = \text{SHA-256}(\text{DNI Normalizado} + \text{BLIND\_INDEX\_SALT})$$
 
 ```sql
--- El hash resultante se guarda en la columna 'identity_blind_index' con restricción UNIQUE.
--- Si se intenta ingresar el mismo DNI, SQLite rebotará la query por duplicación,
--- sin que el motor de base de datos sepa jamás qué DNI originó ese hash.
+-- El hash resultante se guarda en la columna 'blind_index' de `entities`
+-- con restricción UNIQUE. Si se intenta ingresar el mismo DNI, SQLite
+-- rebotará la query por duplicación, sin que el motor de base de datos
+-- sepa jamás qué DNI originó ese hash.
 ```
 
 ---
 
-## 🔑 4. Gestión del Ciclo de Vida de la Clave Maestra (Cold Start Vault)
+## 🔑 4. Ciclo de Vida de las Claves
 
-La seguridad del sistema descansa sobre la generación y destrucción estricta de las llaves en la memoria volátil (RAM). **No existen claves hardcodeadas en el binario.**
+La seguridad descansa sobre la generación y destrucción estricta de las llaves en la memoria volátil (RAM). **No existen claves hardcodeadas en el binario.** El sistema maneja **dos familias de claves** con responsabilidades distintas:
 
-1. **Derivación en el Punto de Entrada:** Al iniciar sesión, la contraseña escrita por el médico se procesa con `Argon2id` en modo KDF (Key Derivation Function) para generar exactamente 32 bytes.
-2. **Validación de Vault (`vault.rs`):** Esos 32 bytes se utilizan para descifrar un archivo local oculto (`vault_{user_id}.bin`) que contiene una firma mágica. Si el descifrado es exitoso, la contraseña es correcta.
-3. **Inyección en Memoria:** Los 32 bytes se inyectan en un `Mutex<Option<[u8; 32]>>` global (`CryptoState`). 
-4. **Aislamiento de Procesos:** El frontend (React) *nunca* tiene acceso a estos bytes ni a los textos cifrados crudos; solo recibe los datos ya descifrados a través del canal IPC de Tauri.
-5. **Destrucción:** Al cerrar la aplicación, el proceso de Rust muere y la clave maestra desaparece de la RAM. La base de datos local vuelve a ser un bloque incomprensible.
+### 4.1 Vault por usuario → llave de firma Ed25519
 
-### Aislamiento Multi-Usuario (Policonsultorio)
-Cada médico genera su propio archivo `vault_{user_id}.bin`. Por lo tanto, la clave maestra de la Dra. Cameron es diferente a la del Dr. House. Si House intenta descifrar una nota cifrada por Cameron, el algoritmo AES-GCM fallará de forma segura, aislando las consultas por defecto sin necesidad de lógica de permisos compleja.
+1. **Derivación:** la contraseña del usuario se procesa con `Argon2id` (sal única por usuario en `vault_{user}.salt`) para generar exactamente 32 bytes de *master key*.
+2. **Validación (`vault.rs`):** esos 32 bytes descifran `vault_{user}.bin` (AES-GCM). Si la firma mágica `HISTORIA_CLINICA_VAULT_OK` aparece, la contraseña es correcta y el payload contiene la **llave privada Ed25519** del usuario.
+3. **Primer login:** si el vault no existe, se crea con un keypair nuevo.
+4. **Inyección en Memoria:** la llave privada y la master key viven solo en `Mutex` de Rust (`CryptoState`/`SigningState`); el frontend (React) nunca las ve — solo recibe datos ya descifrados por el canal IPC.
+5. **Destrucción:** `lock_vault` limpia los states y la sesión (`SessionState`); al cerrar la aplicación, el proceso de Rust muere y todo desaparece de la RAM.
+
+### 4.2 DataKey de instalación → datos clínicos
+
+Una única **DataKey** (32 bytes, generada una sola vez) cifra todo lo clínico: `entries.payload`, `entities.enc_data_blob` y el perfil profesional. Nunca se persiste en claro; se guarda envuelta:
+
+| Archivo | Llave que la envuelve | Rol |
+| :--- | :--- | :--- |
+| `.data_key.{user_id}` | master key derivada de la contraseña del usuario | **Fast path**: login normal sin tipear la semilla |
+| `.data_key.master` | `SHA-256(frase semilla)` | **Bootstrap / recovery**: primer login y wrap huérfano |
+
+**Orden de resolución** (`resolve_data_key`): wrap personal → semilla → generación (`SEED_REQUIRED` pide la frase al frontend, nunca falla perdiendo datos). Los tests de invariante garantizan que un cambio de contraseña o un reset **nunca alteran la DataKey** — solo se re-envuelve el wrap personal con la nueva master key.
+
+### 4.3 Aislamiento multi-usuario (qué protege y qué no)
+
+> ⚠️ **Corrección importante:** los vaults (y por tanto las llaves de firma) son **por usuario**, pero la DataKey es **compartida por instalación**. Por eso el aislamiento entre consultas **no es criptográfico entre usuarios**: cualquier usuario con sesión abierta —médico, enfermería, asistente o administrador— descifra los mismos datos clínicos. La distinción entre roles es de **autorización y UI** (ver §4.6), no de cifrado.
+
+Lo que el modelo Zero-Knowledge protege de verdad es el **disco**: sin la contraseña o la frase semilla, la base local es un bloque incomprensible — incluso para alguien con acceso físico o para el propio administrador, que en su cuenta solo tiene un wrap personal idéntico al de cualquier otro usuario y no custodia claves de datos ajenas.
+
+### 4.4 Firmas y el histórico `signing_keys`
+
+* Cada entry se firma con Ed25519 sobre `SHA-256(category|subject_id|title|status|timestamp)`. La verificación usa la **llave pública del autor**.
+* `professional_profiles.public_key` guarda la clave **vigente** (se sincroniza en cada `unlock_vault`).
+* `signing_keys` guarda el **histórico**: rangos `valid_from`/`valid_to` por clave. La verificación contrasta cada entry contra la clave vigente en **el timestamp de la entry** (`public_key_at`), con fallback al perfil para registros previos al histórico.
+* **Cambio de contraseña propio:** mismo keypair → nada cambia en las firmas.
+* **Reset por el administrador** (`admin_reset_password`, sin contraseña previa): regenera el vault con keypair **nuevo**, re-envuelve el wrap personal, actualiza la pública vigente y cierra el rango anterior en `signing_keys` — las entries viejas siguen verificando con la clave que les corresponde por fecha.
+
+### 4.5 Frase semilla (recovery y continuidad)
+
+* 6 palabras generadas en el dispositivo, mostradas una sola vez, **jamás persistidas en disco ni en la base**.
+* Deriva únicamente `.data_key.master`; **no sustituye a la contraseña** — si se olvida la contraseña, el login falla antes de pedirla, para eso existe el reset del administrador.
+* **Rotación** (tab del administrador): generar → anotar → re-escribir para verificar → recién entonces `admin_rotate_seed` reenvuelve `.data_key.master`. Hasta el último paso la frase anterior sigue siendo válida, y la acción queda registrada en `audit_log`.
+
+### 4.6 Custodia: roles y autorización en backend
+
+`login_user` registra la sesión activa en `SessionState` (Rust) y `lock_vault` la limpia. Todo command sensible exige `require_admin()` —rol `administrador`— **del lado de Rust**, nunca confiando en flags del frontend:
+
+* altas y bajas lógicas de usuarios (`admin_create_user`, `set_user_active`),
+* resets de contraseña ajenos,
+* rotación de la frase semilla,
+* lectura del registro de auditoría (`audit_log`, con actor y objetivo).
+
+El administrador **no gana lectura nueva de datos clínicos** (misma DataKey, mismo wrap que todos): su poder es sobre *cuentas y credenciales*, y cada uso queda auditado.
 
 ---
 
@@ -90,5 +133,5 @@ Cuando se implemente el puente de sincronización, el servidor remoto actuará c
     * UUIDs relacionales generados aleatoriamente.
     * Bloques de texto cifrado incomprensibles (Hexadecimal).
     * Nonces públicos.
-    * El `identity_blind_index` para indexación y búsquedas opacas.
+    * El `blind_index` para indexación y búsquedas opacas.
 3. **Filosofía Zero-Knowledge:** El proveedor de la nube (o cualquier atacante que acceda al servidor central) solo verá metadatos correlativos, haciendo imposible la reconstrucción de la historia clínica de un paciente o su identificación legal.

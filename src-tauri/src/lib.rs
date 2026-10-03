@@ -8,7 +8,7 @@ mod export;
 mod security;
 mod types;
 
-use types::{CryptoState, DataKey, DbState, SigningState};
+use types::{CryptoState, DataKey, DbState, SessionState, SigningState};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -18,6 +18,7 @@ pub fn run() {
         .manage(CryptoState(Mutex::new(None)))
         .manage(SigningState(Mutex::new(None)))
         .manage(DataKey(Mutex::new(None)))
+        .manage(SessionState(Mutex::new(None)))
         .setup(|app| {
             let app_data_dir = app
                 .path()
@@ -52,6 +53,13 @@ pub fn run() {
             commands::test_crypto_flow,
             commands::register_user,
             commands::login_user,
+            commands::count_users,
+            commands::admin_create_user,
+            commands::list_users,
+            commands::set_user_active,
+            commands::list_audit_log,
+            commands::admin_reset_password,
+            commands::admin_rotate_seed,
             commands::unlock_vault,
             commands::lock_vault,
             commands::change_password,

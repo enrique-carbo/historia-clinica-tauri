@@ -25,15 +25,20 @@ pub fn init_db(app_dir: PathBuf) -> Result<Connection, String> {
     // TABLAS PADRE (se crean primero, son referenciadas por hijas)
     // ============================================================
 
-    // 1. Tabla de Usuarios (Médicos, Admins, Pacientes)
+    // 1. Tabla de Usuarios (Administrador, Asistente, Médicos, Enfermería, Pacientes)
+    //    - administrador: gestión técnica (usuarios, contraseñas, semilla, auditoría)
+    //    - asistente:     recepción (admisión de pacientes) — el ex-rol "admin"
+    //    - is_active:     baja lógica (el historial de usuarios debe permanecer)
     conn.execute(
         "CREATE TABLE IF NOT EXISTS users (
                 id TEXT PRIMARY KEY,
                 username TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
-                role TEXT CHECK(role IN ('admin', 'medico', 'enfermeria', 'paciente')) NOT NULL,
+                role TEXT CHECK(role IN ('administrador', 'asistente', 'medico', 'enfermeria', 'paciente')) NOT NULL,
                 entity_id INTEGER,
                 created_at TEXT NOT NULL,
+                is_active INTEGER NOT NULL DEFAULT 1 CHECK(is_active IN (0, 1)),
+                last_login_at TEXT,
                 FOREIGN KEY(entity_id) REFERENCES entities(id)
             );",
         [],
@@ -65,6 +70,54 @@ pub fn init_db(app_dir: PathBuf) -> Result<Connection, String> {
         [],
     )
     .map_err(|e| format!("Error al crear tabla professional_profiles: {}", e))?;
+
+    // 3. Histórico de llaves públicas de firma (Ed25519) por usuario.
+    //    Permite verificar entries firmadas ANTES de un reset de contraseña
+    //    o una rotación de llave: cada entry se contrasta contra la clave
+    //    vigente en su timestamp, no contra la actual.
+    //    valid_to NULL = clave vigente.
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS signing_keys (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL,
+            public_key TEXT NOT NULL,
+            valid_from TEXT NOT NULL,
+            valid_to TEXT,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE RESTRICT
+        );",
+        [],
+    )
+    .map_err(|e| format!("Error al crear tabla signing_keys: {}", e))?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_signing_keys_lookup
+         ON signing_keys(user_id, valid_from DESC);",
+        [],
+    )
+    .ok();
+
+    // 4. Auditoría: acciones sensibles del rol administrador
+    //    (reset de contraseña, baja de usuarios, rotación de semilla…).
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS audit_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            actor_user_id TEXT,
+            action TEXT NOT NULL,
+            target_user_id TEXT,
+            detail TEXT,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY(actor_user_id) REFERENCES users(id) ON DELETE SET NULL,
+            FOREIGN KEY(target_user_id) REFERENCES users(id) ON DELETE SET NULL
+        );",
+        [],
+    )
+    .map_err(|e| format!("Error al crear tabla audit_log: {}", e))?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at DESC);",
+        [],
+    )
+    .ok();
 
     // ============================================================
     // TABLAS GENÉRICAS (Template v1)

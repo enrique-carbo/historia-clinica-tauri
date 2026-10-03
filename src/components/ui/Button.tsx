@@ -27,8 +27,8 @@ export function Button({
   return (
     <button
       className={`px-4 py-2 text-sm font-semibold rounded transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${variants[variant]} ${className}`}
-      disabled={isLoading || props.disabled}
       {...props}
+      disabled={isLoading || props.disabled}
     >
       {isLoading ? "Procesando..." : children}
     </button>
