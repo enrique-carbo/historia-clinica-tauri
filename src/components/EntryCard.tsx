@@ -175,7 +175,7 @@ export function EntryCard({ entry, onClick }: EntryCardProps) {
       )}
 
       {/* Footer */}
-      <div className="flex items-center justify-between text-[10px] text-zinc-600 mt-2">
+      <div className="flex items-center justify-between text-[10px] text-zinc-500 mt-2">
         <span>{formatDate(entry.timestamp)}</span>
         <span>ID: {entry.id.slice(0, 8)}...</span>
       </div>

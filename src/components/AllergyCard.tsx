@@ -137,7 +137,7 @@ export function AllergyCard({ subjectId }: AllergyCardProps) {
                     {a.payload.descripcion}
                   </p>
                 )}
-                <div className="flex items-center justify-between text-[10px] text-zinc-600 mt-1.5">
+                <div className="flex items-center justify-between text-[10px] text-zinc-500 mt-1.5">
                   <span>
                     Firmado por <span className="text-zinc-500">{a.author_name}</span>
                     {a.is_verified ? " ✓" : " (sin verificar)"}

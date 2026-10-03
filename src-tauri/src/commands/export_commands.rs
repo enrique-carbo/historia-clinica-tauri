@@ -1,7 +1,7 @@
-use crate::export_render::{
+use crate::export::render::{
     export_filename, render_markdown, ExportEntry, ExportPatient, ExportProfessional, ExportSnapshot,
 };
-use crate::lib_types::{DataKey, DbState};
+use crate::types::{DataKey, DbState};
 use serde::Serialize;
 use std::path::Path;
 use tauri::{AppHandle, Manager, State};
@@ -130,9 +130,9 @@ fn write_export(dir: &Path, snapshot: &ExportSnapshot) -> Result<ExportResult, S
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::crypto;
-    use crate::database::init_db;
-    use crate::lib_types::SigningState;
+    use crate::security::crypto;
+    use crate::db::database::init_db;
+    use crate::types::SigningState;
     use std::collections::HashMap;
     use std::sync::Mutex;
     use tauri::Manager;

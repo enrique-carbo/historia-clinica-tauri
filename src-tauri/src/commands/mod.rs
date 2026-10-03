@@ -4,6 +4,7 @@ mod entity_commands;
 mod entry_commands;
 mod export_commands;
 mod professional_profile_commands;
+mod seed_commands;
 
 // Re-exportamos todo al exterior
 pub use auth_commands::*;
@@ -11,10 +12,11 @@ pub use entity_commands::*;
 pub use entry_commands::*;
 pub use export_commands::*;
 pub use professional_profile_commands::*;
+pub use seed_commands::*;
 
 // --- HELPERS ---
 
-use crate::lib_types::{CryptoState, DataKey, DbState};
+use crate::types::{CryptoState, DataKey, DbState};
 use rusqlite::Connection;
 use tauri::State;
 

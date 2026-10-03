@@ -133,7 +133,7 @@ export function ProfileView() {
                 <input
                   value={(profile as any)[item.field]}
                   onChange={(e) => handleChange(item.field, e.target.value)}
-                  className="w-full rounded-lg bg-zinc-950 border border-zinc-700 px-3 py-2.5 text-sm text-zinc-200 focus:border-blue-500 outline-none transition-all"
+                  className="w-full rounded-lg bg-zinc-950 border border-zinc-700 px-3 py-2.5 text-sm text-zinc-200 focus:border-blue-500 outline-none transition-colors"
                 />
               ) : (
                 <p className="text-sm text-zinc-300 font-medium py-2.5 border-b border-zinc-800/50">
@@ -165,7 +165,7 @@ export function ProfileView() {
                   type={item.type}
                   value={(profile as any)[item.field]}
                   onChange={(e) => handleChange(item.field, e.target.value)}
-                  className="w-full rounded-lg bg-zinc-950 border border-zinc-700 px-3 py-2.5 text-sm text-zinc-200 focus:border-emerald-500 outline-none transition-all"
+                  className="w-full rounded-lg bg-zinc-950 border border-zinc-700 px-3 py-2.5 text-sm text-zinc-200 focus:border-emerald-500 outline-none transition-colors"
                 />
               ) : (
                 <p className="text-sm text-zinc-300 font-medium py-2.5 border-b border-zinc-800/50 truncate">
@@ -193,7 +193,7 @@ export function ProfileView() {
               autoComplete="current-password"
               value={pwdForm.current}
               onChange={(e) => setPwdForm((p) => ({ ...p, current: e.target.value }))}
-              className="w-full rounded-lg bg-zinc-950 border border-zinc-700 px-3 py-2.5 text-sm text-zinc-200 focus:border-amber-500 outline-none transition-all"
+              className="w-full rounded-lg bg-zinc-950 border border-zinc-700 px-3 py-2.5 text-sm text-zinc-200 focus:border-amber-500 outline-none transition-colors"
             />
           </div>
           <div>
@@ -205,7 +205,7 @@ export function ProfileView() {
               autoComplete="new-password"
               value={pwdForm.new}
               onChange={(e) => setPwdForm((p) => ({ ...p, new: e.target.value }))}
-              className="w-full rounded-lg bg-zinc-950 border border-zinc-700 px-3 py-2.5 text-sm text-zinc-200 focus:border-amber-500 outline-none transition-all"
+              className="w-full rounded-lg bg-zinc-950 border border-zinc-700 px-3 py-2.5 text-sm text-zinc-200 focus:border-amber-500 outline-none transition-colors"
             />
           </div>
           <div>
@@ -217,7 +217,7 @@ export function ProfileView() {
               autoComplete="new-password"
               value={pwdForm.confirm}
               onChange={(e) => setPwdForm((p) => ({ ...p, confirm: e.target.value }))}
-              className="w-full rounded-lg bg-zinc-950 border border-zinc-700 px-3 py-2.5 text-sm text-zinc-200 focus:border-amber-500 outline-none transition-all"
+              className="w-full rounded-lg bg-zinc-950 border border-zinc-700 px-3 py-2.5 text-sm text-zinc-200 focus:border-amber-500 outline-none transition-colors"
             />
           </div>
         </div>
@@ -228,7 +228,7 @@ export function ProfileView() {
             disabled={
               pwdLoading || !pwdForm.current || !pwdForm.new || !pwdForm.confirm
             }
-            className="rounded-lg bg-amber-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-amber-700 disabled:opacity-50 transition-all"
+            className="rounded-lg bg-amber-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-amber-700 disabled:opacity-50 transition-colors"
           >
             {pwdLoading ? "Cambiando..." : "Cambiar Contraseña"}
           </button>
@@ -245,7 +245,7 @@ export function ProfileView() {
           )}
         </div>
 
-        <p className="mt-3 text-xs text-zinc-600">
+        <p className="mt-3 text-xs text-zinc-500">
           Cambiar la contraseña re-cifra la bóveda local y el wrap de datos. Tu
           frase semilla en papel no se ve afectada.
         </p>
@@ -255,14 +255,14 @@ export function ProfileView() {
         <div className="mt-8 pt-6 border-t border-zinc-800 flex justify-end gap-3">
           <button
             onClick={() => setIsEditing(false)}
-            className="rounded-lg bg-zinc-800 px-6 py-2.5 text-sm font-bold text-zinc-300 hover:bg-zinc-700 transition-all"
+            className="rounded-lg bg-zinc-800 px-6 py-2.5 text-sm font-bold text-zinc-300 hover:bg-zinc-700 transition-colors"
           >
             Cancelar
           </button>
           <button
             onClick={handleSave}
             disabled={loading}
-            className="rounded-lg bg-emerald-600 px-6 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50 shadow-lg shadow-emerald-900/20 transition-all"
+            className="rounded-lg bg-emerald-600 px-6 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50 shadow-lg shadow-emerald-900/20 transition-colors"
           >
             {loading ? "Guardando cambios..." : "Guardar Perfil"}
           </button>

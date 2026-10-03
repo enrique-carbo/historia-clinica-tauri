@@ -15,7 +15,7 @@ export function PacienteView() {
 
       <hr className="border-zinc-800" />
 
-      <div className="p-8 text-center bg-zinc-900/50 rounded-lg border border-dashed border-zinc-800 text-zinc-600">
+      <div className="p-8 text-center bg-zinc-900/50 rounded-lg border border-dashed border-zinc-800 text-zinc-500">
         <p className="text-3xl mb-3">🛠️</p>
         <p className="text-sm font-semibold text-zinc-500">
           Módulo de Teleconsulta Asíncrona

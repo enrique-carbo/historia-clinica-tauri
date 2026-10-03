@@ -32,7 +32,7 @@ export function Navbar({
                 onClick={() => onTabChange(tab.id)}
                 className={`
                   flex-1 sm:flex-none
-                  flex items-center justify-center gap-2 px-3.5 py-2 text-sm font-medium transition-all
+                  flex items-center justify-center gap-2 px-3.5 py-2 text-sm font-medium transition-colors
                   rounded-t-lg rounded-b-none
                   ${
                     isActive

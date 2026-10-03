@@ -34,22 +34,30 @@ Diseño modular estricto para evitar dependencias circulares. El acceso a la bas
 src-tauri/src/
  ├── main.rs              # Punto de entrada al ejecutable nativo.
  ├── lib.rs               # Orquestador de Tauri, inyección de estados globales (DbState, CryptoState, SigningState, DataKey).
- ├── lib_types.rs         # Contenedores de estado seguro (Mutex<Option<T>>).
+ ├── types.rs             # Contenedores de estado seguro (Mutex<Option<T>>).
  │
- ├── config_schema.rs     # Structs para parsear schema.json dinámicamente.
- ├── vault.rs             # Gestión de Bóvedas criptográficas por usuario (Cold Start + Llave Privada de Firma).
- ├── data_key.rs          # ← NUEVO: Envoltorio AES-GCM de la DataKey (wrap por usuario + master wrap con seed) + migración legacy.
- ├── seed.rs              # Generación de mnemonic (6 palabras) y derivación de key con SHA-256.
- ├── auth.rs              # Hashing Argon2id para autenticación de usuarios.
- ├── crypto.rs            # Motor matemático puro (AES-GCM, Ed25519, Nonces OsRng, SHA-256 Blind Index).
- ├── database.rs          # Inicialización física de SQLite (WAL Mode activado) y esquemas relacionales.
+ ├── security/            # Núcleo criptográfico (stateless respecto al IPC).
+ │   ├── auth.rs          # Hashing Argon2id para autenticación de usuarios.
+ │   ├── crypto.rs        # Motor matemático puro (AES-GCM, Ed25519, Nonces OsRng, SHA-256 Blind Index).
+ │   ├── data_key.rs      # Envoltorio AES-GCM de la DataKey (wrap por usuario + master wrap con seed) + migración legacy.
+ │   ├── seed.rs          # Generación de mnemonic (6 palabras) y derivación de key con SHA-256.
+ │   └── vault.rs         # Gestión de Bóvedas criptográficas por usuario (Cold Start + Llave Privada de Firma).
+ │
+ ├── db/                  # Capa de persistencia.
+ │   ├── config_schema.rs # Structs para parsear schema.json dinámicamente.
+ │   └── database.rs      # Inicialización física de SQLite (WAL Mode activado) y esquemas relacionales.
+ │
+ ├── export/              # Motor de exportación de historias clínicas.
+ │   └── render.rs        # Snapshot tipado + render puro a Markdown (filiación, perfil, entries cronológicas, footer SHA-256).
  │
  └── commands/            # Controladores de API interna (Aduana de peticiones de React).
      ├── mod.rs           # Exportación plana y Helpers (`with_conn`, `get_data_key`).
      ├── auth_commands.rs # Registro, login, unlock_vault (resuelve DataKey), lock_vault, setup_seed_master_wrap.
      ├── entity_commands.rs    # Endpoints genéricos de entidades (Template v1).
      ├── entry_commands.rs     # CRUD append-only de entries (inmutables, con firma + búsqueda).
-     └── professional_profile_commands.rs # Endpoints de perfil profesional.
+     ├── export_commands.rs    # `get_export_snapshot` (descifrado completo) + `export_history` (escritura en `exports/`).
+     ├── professional_profile_commands.rs # Endpoints de perfil profesional.
+     └── seed_commands.rs      # Generación, verificación y derivación de la frase semilla.
 ```
 
 ### Frontend UI (React)
@@ -66,12 +74,7 @@ src/
  │   └── usePatientStore.ts  # Fuente única de verdad para paciente seleccionado.
  │
  ├── config/
- │   ├── schema.json              # Definición de entidades (solo filiación en patient).
- │   └── entry_templates/         # Templates de entries por categoría
- │       ├── soap.json
- │       ├── allergy.json
- │       ├── medication.json
- │       └── condition.json
+ │   └── schema.json              # Definición de entidades (copia empaquetada del backend en src-tauri/config/).
  │
  ├── components/
  │   ├── layouts/
@@ -81,7 +84,7 @@ src/
  │   │   └── Drawer.tsx      # NavigationDrawer con menú por roles.
  │   ├── views/
  │   │   ├── AdminView.tsx
- │   │   ├── MedicoView.tsx  # Tabs: Perfil, Paciente, EHR, Entries.
+ │   │   ├── MedicoView.tsx  # Tabs: Perfil, Paciente, EHR, Entries (+ export .md).
  │   │   └── PacienteView.tsx
  │   │
  │   ├── PatientEhrView.tsx  # Interfaz clínica unificada (ficha + evoluciones).
@@ -93,6 +96,8 @@ src/
  │   ├── ProfileView.tsx
  │   └── AuthBox.tsx         # Login/registro + manejo de SEED_REQUIRED (bootstrap).
 ```
+
+> 🎨 Las reglas visuales del frontend (tokens de color, tipografía, radios, estados interactivos, semántica de color y estrategia de temas claro/oscuro) están definidas en **[DESIGN.md](./DESIGN.md)**.
 
 ## Principios de Diseño del Core & Frontend
 
@@ -211,29 +216,63 @@ CREATE INDEX idx_entries_sync ON entries(is_synced) WHERE is_synced = 0;
 ### Archivos de Configuración Empaquetados
 | Archivo | Propósito | Consumidor |
 |---|---|---|
-| `config/schema.json` | Define entidades y campos de filiación | `entity_commands.rs` + `Entity.tsx` |
+| `src/config/schema.json` (copia del backend en `src-tauri/config/`) | Define entidades y campos de filiación | `entity_commands.rs` (via `include_str!`) + `Entity.tsx` |
 | `config/entry_templates/soap.json` | Template de entry SOAP | `EntryForm.tsx` |
 | `config/entry_templates/allergy.json` | Template de alergia | `EntryForm.tsx` |
 | `config/entry_templates/medication.json` | Template de medicación | `EntryForm.tsx` |
 | `config/entry_templates/condition.json` | Template de condición médica | `EntryForm.tsx` |
 
-`schema.json` se empaqueta en el binario con `include_str!` en `lib.rs`; los `entry_templates/` se cargan en el frontend. Todo funciona offline y es inmutable en runtime.
+`schema.json` se empaqueta en el binario con `include_str!` en `lib.rs`. Los `entry_templates/` se embeben en el bundle de Vite con `import.meta.glob(..., { eager: true })`: `EntryForm.tsx` los descubre del disco en build time, valida el shape (`category`, `label`, `fields`) y arma el diccionario de templates. Todo funciona offline y es inmutable en runtime.
 
-**Paradigma Entity-Entry**: El core no conoce el significado clínico de cada campo. Simplemente almacena `entries` cifradas con su categoría y las presenta según el template JSON correspondiente. Agregar nuevos tipos de entries solo requiere crear un nuevo archivo JSON en `entry_templates/`.
+**Paradigma Entity-Entry**: El core no conoce el significado clínico de cada campo. Simplemente almacena `entries` cifradas con su categoría y las presenta según el template JSON correspondiente. Agregar nuevos tipos de entries solo requiere crear un nuevo archivo JSON en `config/entry_templates/` (y sumar la categoría al tipo `EntryCategory` y al CHECK de SQLite).
+
+## 📤 Exportación de Historia Clínica (Markdown)
+
+La historia completa de un paciente se exporta a un archivo `.md` legible y versionable. El diseño es **stateless respecto a claves**: los datos se descifran en Rust y el frontend solo recibe el snapshot ya resuelto (nunca la DataKey).
+
+### Flujo
+
+```text
+MedicoView (tab Entries) ─ "Exportar .md"
+  │
+  ├─ 1. get_export_snapshot(subject_id, professional_user_id)
+  │      Descifra en un solo roundtrip: paciente + perfil profesional + TODAS las entries.
+  │      Falla con error claro si la bóveda está cerrada.
+  │
+  └─ 2. export_history(snapshot)
+         Render puro a Markdown → escritura en <app_local_data_dir>/exports/
+         Devuelve { path, filename, entries_count } → banner "Revelar en carpeta"
+```
+
+### Decisiones de diseño
+
+| Aspecto | Decisión | Razón |
+|---|---|---|
+| Destino | Carpeta fija `exports/` de la app | Sin `tauri-plugin-dialog` — compatible con el futuro build mobile |
+| Nombre de archivo | `HistoriaClinica_Apellido_Nombre_YYYY-MM-DD_HHMMSS.md` (sanitizado, único por timestamp) | Sin conflictos de sobrescritura ni diálogos |
+| Campos por categoría | Labels canónicos de `config/entry_templates/*.json` (orden y nombre) | El `.md` es espejo del formulario clínico |
+| Orden | Cronológico ascendente | Lectura continua de la evolución |
+| Firma | Check ✓/✗ por entry + longitud corta de la firma | El `.md` es una foto, no la fuente de verdad — la verificación real sigue en la app |
+| Integridad | SHA-256 del contenido en el footer + aviso de confidencialidad | Permite detectar alteraciones del archivo exportado |
+| "Revelar en carpeta" | `revealItemInDir` de `@tauri-apps/plugin-opener` | Ya instalado y concedido vía `opener:default` (sin cambios de capability) |
+
+Los commands se registran en `lib.rs` (`get_export_snapshot`, `export_history`), la lógica vive en `commands/export_commands.rs` y el render puro en `export/render.rs` (sin estado, sin I/O → 6 tests unitarios directos).
 
 ## 🧪 Tests Automatizados
 
-El Core cuenta con 60 tests unitarios que cubren:
+El Core cuenta con 70 tests unitarios que cubren:
 | Módulo | Tests | Cobertura |
 |---|---|---|
-| `crypto.rs` | 13 | AES-GCM roundtrip, nonces únicos, clave incorrecta, manipulación, Blind Index, Firma Ed25519, derivación de pública desde privada |
-| `vault.rs` | 10 | Creación, desbloqueo, contraseña incorrecta, sal única por usuario, `change_password` (vault re-cifrado, invariante data_key resolvable, wrap huérfano recupera con seed) |
-| `seed.rs` | 12 | Generación mnemonic, unicidad, derivación SHA-256, verificación, edge cases, word list sin duplicados ni tildes |
-| `data_key.rs` | 10 | Wrap/unwrap AES-GCM, prioridades de resolución, `SEED_REQUIRED`, migración legacy |
-| `entry_commands.rs` | 15 | CRUD completo end-to-end con DB real (roundtrip cifrado→descifrado, payload sin texto plano en DB, validaciones de categoría/status, states obligatorios, firma rota por manipulación, wrong data key, autor sin perfil, paginación e isolación por paciente, filtro por categoría, búsqueda case-insensitive, `decrypt_payload` |
+| `security/crypto.rs` | 13 | AES-GCM roundtrip, nonces únicos, clave incorrecta, manipulación, Blind Index, Firma Ed25519, derivación de pública desde privada |
+| `security/vault.rs` | 10 | Creación, desbloqueo, contraseña incorrecta, sal única por usuario, `change_password` (vault re-cifrado, invariante data_key resolvable, wrap huérfano recupera con seed) |
+| `security/seed.rs` | 12 | Generación mnemonic, unicidad, derivación SHA-256, verificación, edge cases, word list sin duplicados ni tildes |
+| `security/data_key.rs` | 10 | Wrap/unwrap AES-GCM, prioridades de resolución, `SEED_REQUIRED`, migración legacy |
+| `commands/entry_commands.rs` | 15 | CRUD completo end-to-end con DB real (roundtrip cifrado→descifrado, payload sin texto plano en DB, validaciones de categoría/status, states obligatorios, firma rota por manipulación, wrong data key, autor sin perfil, paginación e isolación por paciente, filtro por categoría, búsqueda case-insensitive, `decrypt_payload` |
+| `commands/export_commands.rs` | 4 | Snapshot descifrado (paciente + perfil), bóveda cerrada, escritura del `.md` (heading, filename, footer) y rechazo con 0 entries |
+| `export/render.rs` | 6 | Header con paciente/perfil, orden cronológico, orden/labels canónicos de campos, footer SHA-256 + aviso, filename sanitizado y fallback sin nombre |
 
 ```bash
-cargo test --lib  # 60 passed; 0 failed
+cargo test --lib  # 70 passed; 0 failed
 ```
 
 > Los tests de `entry_commands` usan `tauri::test` (feature habilitada solo en `[dev-dependencies]`; el binario de producción no la incluye).
@@ -300,6 +339,15 @@ cargo test --lib  # 60 passed; 0 failed
 - [x] **Fix firma multi-usuario**: `unlock_vault` sincroniza `professional_profiles.public_key` siempre (derivada desde la privada si el vault ya existía), antes de `resolve_data_key`
 - [x] 60 tests pasando
 
+### 🟩 Fase 3.9: Exportación de Historia Clínica + Orden del Core (✅ Completado)
+- [x] **`get_export_snapshot`**: descifra paciente + perfil + todas las entries en un solo roundtrip IPC (la DataKey nunca llega al frontend); error claro si la bóveda está cerrada
+- [x] **`export_history`**: render puro a Markdown → escritura en `<app_local_data_dir>/exports/` (sin plugin de diálogos, compatible con mobile futuro)
+- [x] **Render `export/render.rs`**: tabla de filiación y perfil, resumen por categoría, entries cronológicas con labels canónicos de los templates, check de firma ✓/✗, footer con SHA-256 + aviso de confidencialidad
+- [x] **UI en `MedicoView` (tab Entries)**: botón "Exportar .md", banner de éxito con "Revelar en carpeta" (`revealItemInDir`), banners descartables y reset al cambiar de paciente
+- [x] **Reorganización `src-tauri/src/` por dominio**: `security/` (auth, crypto, data_key, seed, vault), `db/`, `export/` y `commands/` (incluye `seed_commands`); `lib_types.rs` → `types.rs`
+- [x] **Templates en JSON**: `EntryForm.tsx` consume `config/entry_templates/*.json` via `import.meta.glob` (eliminado el `TEMPLATES` hardcodeado)
+- [x] 70 tests pasando
+
 ### 🟧 Fase 4: Infraestructura y Sincronización Híbrida (Próximo paso)
 - [ ] Despliegue de VPS con Dokploy y PocketBase
 - [ ] Sync Engine (`tokio`): background worker polling `sync_queue`
@@ -324,6 +372,6 @@ pnpm tauri dev          # Levanta el entorno (Rust + React HMR)
 pnpm tauri build        # Compila en modo release para producción
 npx tsc --noEmit        # Verifica TypeScript sin generar archivos
 cargo check             # Verifica compilación Rust
-cargo test --lib        # Ejecuta los 60 tests unitarios del Core
+cargo test --lib        # Ejecuta los 70 tests unitarios del Core
 cargo add <crate>       # Añade dependencias al backend (desde src-tauri)
 ```

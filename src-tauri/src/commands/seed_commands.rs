@@ -1,4 +1,4 @@
-use crate::seed;
+use crate::security::seed;
 
 /// Genera una nueva mnemonic de 6 palabras.
 /// Solo se puede llamar si no hay seed verificada.

@@ -2,7 +2,7 @@ import { ButtonHTMLAttributes, ReactNode } from "react";
 
 // Permitimos que reciba cualquier prop nativa de un botón HTML (como disabled, type, onClick)
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: "primary" | "secondary" | "ghost" | "danger";
+  variant?: "primary" | "secondary" | "ghost" | "success" | "danger";
   isLoading?: boolean;
   children: ReactNode;
 }
@@ -20,6 +20,7 @@ export function Button({
     secondary:
       "bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700",
     ghost: "bg-transparent hover:bg-zinc-800 text-zinc-400",
+    success: "bg-emerald-700 hover:bg-emerald-600 text-white",
     danger: "bg-red-600 hover:bg-red-700 text-white",
   };
 

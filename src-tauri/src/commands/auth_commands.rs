@@ -1,7 +1,7 @@
-use crate::auth;
-use crate::data_key;
-use crate::lib_types::{CryptoState, DataKey, DbState};
-use crate::vault;
+use crate::security::auth;
+use crate::security::data_key;
+use crate::types::{CryptoState, DataKey, DbState};
+use crate::security::vault;
 use tauri::{Manager, State};
 use uuid::Uuid;
 
@@ -87,9 +87,9 @@ pub fn unlock_vault(
     password: String,
     seed_phrase: Option<String>,
     app_handle: tauri::AppHandle,
-    db_state: State<'_, crate::lib_types::DbState>,
+    db_state: State<'_, crate::types::DbState>,
     crypto_state: State<'_, CryptoState>,
-    signing_state: State<'_, crate::lib_types::SigningState>,
+    signing_state: State<'_, crate::types::SigningState>,
     data_key_state: State<'_, DataKey>,
 ) -> Result<bool, String> {
     let app_dir = app_handle
@@ -108,7 +108,7 @@ pub fn unlock_vault(
     //    vacía y TODAS las firmas de ese usuario verificarían como false.
     let public_key_hex = match public_key_opt {
         Some(pk) => pk,
-        None => crate::crypto::public_key_from_private(&private_signing_key),
+        None => crate::security::crypto::public_key_from_private(&private_signing_key),
     };
     super::with_conn(&db_state, |conn| {
         conn.execute(
@@ -222,7 +222,7 @@ pub fn change_password(
 #[tauri::command]
 pub fn lock_vault(
     crypto_state: State<'_, CryptoState>,
-    signing_state: State<'_, crate::lib_types::SigningState>,
+    signing_state: State<'_, crate::types::SigningState>,
     data_key_state: State<'_, DataKey>,
 ) -> Result<(), String> {
     // Limpiamos la llave de cifrado
@@ -270,8 +270,8 @@ pub fn test_crypto_flow(
     crypto_state: State<'_, CryptoState>,
 ) -> Result<String, String> {
     let master_key = super::get_key(&crypto_state)?;
-    let encrypted = crate::crypto::encrypt_text(&text, &master_key)?;
-    let decrypted = crate::crypto::decrypt_text(&encrypted, &master_key)?;
+    let encrypted = crate::security::crypto::encrypt_text(&text, &master_key)?;
+    let decrypted = crate::security::crypto::decrypt_text(&encrypted, &master_key)?;
     Ok(format!(
         "Cifrado Hex: {}. Descifrado: {}",
         encrypted.ciphertext, decrypted

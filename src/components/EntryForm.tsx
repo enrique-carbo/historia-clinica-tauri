@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useEntryStore, EntryCategory, EntryStatus } from "../stores/useEntryStore";
 import { usePatientStore } from "../stores/usePatientStore";
+import { Button } from "./ui/Button";
 
 interface EntryFormProps {
   onSuccess?: () => void;
@@ -21,48 +22,45 @@ interface Template {
   fields: TemplateField[];
 }
 
-const TEMPLATES: Record<EntryCategory, Template> = {
-  SOAP_NOTE: {
-    category: "SOAP_NOTE",
-    label: "Nota SOAP",
-    fields: [
-      { name: "subjetivo", label: "Subjetivo", type: "textarea", required: true, placeholder: "Síntomas y preocupaciones del paciente..." },
-      { name: "objetivo", label: "Objetivo", type: "textarea", required: true, placeholder: "Signos vitales, hallazgos del examen físico..." },
-      { name: "evaluacion", label: "Evaluación", type: "textarea", required: true, placeholder: "Diagnóstico diferencial, impresión clínica..." },
-      { name: "plan", label: "Plan", type: "textarea", required: true, placeholder: "Tratamiento, medicación, próxima consulta..." },
-    ],
-  },
-  ALLERGY: {
-    category: "ALLERGY",
-    label: "Alergia",
-    fields: [
-      { name: "sustancia", label: "Sustancia", type: "text", required: true, placeholder: "Ej: Penicilina, Polen, Mariscos..." },
-      { name: "tipo_reaccion", label: "Tipo de Reacción", type: "select", required: true, options: ["Leve", "Moderada", "Severa", "Anafilaxia"] },
-      { name: "descripcion", label: "Descripción", type: "textarea", required: false, placeholder: "Detalles de la reacción alérgica..." },
-    ],
-  },
-  MEDICATION: {
-    category: "MEDICATION",
-    label: "Medicación",
-    fields: [
-      { name: "medicamento", label: "Medicamento", type: "text", required: true, placeholder: "Ej: Enalapril, Ibuprofeno..." },
-      { name: "dosis", label: "Dosis", type: "text", required: true, placeholder: "Ej: 10mg, 500mg..." },
-      { name: "frecuencia", label: "Frecuencia", type: "select", required: true, options: ["Cada 8 horas", "Cada 12 horas", "Cada 24 horas", "Según necesidad", "Una vez"] },
-      { name: "via_administracion", label: "Vía", type: "select", required: true, options: ["Oral", "Intravenosa", "Intramuscular", "Subcutánea", "Tópica", "Inhalatoria"] },
-      { name: "indicacion", label: "Indicación", type: "textarea", required: false, placeholder: "Motivo de la prescripción..." },
-    ],
-  },
-  CONDITION: {
-    category: "CONDITION",
-    label: "Diagnóstico / Antecedentes",
-    fields: [
-      { name: "diagnostico", label: "Diagnóstico", type: "text", required: true, placeholder: "Ej: Hipertensión arterial..." },
-      { name: "codigo_cie10", label: "Código CIE-10", type: "text", required: false, placeholder: "Ej: I10, E11.9" },
-      { name: "estado", label: "Estado", type: "select", required: true, options: ["Activo", "En tratamiento", "Resuelto", "Crónico"] },
-      { name: "observaciones", label: "Observaciones", type: "textarea", required: false, placeholder: "Notas adicionales..." },
-    ],
-  },
+type EntryTemplateJson = Template & {
+  description?: string;
+  signature_payload_order?: string[];
+  immutable?: boolean;
+  requires_signature?: boolean;
 };
+
+const CATEGORY_ORDER: EntryCategory[] = ["SOAP_NOTE", "ALLERGY", "MEDICATION", "CONDITION"];
+
+const TEMPLATE_MODULES = import.meta.glob("../../config/entry_templates/*.json", {
+  eager: true,
+  import: "default",
+});
+
+function loadTemplates(): Record<EntryCategory, Template> {
+  const templates = {} as Partial<Record<EntryCategory, Template>>;
+
+  for (const path of Object.keys(TEMPLATE_MODULES)) {
+    const raw = TEMPLATE_MODULES[path] as EntryTemplateJson;
+    const valid =
+      (CATEGORY_ORDER as string[]).includes(raw?.category) &&
+      typeof raw?.label === "string" &&
+      Array.isArray(raw?.fields);
+    if (!valid) {
+      console.error(`[EntryTemplates] Template inválido: ${path}`);
+      continue;
+    }
+    templates[raw.category] = { category: raw.category, label: raw.label, fields: raw.fields };
+  }
+
+  const missing = CATEGORY_ORDER.filter((c) => !templates[c]);
+  if (missing.length > 0) {
+    console.error(`[EntryTemplates] Faltan templates: ${missing.join(", ")}`);
+  }
+
+  return templates as Record<EntryCategory, Template>;
+}
+
+const TEMPLATES = loadTemplates();
 
 const CATEGORY_ICONS: Record<EntryCategory, string> = {
   SOAP_NOTE: "📋",
@@ -159,7 +157,7 @@ export function EntryForm({ onSuccess }: EntryFormProps) {
           Categoría
         </label>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {(Object.keys(TEMPLATES) as EntryCategory[]).map((category) => (
+          {CATEGORY_ORDER.filter((category) => TEMPLATES[category]).map((category) => (
             <button
               key={category}
               type="button"
@@ -257,13 +255,9 @@ export function EntryForm({ onSuccess }: EntryFormProps) {
           )}
 
           {/* Submit */}
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-700 text-white rounded-lg font-medium transition-colors"
-          >
+          <Button type="submit" disabled={isLoading} className="w-full">
             {isLoading ? "Creando..." : "Crear Entry"}
-          </button>
+          </Button>
         </form>
       )}
     </div>

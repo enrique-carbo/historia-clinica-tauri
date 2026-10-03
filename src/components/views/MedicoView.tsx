@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { Navbar, Tab } from "../../components/ui/Navbar";
+import { Button } from "../../components/ui/Button";
 import { PatientEhrView } from "../../components/PatientEhrView";
 import { Entity } from "../Entity";
 import { ProfileView } from "../../components/ProfileView";
@@ -106,19 +107,16 @@ export function MedicoView() {
             </h2>
             {selectedPatient && (
               <div className="flex items-center gap-2">
-                <button
+                <Button
+                  variant="success"
                   onClick={handleExport}
                   disabled={exporting}
-                  className="px-4 py-2 bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors"
                 >
                   {exporting ? "Exportando…" : "Exportar .md"}
-                </button>
-                <button
-                  onClick={() => setShowEntryForm(!showEntryForm)}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-colors"
-                >
+                </Button>
+                <Button onClick={() => setShowEntryForm(!showEntryForm)}>
                   {showEntryForm ? "Ver Timeline" : "+ Nueva Entry"}
-                </button>
+                </Button>
               </div>
             )}
           </div>
@@ -129,12 +127,9 @@ export function MedicoView() {
                 Exportado: {exportResult.filename} ({exportResult.entries_count} entries)
               </span>
               <div className="flex items-center gap-2 shrink-0">
-                <button
-                  onClick={handleReveal}
-                  className="px-3 py-1.5 bg-emerald-800 hover:bg-emerald-700 text-emerald-100 rounded-lg text-xs font-medium transition-colors"
-                >
+                <Button variant="success" onClick={handleReveal}>
                   Revelar en carpeta
-                </button>
+                </Button>
                 <button
                   onClick={() => setExportResult(null)}
                   aria-label="Cerrar"

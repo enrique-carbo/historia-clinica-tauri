@@ -95,7 +95,7 @@ export function AuthBox() {
           : "El hash se calculará de forma aislada en la RAM"}
       </p>
 
-      {error && <Alert variant="error">{error}</Alert>}
+      {error && <Alert variant="error" className="my-3">{error}</Alert>}
 
       {/* Formulario de seed (bootstrap / recovery) */}
       {needsSeed && isLogin ? (

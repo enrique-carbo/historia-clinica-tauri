@@ -2,19 +2,13 @@ use rand::RngCore;
 use std::sync::Mutex;
 use tauri::Manager;
 
-mod auth;
 mod commands;
-mod config_schema;
-mod crypto;
-mod data_key;
-mod database;
-mod export_render;
-mod lib_types;
-mod seed;
-mod seed_commands;
-mod vault;
+mod db;
+mod export;
+mod security;
+mod types;
 
-use lib_types::{CryptoState, DataKey, DbState, SigningState};
+use types::{CryptoState, DataKey, DbState, SigningState};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -23,7 +17,7 @@ pub fn run() {
         .manage(DbState(Mutex::new(None)))
         .manage(CryptoState(Mutex::new(None)))
         .manage(SigningState(Mutex::new(None)))
-        .manage(DataKey(Mutex::new(None))) // ← NUEVO
+        .manage(DataKey(Mutex::new(None)))
         .setup(|app| {
             let app_data_dir = app
                 .path()
@@ -32,14 +26,14 @@ pub fn run() {
 
             // Inicializar sal de instalación para blind index
             let installation_salt = get_or_create_installation_salt(&app_data_dir)?;
-            crypto::init_blind_index_salt(installation_salt)
+            security::crypto::init_blind_index_salt(installation_salt)
                 .map_err(|e| format!("Error inicializando blind index salt: {}", e))?;
 
             // NOTA: La data_key YA NO se carga aquí en claro.
             // Se resuelve en unlock_vault() con la master_key del usuario
             // (o con la seed en el bootstrap de nuevos usuarios).
 
-            let conn = database::init_db(app_data_dir)
+            let conn = db::database::init_db(app_data_dir)
                 .map_err(|e| format!("Fallo crítico de DB: {}", e))?;
 
             let state = app.state::<DbState>();
@@ -47,7 +41,7 @@ pub fn run() {
 
             // CARGAR SCHEMAS EMPAQUETADOS
             const SCHEMA_JSON: &str = include_str!("../config/schema.json");
-            let schema: config_schema::SchemaConfig =
+            let schema: db::config_schema::SchemaConfig =
                 serde_json::from_str(SCHEMA_JSON).map_err(|e| format!("Schema inválido: {}", e))?;
 
             app.manage(schema);
@@ -78,10 +72,10 @@ pub fn run() {
             commands::search_entries,
             commands::get_export_snapshot,
             commands::export_history,
-            seed_commands::generate_seed,
-            seed_commands::verify_seed,
-            seed_commands::derive_key_from_seed,
-            seed_commands::hash_seed,
+            commands::generate_seed,
+            commands::verify_seed,
+            commands::derive_key_from_seed,
+            commands::hash_seed,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

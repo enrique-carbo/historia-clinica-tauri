@@ -2,10 +2,11 @@ import { ReactNode } from "react";
 
 interface AlertProps {
   variant?: "error" | "success" | "info";
+  className?: string;
   children: ReactNode;
 }
 
-export function Alert({ variant = "info", children }: AlertProps) {
+export function Alert({ variant = "info", className = "", children }: AlertProps) {
   const variants = {
     error: "bg-red-950 border-red-800 text-red-400",
     success: "bg-green-950 border-green-800 text-green-400",
@@ -13,7 +14,7 @@ export function Alert({ variant = "info", children }: AlertProps) {
   };
 
   return (
-    <div className={`border p-3 m-3 rounded text-xs ${variants[variant]}`}>
+    <div className={`border p-3 rounded text-xs ${variants[variant]} ${className}`}>
       {children}
     </div>
   );

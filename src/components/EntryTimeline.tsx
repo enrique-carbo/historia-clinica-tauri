@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useEntryStore, EntryCategory } from "../stores/useEntryStore";
 import { EntryCard } from "./EntryCard";
+import { Button } from "./ui/Button";
 
 interface EntryTimelineProps {
   subjectId: number;
@@ -128,7 +129,7 @@ export function EntryTimeline({ subjectId }: EntryTimelineProps) {
       ) : entries.length === 0 && !isLoading ? (
         <div className="flex flex-col items-center justify-center py-12 text-zinc-500">
           <svg
-            className="w-12 h-12 mb-3 text-zinc-700"
+            className="w-12 h-12 mb-3 text-zinc-500"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -147,7 +148,7 @@ export function EntryTimeline({ subjectId }: EntryTimelineProps) {
                 ? "No hay entries registradas"
                 : `No hay entries de tipo ${CATEGORIES.find((c) => c.value === filter)?.label}`}
           </p>
-          <p className="text-xs text-zinc-600 mt-1">
+          <p className="text-xs text-zinc-500 mt-1">
             {debouncedQuery
               ? "Probá con otro término de búsqueda"
               : "Las entries son inmutables y se crean al registrar datos clínicos"}
@@ -211,14 +212,11 @@ export function EntryTimeline({ subjectId }: EntryTimelineProps) {
                 Cargando...
               </div>
             ) : hasMore ? (
-              <button
-                onClick={handleLoadMore}
-                className="px-4 py-2 bg-zinc-900 border border-zinc-800 text-zinc-400 rounded-lg text-sm hover:bg-zinc-800 hover:text-zinc-300 transition-colors"
-              >
+              <Button variant="secondary" onClick={handleLoadMore}>
                 Cargar más ({entries.length} cargadas)
-              </button>
+              </Button>
             ) : (
-              <span className="text-xs text-zinc-600">
+              <span className="text-xs text-zinc-500">
                 Fin de la lista
               </span>
             )}

@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useAuthStore } from "../stores/useAuthStore";
 import { usePatientStore } from "../stores/usePatientStore";
 import schemaConfig from "../config/schema.json";
+import { Button } from "./ui/Button";
 
 type EntityData = Record<string, string>;
 
@@ -191,7 +192,7 @@ export function Entity() {
 
   const renderFieldInput = (field: any) => {
     const commonClasses =
-      "w-full rounded-lg bg-zinc-950 border border-zinc-700 px-3 py-2.5 text-sm text-zinc-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all appearance-none";
+      "w-full rounded-lg bg-zinc-950 border border-zinc-700 px-3 py-2.5 text-sm text-zinc-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-colors appearance-none";
     switch (field.type) {
       case "textarea":
         return (
@@ -258,7 +259,7 @@ export function Entity() {
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSearch()}
               placeholder="Buscar por nombre, teléfono..."
-              className="w-full min-w-0 rounded-lg bg-zinc-950 border border-zinc-700 px-3.5 py-2 text-sm text-zinc-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all outline-none"
+              className="w-full min-w-0 rounded-lg bg-zinc-950 border border-zinc-700 px-3.5 py-2 text-sm text-zinc-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors outline-none"
             />
             <button
               onClick={handleSearch}
@@ -277,7 +278,7 @@ export function Entity() {
               onChange={(e) => setSearchDni(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleFind()}
               placeholder="DNI exacto..."
-              className="w-full min-w-0 flex-1 rounded-lg bg-zinc-950 border border-zinc-700 px-3.5 py-2 text-sm text-zinc-200 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all outline-none"
+              className="w-full min-w-0 flex-1 rounded-lg bg-zinc-950 border border-zinc-700 px-3.5 py-2 text-sm text-zinc-200 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors outline-none"
             />
             <button
               onClick={handleFind}
@@ -296,7 +297,7 @@ export function Entity() {
               <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
             </div>
           ) : entities.length === 0 ? (
-            <div className="text-center py-12 text-zinc-600 text-sm px-4">
+            <div className="text-center py-12 text-zinc-500 text-sm px-4">
               {searchQuery || searchDni
                 ? "No se encontraron coincidencias"
                 : "Busca un paciente o crea uno nuevo"}
@@ -305,7 +306,7 @@ export function Entity() {
             entities.map((e) => (
               <div
                 key={e.id}
-                className={`w-full text-left p-3 rounded-lg transition-all duration-200 group flex items-center justify-between gap-2 ${
+                className={`w-full text-left p-3 rounded-lg transition-colors duration-200 group flex items-center justify-between gap-2 ${
                   selectedId === e.id
                     ? "bg-blue-900/20 border border-blue-500/50 shadow-md"
                     : "bg-zinc-950/50 border border-transparent hover:bg-zinc-800 hover:border-zinc-700"
@@ -337,7 +338,7 @@ export function Entity() {
                 {/* En móviles siempre visible, en desktop sólo en hover */}
                 <button
                   onClick={() => loadEntityForEdit(e.id)}
-                  className="shrink-0 px-2.5 py-1.5 rounded-lg bg-zinc-800 text-zinc-400 hover:text-white hover:bg-amber-600 transition-all text-xs font-bold border border-zinc-700 hover:border-amber-500 opacity-100 md:opacity-0 md:group-hover:opacity-100"
+                  className="shrink-0 px-2.5 py-1.5 rounded-lg bg-zinc-800 text-zinc-400 hover:text-white hover:bg-amber-600 transition-[color,background-color,border-color,opacity] text-xs font-bold border border-zinc-700 hover:border-amber-500 opacity-100 md:opacity-0 md:group-hover:opacity-100"
                   title="Editar paciente"
                 >
                   ✏️
@@ -395,24 +396,21 @@ export function Entity() {
           {/* Footer sticky responsivo */}
           <div className="pt-6 mt-4 flex flex-col-reverse sm:flex-row justify-end gap-3 sticky bottom-0 bg-linear-to-t from-zinc-900 via-zinc-900 to-transparent pb-2">
             {editingId && (
-              <button
+              <Button
+                variant="secondary"
                 onClick={resetForm}
-                className="w-full sm:w-auto rounded-lg bg-zinc-700 px-6 py-2.5 text-sm font-bold text-white hover:bg-zinc-600 transition-all"
+                className="w-full sm:w-auto"
               >
                 Cancelar
-              </button>
+              </Button>
             )}
-            <button
+            <Button
               onClick={handleCreateOrUpdate}
               disabled={loading}
-              className={`w-full sm:w-auto rounded-lg px-6 py-2.5 text-sm font-bold text-white shadow-lg transition-all ${
-                editingId
-                  ? "bg-amber-600 hover:bg-amber-700 shadow-amber-900/20"
-                  : "bg-blue-600 hover:bg-blue-700 shadow-blue-900/20"
-              } disabled:opacity-50`}
+              className="w-full sm:w-auto"
             >
               {loading ? "Procesando..." : editingId ? "Guardar Cambios" : "Crear y Cifrar"}
-            </button>
+            </Button>
           </div>
         </div>
       </div>

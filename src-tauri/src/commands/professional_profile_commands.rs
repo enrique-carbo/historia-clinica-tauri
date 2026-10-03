@@ -1,7 +1,7 @@
 // src/commands/professional_profile_commands.rs
 
-use crate::crypto;
-use crate::lib_types::{DataKey, DbState};
+use crate::security::crypto;
+use crate::types::{DataKey, DbState};
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use tauri::State;

@@ -6,7 +6,7 @@ use rand::rngs::OsRng;
 use rand::RngCore;
 use std::path::{Path, PathBuf};
 
-use crate::seed;
+use crate::security::seed;
 
 /// Error distintivo que el frontend reconoce para pedir la seed al usuario.
 pub const SEED_REQUIRED: &str = "SEED_REQUIRED";

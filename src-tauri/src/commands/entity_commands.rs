@@ -1,6 +1,6 @@
-use crate::config_schema::SchemaConfig;
-use crate::crypto;
-use crate::lib_types::{DataKey, DbState}; // ← Cambiar CryptoState por DataKey
+use crate::db::config_schema::SchemaConfig;
+use crate::security::crypto;
+use crate::types::{DataKey, DbState}; // ← Cambiar CryptoState por DataKey
 use rusqlite::params;
 use serde::Serialize;
 use std::collections::HashMap;

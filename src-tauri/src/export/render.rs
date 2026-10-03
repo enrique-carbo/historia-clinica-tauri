@@ -1,4 +1,4 @@
-use crate::crypto;
+use crate::security::crypto;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::HashMap;

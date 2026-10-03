@@ -1,5 +1,5 @@
-use crate::crypto;
-use crate::lib_types::{DataKey, DbState, SigningState};
+use crate::security::crypto;
+use crate::types::{DataKey, DbState, SigningState};
 use rusqlite::params;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -669,7 +669,7 @@ fn decrypt_payload(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::database::init_db;
+    use crate::db::database::init_db;
     use std::sync::Mutex;
     use std::thread;
     use std::time::Duration;

@@ -61,7 +61,7 @@ export function PatientEhrView() {
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Buscar por nombre, DNI o teléfono..."
-          className="w-full rounded-lg bg-zinc-950 border border-zinc-700 px-4 py-2.5 text-sm text-zinc-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all outline-none"
+          className="w-full rounded-lg bg-zinc-950 border border-zinc-700 px-4 py-2.5 text-sm text-zinc-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors outline-none"
         />
       </div>
 
@@ -71,7 +71,7 @@ export function PatientEhrView() {
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
           </div>
         ) : entities.length === 0 ? (
-          <div className="text-center py-12 text-zinc-600 text-sm">
+          <div className="text-center py-12 text-zinc-500 text-sm">
             {searchQuery ? "No se encontraron coincidencias" : "Comienza escribiendo para buscar"}
           </div>
         ) : (
@@ -79,7 +79,7 @@ export function PatientEhrView() {
             <button
               key={entity.id}
               onClick={() => handleSelectPatient(entity.id)}
-              className={`w-full text-left p-3 rounded-lg transition-all duration-200 group ${
+              className={`w-full text-left p-3 rounded-lg transition-colors duration-200 group ${
                 patient?.id === entity.id
                   ? "bg-blue-900/20 border border-blue-500/50 shadow-md"
                   : "bg-zinc-950/50 border border-transparent hover:bg-zinc-800 hover:border-zinc-700"
@@ -110,7 +110,7 @@ export function PatientEhrView() {
       {patient && (
         <>
           {/* FICHA COLAPSABLE */}
-          <div className="border border-zinc-800 rounded-xl bg-zinc-900/50 shadow-lg overflow-hidden transition-all duration-300">
+          <div className="border border-zinc-800 rounded-xl bg-zinc-900/50 shadow-lg overflow-hidden transition-colors duration-300">
             <div
               className="p-4 sm:p-5 cursor-pointer hover:bg-zinc-800/30 transition-colors flex justify-between items-center gap-2"
               onClick={() => setIsPatientDetailsOpen(!isPatientDetailsOpen)}
@@ -138,7 +138,7 @@ export function PatientEhrView() {
 
               <div className="flex items-center gap-2 sm:gap-4 shrink-0">
                 <div className="text-right hidden sm:block">
-                  <div className="text-xs font-mono text-zinc-600">ID: {patient.id}</div>
+                  <div className="text-xs font-mono text-zinc-500">ID: {patient.id}</div>
                 </div>
                 <div className={`transform transition-transform duration-200 ${isPatientDetailsOpen ? "rotate-180" : ""}`}>
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -195,7 +195,7 @@ export function PatientEhrView() {
               ) : soapEntries.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-10 text-zinc-500">
                   <svg
-                    className="w-10 h-10 mb-3 text-zinc-700"
+                    className="w-10 h-10 mb-3 text-zinc-500"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -208,7 +208,7 @@ export function PatientEhrView() {
                     />
                   </svg>
                   <p className="text-sm">Sin notas SOAP registradas</p>
-                  <p className="text-xs text-zinc-600 mt-1">
+                  <p className="text-xs text-zinc-500 mt-1">
                     Se crean desde la pestaña Entries
                   </p>
                 </div>
