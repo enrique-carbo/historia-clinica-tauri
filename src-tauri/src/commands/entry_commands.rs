@@ -77,22 +77,32 @@ pub fn create_entry(
         .as_ref()
         .ok_or("Error de Seguridad: No hay llave de firma en RAM. ¿Bóveda cerrada?".to_string())?;
 
-    // Construir payload para firma: category|subject_id|title|status|timestamp
+    // id y created_at se generan ANTES de firmar: ambos entran en el material.
+    let entry_id = Uuid::new_v4().to_string();
     let timestamp = chrono::Utc::now().to_rfc3339();
-    let signature_payload = format!(
-        "{}|{}|{}|{}|{}",
-        category, subject_id, title, status, timestamp
+    // Mismo formato que producía `datetime('now')` de SQLite (UTC, sin offset)
+    // para no romper el parsing del frontend.
+    let created_at = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
+
+    let hash = signed_hash(
+        &category,
+        subject_id,
+        &title,
+        &status,
+        &timestamp,
+        &author_id,
+        &entry_id,
+        &created_at,
+        &payload_json,
     );
-    let hash = crypto::hash_document(&signature_payload);
     let signature_hex = crypto::sign_hash(&hash, private_key_bytes)?;
 
-    let entry_id = Uuid::new_v4().to_string();
     let entry_id_clone = entry_id.clone();
 
     with_conn(&db_state, |conn| {
         conn.execute(
             "INSERT INTO entries (id, category, subject_id, author_id, title, status, timestamp, payload, signature, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, datetime('now'))",
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             params![
                 entry_id,
                 category,
@@ -102,7 +112,8 @@ pub fn create_entry(
                 status,
                 timestamp,
                 payload_json,
-                signature_hex
+                signature_hex,
+                created_at
             ],
         )
         .map_err(|e| e.to_string())?;
@@ -187,11 +198,17 @@ pub fn get_entry(
     let payload = decrypt_payload(&payload_blob, &data_key)?;
 
     // Verificar firma
-    let signature_payload = format!(
-        "{}|{}|{}|{}|{}",
-        category, subject_id, title, status, timestamp
+    let hash = signed_hash(
+        &category,
+        subject_id,
+        &title,
+        &status,
+        &timestamp,
+        &author_id,
+        &id,
+        &created_at,
+        &payload_blob,
     );
-    let hash = crypto::hash_document(&signature_payload);
 
     // Obtener la llave pública del autor vigente en la fecha de la entry
     let pub_key_result = with_conn(&db_state, |conn| {
@@ -300,11 +317,17 @@ pub fn get_entries_by_subject(
         };
 
         let payload = decrypt_payload(&payload_blob, &data_key)?;
-        let signature_payload = format!(
-            "{}|{}|{}|{}|{}",
-            category, subject_id, title, status, timestamp
+        let hash = signed_hash(
+            &category,
+            subject_id,
+            &title,
+            &status,
+            &timestamp,
+            &author_id,
+            &id,
+            &created_at,
+            &payload_blob,
         );
-        let hash = crypto::hash_document(&signature_payload);
 
         let pub_key_result = with_conn(&db_state, |conn| {
             public_key_at(conn, &author_id, &timestamp)
@@ -416,11 +439,17 @@ pub fn get_entries_by_category(
         };
 
         let payload = decrypt_payload(&payload_blob, &data_key)?;
-        let signature_payload = format!(
-            "{}|{}|{}|{}|{}",
-            category, subject_id, title, status, timestamp
+        let hash = signed_hash(
+            &category,
+            subject_id,
+            &title,
+            &status,
+            &timestamp,
+            &author_id,
+            &id,
+            &created_at,
+            &payload_blob,
         );
-        let hash = crypto::hash_document(&signature_payload);
 
         let pub_key_result = with_conn(&db_state, |conn| {
             public_key_at(conn, &author_id, &timestamp)
@@ -578,11 +607,17 @@ pub fn search_entries(
         };
 
         let payload = decrypt_payload(&payload_blob, &data_key)?;
-        let signature_payload = format!(
-            "{}|{}|{}|{}|{}",
-            category, subject_id, title, status, timestamp
+        let hash = signed_hash(
+            &category,
+            subject_id,
+            &title,
+            &status,
+            &timestamp,
+            &author_id,
+            &id,
+            &created_at,
+            &payload_blob,
         );
-        let hash = crypto::hash_document(&signature_payload);
 
         let pub_key_result = with_conn(&db_state, |conn| {
             public_key_at(conn, &author_id, &timestamp)
@@ -610,6 +645,65 @@ pub fn search_entries(
     }
 
     Ok(entries)
+}
+
+/// Material canónico que se firma/verifica con Ed25519.
+///
+/// Se serializa como JSON (campos en orden de declaración → determinista), lo
+/// que elimina la ambigüedad de re-partición del viejo formato concatenado con
+/// `|`: un title que contiene el delimitador ya no puede desplazar la frontera
+/// con los campos vecinos. Cubre todos los atributos de la fila, no solo la
+/// metadata clínica: `id`, `author_id` y `created_at` también quedan atados a
+/// la firma.
+///
+/// `payload_hex` son los BYTES CRUDOS persistidos (JSON del mapa cifrado) en
+/// hex: cualquier re-escritura del payload —incluso re-cifrado con la misma
+/// DataKey— rompe la firma. Nunca se re-serializa el `HashMap` del payload
+/// (su orden de claves no está garantizado).
+#[derive(Serialize)]
+struct SignedMaterial<'a> {
+    category: &'a str,
+    subject_id: i64,
+    title: &'a str,
+    status: &'a str,
+    timestamp: &'a str,
+    author_id: &'a str,
+    id: &'a str,
+    created_at: &'a str,
+    payload_hex: String,
+}
+
+/// Hash SHA-256 del material canónico. Es la ÚNICA fuente de verdad del
+/// formato firmado: creación y las 4 rutas de verificación pasan por acá.
+/// `#[allow]` porque agrupa todos los campos de la fila en una sola firma
+/// atómica — dispersarlos en call sites es lo que introduce divergencias.
+#[allow(clippy::too_many_arguments)]
+fn signed_hash(
+    category: &str,
+    subject_id: i64,
+    title: &str,
+    status: &str,
+    timestamp: &str,
+    author_id: &str,
+    id: &str,
+    created_at: &str,
+    payload_blob: &[u8],
+) -> [u8; 32] {
+    let material = SignedMaterial {
+        category,
+        subject_id,
+        title,
+        status,
+        timestamp,
+        author_id,
+        id,
+        created_at,
+        payload_hex: hex::encode(payload_blob),
+    };
+    // Serializar una struct de campos escalar no puede fallar en la práctica.
+    let json = serde_json::to_string(&material)
+        .expect("serialización de SignedMaterial no puede fallar");
+    crypto::hash_document(&json)
 }
 
 /// Llave pública del autor vigente en `entry_timestamp`, según el histórico
@@ -686,6 +780,7 @@ mod tests {
     use std::thread;
     use std::time::Duration;
     use tauri::Manager;
+    use zeroize::Zeroizing;
 
     const DATA_KEY: [u8; 32] = [7u8; 32];
 
@@ -745,12 +840,12 @@ mod tests {
         let app = tauri::test::mock_app();
         app.manage(DbState(Mutex::new(Some(conn))));
         app.manage(DataKey(Mutex::new(if data_key_present {
-            Some(DATA_KEY)
+            Some(Zeroizing::new(DATA_KEY))
         } else {
             None
         })));
         app.manage(SigningState(Mutex::new(if signing_present {
-            Some(private_bytes)
+            Some(Zeroizing::new(private_bytes))
         } else {
             None
         })));
@@ -985,6 +1080,127 @@ mod tests {
     }
 
     #[test]
+    fn test_get_entry_tampered_payload_breaks_signature() {
+        let env = setup();
+        let id = create(&env, env.entity_id, "Original").expect("create");
+
+        // Re-cifrar un campo alterado con la MISMA DataKey: un atacante con la
+        // DataKey puede producir un payload que descifra sin errores, pero la
+        // firma debe romperse igual porque cubre los bytes persistidos.
+        let enc = crypto::encrypt_text("Contenido manipulado", &DATA_KEY).expect("encrypt");
+        let tampered = serde_json::json!({
+            "subjetivo": format!("{}:{}", enc.ciphertext, enc.nonce),
+            "objetivo": format!("{}:{}", enc.ciphertext, enc.nonce),
+        });
+        let blob = serde_json::to_vec(&tampered).expect("to_vec");
+
+        let db = env.app.state::<DbState>();
+        with_conn(&db, |conn| {
+            conn.execute(
+                "UPDATE entries SET payload = ?1 WHERE id = ?2",
+                params![blob, id],
+            )
+            .map_err(|e| e.to_string())
+        })
+        .expect("update payload");
+
+        let entry = get(&env, &id).expect("get");
+        assert_eq!(
+            entry.payload.get("subjetivo").unwrap(),
+            "Contenido manipulado"
+        );
+        assert!(
+            !entry.is_verified,
+            "alterar el payload (aunque se descifre correctamente) debe romper la firma"
+        );
+    }
+
+    #[test]
+    fn test_get_entry_tampered_created_at_breaks_signature() {
+        let env = setup();
+        let id = create(&env, env.entity_id, "Original").expect("create");
+
+        let db = env.app.state::<DbState>();
+        with_conn(&db, |conn| {
+            conn.execute(
+                "UPDATE entries SET created_at = '1999-01-01 00:00:00' WHERE id = ?1",
+                params![id],
+            )
+            .map_err(|e| e.to_string())
+        })
+        .expect("update created_at");
+
+        let entry = get(&env, &id).expect("get");
+        assert_eq!(entry.created_at, "1999-01-01 00:00:00");
+        assert!(
+            !entry.is_verified,
+            "alterar created_at debe romper la firma (falla abierta antes de este cambio)"
+        );
+    }
+
+    #[test]
+    fn test_get_entry_tampered_id_breaks_signature() {
+        let env = setup();
+        let id = create(&env, env.entity_id, "Original").expect("create");
+
+        // Re-identificar la fila: con el material viejo la firma seguía
+        // validando y la entry aparecía "verificada" bajo otra identidad
+        // (rompía la unión por id del sync).
+        let db = env.app.state::<DbState>();
+        with_conn(&db, |conn| {
+            conn.execute(
+                "UPDATE entries SET id = 'id-reidentificado' WHERE id = ?1",
+                params![id],
+            )
+            .map_err(|e| e.to_string())
+        })
+        .expect("update id");
+
+        let entry = get(&env, "id-reidentificado").expect("get");
+        assert!(
+            !entry.is_verified,
+            "re-identificar la fila debe romper la firma"
+        );
+    }
+
+    #[test]
+    fn test_signed_hash_no_delimiter_ambiguity() {
+        // Bajo el viejo formato `a|b|c` estas dos asignaciones producían la
+        // MISMA cadena (title absorbía el pipe de status) → misma firma.
+        // El JSON canónico las distingue.
+        let h1 = signed_hash(
+            "SOAP_NOTE", 1, "Nota|vieja", "ACTIVE", "t", "u", "i", "c", b"p",
+        );
+        let h2 = signed_hash(
+            "SOAP_NOTE", 1, "Nota", "vieja|ACTIVE", "t", "u", "i", "c", b"p",
+        );
+        assert_ne!(
+            h1, h2,
+            "la frontera entre campos debe ser inequívoca sin importar pipes en los valores"
+        );
+    }
+
+    #[test]
+    fn test_signed_hash_covers_every_row_field() {
+        // Cada campo de la fila debe alterar el hash individualmente: si uno
+        // no está en el material, su alteración pasaría inadvertida.
+        let base = |cat: &str, sid: i64, t: &str, st: &str, ts: &str, a: &str, id: &str, ca: &str, p: &[u8]| {
+            signed_hash(cat, sid, t, st, ts, a, id, ca, p)
+        };
+        let reference = base("SOAP_NOTE", 1, "T", "ACTIVE", "ts", "au", "id", "ca", b"p");
+
+        assert_ne!(reference, base("MEDICATION", 1, "T", "ACTIVE", "ts", "au", "id", "ca", b"p"));
+        assert_ne!(reference, base("SOAP_NOTE", 2, "T", "ACTIVE", "ts", "au", "id", "ca", b"p"));
+        assert_ne!(reference, base("SOAP_NOTE", 1, "X", "ACTIVE", "ts", "au", "id", "ca", b"p"));
+        assert_ne!(reference, base("SOAP_NOTE", 1, "T", "RESOLVED", "ts", "au", "id", "ca", b"p"));
+        assert_ne!(reference, base("SOAP_NOTE", 1, "T", "ACTIVE", "ts2", "au", "id", "ca", b"p"));
+        assert_ne!(reference, base("SOAP_NOTE", 1, "T", "ACTIVE", "ts", "au2", "id", "ca", b"p"));
+        assert_ne!(reference, base("SOAP_NOTE", 1, "T", "ACTIVE", "ts", "au", "id2", "ca", b"p"));
+        assert_ne!(reference, base("SOAP_NOTE", 1, "T", "ACTIVE", "ts", "au", "id", "ca2", b"p"));
+        assert_ne!(reference, base("SOAP_NOTE", 1, "T", "ACTIVE", "ts", "au", "id", "ca", b"q"));
+    }
+
+    #[test]
     fn test_get_entry_with_wrong_data_key_fails() {
         let env = setup();
         let id = create(&env, env.entity_id, "Secreta").expect("create");
@@ -992,7 +1208,7 @@ mod tests {
         {
             let dk = env.app.state::<DataKey>();
             let mut guard = dk.0.lock().unwrap();
-            *guard = Some([0u8; 32]);
+            *guard = Some(Zeroizing::new([0u8; 32]));
         }
 
         let err = get(&env, &id).unwrap_err();

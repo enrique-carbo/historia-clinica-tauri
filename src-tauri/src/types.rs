@@ -1,17 +1,20 @@
 use rusqlite::Connection;
 use std::sync::Mutex;
+use zeroize::Zeroizing;
 
 // El contenedor seguro para compartir la conexión de SQLite
 pub struct DbState(pub Mutex<Option<Connection>>);
 
-// Aquí vivirá la llave maestra en RAM
-pub struct CryptoState(pub Mutex<Option<[u8; 32]>>);
+// Llave maestra en RAM. `Zeroizing` pone los bytes a cero al soltar el
+// Option (lock_vault / restore_backup) — sin esto, drop() solo libera
+// memoria y los bytes quedan residuales en el heap.
+pub struct CryptoState(pub Mutex<Option<Zeroizing<[u8; 32]>>>);
 
-// Aquí vivirá Llave asimétrica (Ed25519)
-pub struct SigningState(pub Mutex<Option<[u8; 32]>>);
+// Llave asimétrica (Ed25519) en RAM — misma garantía de zeroize-on-drop.
+pub struct SigningState(pub Mutex<Option<Zeroizing<[u8; 32]>>>);
 
-// Llave de cifrado compartida para datos médicos (entidades y notas)
-pub struct DataKey(pub Mutex<Option<[u8; 32]>>);
+// Llave de cifrado compartida para datos médicos (entidades y notas).
+pub struct DataKey(pub Mutex<Option<Zeroizing<[u8; 32]>>>);
 
 // Usuario con sesión activa en esta instalación (quién abrió la bóveda).
 // Los commands sensibles (usuarios, reset de contraseña, semilla) verifican

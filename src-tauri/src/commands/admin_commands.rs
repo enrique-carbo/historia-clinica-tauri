@@ -3,6 +3,7 @@ use crate::security::{auth, data_key, vault};
 use crate::types::{DbState, DataKey, SessionState, SessionUser};
 use tauri::{Manager, State};
 use uuid::Uuid;
+use zeroize::Zeroizing;
 
 /// Exige una sesión activa con rol `administrador`.
 /// Toda gestión sensible (usuarios, contraseñas, semilla, respaldos) pasa por
@@ -72,7 +73,8 @@ pub fn count_users(db_state: State<'_, DbState>) -> Result<i64, String> {
 #[tauri::command]
 pub fn admin_create_user(
     username: String,
-    password_plain: String,
+    // Zeroizing: se pone a cero al salir del comando.
+    password_plain: Zeroizing<String>,
     role: String,
     session_state: State<'_, SessionState>,
     db_state: State<'_, DbState>,
@@ -291,7 +293,7 @@ pub fn list_audit_log(
 #[tauri::command]
 pub fn admin_reset_password(
     target_user_id: String,
-    new_password: String,
+    new_password: Zeroizing<String>,
     app_handle: tauri::AppHandle,
     session_state: State<'_, SessionState>,
     db_state: State<'_, DbState>,
@@ -397,7 +399,7 @@ pub fn admin_reset_password(
 /// Solo administrador con bóveda abierta (la DataKey está en RAM).
 #[tauri::command]
 pub fn admin_rotate_seed(
-    phrase: String,
+    phrase: Zeroizing<String>,
     app_handle: tauri::AppHandle,
     session_state: State<'_, SessionState>,
     db_state: State<'_, DbState>,

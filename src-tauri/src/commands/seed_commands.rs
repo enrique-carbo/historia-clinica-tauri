@@ -1,4 +1,5 @@
 use crate::security::seed;
+use zeroize::Zeroizing;
 
 /// Genera una nueva mnemonic de 6 palabras.
 /// Solo se puede llamar si no hay seed verificada.
@@ -11,7 +12,7 @@ pub fn generate_seed() -> Result<String, String> {
 
 /// Verifica si una frase semilla coincide con la generada.
 #[tauri::command]
-pub fn verify_seed(phrase: String) -> Result<bool, String> {
+pub fn verify_seed(phrase: Zeroizing<String>) -> Result<bool, String> {
     let is_valid = seed::verify_seed_phrase(&phrase)?;
     if is_valid {
         println!("🌱 [Seed] Frase verificada correctamente");
@@ -24,14 +25,14 @@ pub fn verify_seed(phrase: String) -> Result<bool, String> {
 /// Deriva una clave de cifrado a partir de una frase semilla.
 /// Esta clave puede usarse como capa adicional de protección.
 #[tauri::command]
-pub fn derive_key_from_seed(phrase: String) -> Result<String, String> {
+pub fn derive_key_from_seed(phrase: Zeroizing<String>) -> Result<String, String> {
     let key = seed::derive_key_from_seed(&phrase)?;
     Ok(hex::encode(key))
 }
 
 /// Calcula el hash de la frase semilla para persistencia.
 #[tauri::command]
-pub fn hash_seed(phrase: String) -> Result<String, String> {
+pub fn hash_seed(phrase: Zeroizing<String>) -> Result<String, String> {
     Ok(seed::hash_seed_phrase(&phrase))
 }
 

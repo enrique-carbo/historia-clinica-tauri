@@ -23,6 +23,7 @@ pub use seed_commands::*;
 use crate::types::{CryptoState, DataKey, DbState};
 use rusqlite::Connection;
 use tauri::State;
+use zeroize::Zeroizing;
 
 /// Ejecuta operaciones sobre la DB manteniendo el Mutex bloqueado el menor tiempo posible.
 /// Recibe una función (closure) que usa la conexión, y devuelve su resultado.
@@ -38,17 +39,25 @@ where
 }
 
 /// Extrae la llave maestra de la RAM.
-/// Aquí sí usamos .cloned() porque un arreglo de 32 bytes ([u8; 32]) SÍ es seguro de clonar.
-pub fn get_key(crypto_state: &State<'_, CryptoState>) -> Result<[u8; 32], String> {
+///
+/// Devuelve `Zeroizing` porque esta llamada **clona** la llave: esa copia
+/// vivirá en el stack del caller y debe ponerse a cero al caer, no quedar
+/// residual en el heap/stack. Deref coercion (`&key` → `&[u8; 32]`) mantiene
+/// inalterados los call sites.
+pub fn get_key(crypto_state: &State<'_, CryptoState>) -> Result<Zeroizing<[u8; 32]>, String> {
     let guard = crypto_state.0.lock().unwrap();
     guard
         .as_ref()
-        .cloned()
+        .map(|k| Zeroizing::new(**k))
         .ok_or("Sesión no desbloqueada. La llave maestra no está en memoria.".to_string())
 }
 
-/// Helper: Extraer la data key del DataKey state
-pub fn get_data_key(data_key_state: &DataKey) -> Result<[u8; 32], String> {
+/// Helper: Extraer la data key del DataKey state.
+/// Igual que `get_key`: la copia que se devuelve se zeroizea al soltarse.
+pub fn get_data_key(data_key_state: &DataKey) -> Result<Zeroizing<[u8; 32]>, String> {
     let guard = data_key_state.0.lock().map_err(|_| "Lock poisoned")?;
-    guard.ok_or("Data key no inicializada. ¿Reiniciaste la aplicación?".to_string())
+    guard
+        .as_ref()
+        .map(|k| Zeroizing::new(**k))
+        .ok_or("Data key no inicializada. ¿Reiniciaste la aplicación?".to_string())
 }

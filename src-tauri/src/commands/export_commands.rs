@@ -136,6 +136,7 @@ mod tests {
     use std::collections::HashMap;
     use std::sync::Mutex;
     use tauri::Manager;
+    use zeroize::Zeroizing;
 
     const DATA_KEY: [u8; 32] = [7u8; 32];
 
@@ -210,11 +211,11 @@ mod tests {
         let app = tauri::test::mock_app();
         app.manage(DbState(Mutex::new(Some(conn))));
         app.manage(DataKey(Mutex::new(if data_key_present {
-            Some(DATA_KEY)
+            Some(Zeroizing::new(DATA_KEY))
         } else {
             None
         })));
-        app.manage(SigningState(Mutex::new(Some(private_bytes))));
+        app.manage(SigningState(Mutex::new(Some(Zeroizing::new(private_bytes)))));
 
         TestEnv {
             app,

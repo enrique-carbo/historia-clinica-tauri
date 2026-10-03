@@ -9,13 +9,25 @@ use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+use zeroize::Zeroizing;
 
 const VAULT_MAGIC_BYTES: &str = "HISTORIA_CLINICA_VAULT_OK";
+
+/// Resultado de `unlock_user_vault`:
+/// (master key, llave privada de firma, llave pública hex opcional).
+/// Las dos primeras son `Zeroizing` → se ponen a cero al soltarse.
+type UnlockOutcome = (Zeroizing<[u8; 32]>, Zeroizing<[u8; 32]>, Option<String>);
+
+/// Resultado de `reset_user_vault`:
+/// (master key nueva, llave privada nueva, llave pública hex).
+type ResetOutcome = (Zeroizing<[u8; 32]>, Zeroizing<[u8; 32]>, String);
 
 #[derive(Serialize, Deserialize)]
 struct VaultPayload {
     magic: String,
-    private_key: String,
+    // La llave privada en claro durante la (breve) serialización —
+    // Zeroizing la pone a cero al dropear este payload.
+    private_key: Zeroizing<String>,
 }
 
 /// Lee o genera la sal del KDF para un usuario.
@@ -38,11 +50,14 @@ fn get_or_create_kdf_salt(app_dir: &PathBuf, user_id: &str) -> Result<SaltString
 
 /// Inicializa o desbloquea el Vault de un usuario específico.
 /// Devuelve: (Llave de cifrado, Llave privada de firma, Llave pública opcional)
+///
+/// Ambas llaves vienen envueltas en `Zeroizing`: se ponen a cero cuando el
+/// caller las suelta, en vez de quedar como bytes residuales en el heap.
 pub fn unlock_user_vault(
     app_dir: PathBuf,
     user_id: &str,
     password: &str,
-) -> Result<([u8; 32], [u8; 32], Option<String>), String> {
+) -> Result<UnlockOutcome, String> {
     let vault_path = app_dir.join(format!("vault_{}.bin", user_id));
 
     let salt = get_or_create_kdf_salt(&app_dir, user_id)?;
@@ -61,11 +76,13 @@ pub fn unlock_user_vault(
                 if payload.magic == VAULT_MAGIC_BYTES {
                     println!("🔓 [Vault] Desbloqueo exitoso para: {}", user_id);
 
-                    let priv_key_bytes = BASE64
-                        .decode(payload.private_key)
-                        .map_err(|_| "Llave privada corrupta".to_string())?;
+                    let priv_key_bytes = Zeroizing::new(
+                        BASE64
+                            .decode(payload.private_key)
+                            .map_err(|_| "Llave privada corrupta".to_string())?,
+                    );
 
-                    let mut priv_key_array = [0u8; 32];
+                    let mut priv_key_array = Zeroizing::new([0u8; 32]);
                     priv_key_array.copy_from_slice(&priv_key_bytes);
 
                     Ok((master_key, priv_key_array, None))
@@ -79,15 +96,16 @@ pub fn unlock_user_vault(
         // --- CASO B: Primer inicio de sesión. Creamos el vault. ---
 
         let (signing_key, verifying_key) = crate::security::crypto::generate_keypair();
-        let priv_key_bytes = signing_key.to_bytes();
+        let priv_key_bytes = Zeroizing::new(signing_key.to_bytes());
         let pub_key_hex = hex::encode(verifying_key.to_bytes());
 
         let payload = VaultPayload {
             magic: VAULT_MAGIC_BYTES.to_string(),
-            private_key: BASE64.encode(priv_key_bytes),
+            private_key: Zeroizing::new(BASE64.encode(priv_key_bytes.as_slice())),
         };
-        let json_bytes =
-            serde_json::to_vec(&payload).map_err(|e| format!("Error serializando vault: {}", e))?;
+        let json_bytes = Zeroizing::new(
+            serde_json::to_vec(&payload).map_err(|e| format!("Error serializando vault: {}", e))?,
+        );
 
         let encrypted_data = encrypt_vault_data(&json_bytes, &master_key)?;
         fs::write(&vault_path, encrypted_data)
@@ -117,7 +135,7 @@ pub fn change_vault_password(
     user_id: &str,
     current_password: &str,
     new_password: &str,
-) -> Result<[u8; 32], String> {
+) -> Result<Zeroizing<[u8; 32]>, String> {
     if new_password == current_password {
         return Err("La nueva contraseña debe ser distinta a la actual".to_string());
     }
@@ -163,22 +181,23 @@ pub fn reset_user_vault(
     app_dir: PathBuf,
     user_id: &str,
     new_password: &str,
-) -> Result<([u8; 32], [u8; 32], String), String> {
+) -> Result<ResetOutcome, String> {
     let vault_path = app_dir.join(format!("vault_{}.bin", user_id));
 
     let salt = get_or_create_kdf_salt(&app_dir, user_id)?;
     let new_master = derive_key_from_password(new_password, &salt)?;
 
     let (signing_key, verifying_key) = crate::security::crypto::generate_keypair();
-    let priv_key_bytes = signing_key.to_bytes();
+    let priv_key_bytes = Zeroizing::new(signing_key.to_bytes());
     let pub_key_hex = hex::encode(verifying_key.to_bytes());
 
     let payload = VaultPayload {
         magic: VAULT_MAGIC_BYTES.to_string(),
-        private_key: BASE64.encode(priv_key_bytes),
+        private_key: Zeroizing::new(BASE64.encode(priv_key_bytes.as_slice())),
     };
-    let json_bytes =
-        serde_json::to_vec(&payload).map_err(|e| format!("Error serializando vault: {}", e))?;
+    let json_bytes = Zeroizing::new(
+        serde_json::to_vec(&payload).map_err(|e| format!("Error serializando vault: {}", e))?,
+    );
 
     let encrypted = encrypt_vault_data(&json_bytes, &new_master)?;
     fs::write(&vault_path, encrypted)
@@ -191,14 +210,17 @@ pub fn reset_user_vault(
     Ok((new_master, priv_key_bytes, pub_key_hex))
 }
 
-fn derive_key_from_password(password: &str, salt: &SaltString) -> Result<[u8; 32], String> {
+fn derive_key_from_password(
+    password: &str,
+    salt: &SaltString,
+) -> Result<Zeroizing<[u8; 32]>, String> {
     let argon2 = Argon2::default();
-    let mut key_bytes = [0u8; 32];
+    let mut key_bytes = Zeroizing::new([0u8; 32]);
     argon2
         .hash_password_into(
             password.as_bytes(),
             salt.as_str().as_bytes(),
-            &mut key_bytes,
+            &mut *key_bytes,
         )
         .map_err(|e| format!("Error derivando clave maestra: {}", e))?;
     Ok(key_bytes)
@@ -217,7 +239,9 @@ fn encrypt_vault_data(data: &[u8], key: &[u8; 32]) -> Result<Vec<u8>, String> {
     Ok(final_data)
 }
 
-fn decrypt_vault_data(data: &[u8], key: &[u8; 32]) -> Result<Vec<u8>, String> {
+/// Descifra el vault. El buffer devuelto contiene el JSON con la llave
+/// privada en claro → `Zeroizing` lo pone a cero al salir de scope.
+fn decrypt_vault_data(data: &[u8], key: &[u8; 32]) -> Result<Zeroizing<Vec<u8>>, String> {
     if data.len() < 12 {
         return Err("Archivo de vault corrupto (muy corto)".to_string());
     }
@@ -226,6 +250,7 @@ fn decrypt_vault_data(data: &[u8], key: &[u8; 32]) -> Result<Vec<u8>, String> {
     let ciphertext = &data[12..];
     cipher
         .decrypt(nonce, ciphertext)
+        .map(Zeroizing::new)
         .map_err(|_| "Error al descifrar vault".to_string())
 }
 

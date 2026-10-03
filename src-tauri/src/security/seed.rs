@@ -1,6 +1,7 @@
 use rand::seq::SliceRandom;
 use sha2::{Digest, Sha256};
 use std::sync::Mutex;
+use zeroize::Zeroizing;
 
 /// Word list para generación de mnemonic (3073 palabras únicas, sin duplicados ni tildes; la ñ se conserva)
 const WORD_LIST: &[&str] = &[
@@ -314,8 +315,9 @@ const WORD_LIST: &[&str] = &[
     "soto", "soval", "soyez",
 ];
 
-/// Estado global para la seed phrase (solo durante la sesión)
-static SEED_PHRASE: Mutex<Option<String>> = Mutex::new(None);
+/// Estado global para la seed phrase (solo durante la sesión).
+/// `Zeroizing` la pone a cero al reemplazarse o al salir del proceso.
+static SEED_PHRASE: Mutex<Option<Zeroizing<String>>> = Mutex::new(None);
 
 /// Número de palabras en la mnemonic
 pub const SEED_WORD_COUNT: usize = 6;
@@ -336,18 +338,19 @@ pub fn generate_mnemonic() -> Result<String, String> {
 
     // Guardar en memoria para verificación posterior
     let mut stored = SEED_PHRASE.lock().map_err(|_| "Lock poisoned".to_string())?;
-    *stored = Some(phrase.clone());
+    *stored = Some(Zeroizing::new(phrase.clone()));
 
     Ok(phrase)
 }
 
-/// Deriva una clave de 32 bytes a partir de una frase semilla
-pub fn derive_key_from_seed(phrase: &str) -> Result<[u8; 32], String> {
+/// Deriva una clave de 32 bytes a partir de una frase semilla.
+/// El resultado es `Zeroizing`: se pone a cero al soltarse.
+pub fn derive_key_from_seed(phrase: &str) -> Result<Zeroizing<[u8; 32]>, String> {
     let normalized = normalize_seed_phrase(phrase);
     let mut hasher = Sha256::new();
     hasher.update(normalized.as_bytes());
     let result = hasher.finalize();
-    let mut key = [0u8; 32];
+    let mut key = Zeroizing::new([0u8; 32]);
     key.copy_from_slice(&result);
     Ok(key)
 }
@@ -357,7 +360,7 @@ pub fn verify_seed_phrase(phrase: &str) -> Result<bool, String> {
     let stored = SEED_PHRASE
         .lock()
         .map_err(|_| "Lock poisoned".to_string())?;
-    let stored_phrase = stored
+    let stored_phrase: &Zeroizing<String> = stored
         .as_ref()
         .ok_or("No hay frase semilla en memoria".to_string())?;
 

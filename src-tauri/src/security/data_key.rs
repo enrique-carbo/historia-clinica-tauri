@@ -5,6 +5,7 @@ use aes_gcm::{
 use rand::rngs::OsRng;
 use rand::RngCore;
 use std::path::{Path, PathBuf};
+use zeroize::Zeroizing;
 
 use crate::security::seed;
 
@@ -52,8 +53,9 @@ pub fn wrap_key(data_key: &[u8; 32], wrapping_key: &[u8; 32]) -> Result<Vec<u8>,
     Ok(blob)
 }
 
-/// Desenvuelve una data_key.
-pub fn unwrap_key(blob: &[u8], wrapping_key: &[u8; 32]) -> Result<[u8; 32], String> {
+/// Desenvuelve una data_key. El resultado es `Zeroizing` → se pone a cero
+/// al soltarse, sin dejar copias residuales en el heap.
+pub fn unwrap_key(blob: &[u8], wrapping_key: &[u8; 32]) -> Result<Zeroizing<[u8; 32]>, String> {
     if blob.len() < WRAP_OVERHEAD {
         return Err("Wrap de data_key corrupto (muy corto)".to_string());
     }
@@ -61,14 +63,18 @@ pub fn unwrap_key(blob: &[u8], wrapping_key: &[u8; 32]) -> Result<[u8; 32], Stri
     let nonce = Nonce::from_slice(&blob[..WRAP_NONCE_SIZE]);
     let ciphertext = &blob[WRAP_NONCE_SIZE..];
 
-    let plain = cipher
-        .decrypt(nonce, ciphertext)
-        .map_err(|_| "Data_key corrupta o wrapping key incorrecta".to_string())?;
+    let plain: Zeroizing<Vec<u8>> = Zeroizing::new(
+        cipher
+            .decrypt(nonce, ciphertext)
+            .map_err(|_| "Data_key corrupta o wrapping key incorrecta".to_string())?,
+    );
 
-    let arr: [u8; 32] = plain
-        .as_slice()
-        .try_into()
-        .map_err(|_| "Data_key descifrada inválida".to_string())?;
+    let arr: Zeroizing<[u8; 32]> = Zeroizing::new(
+        plain
+            .as_slice()
+            .try_into()
+            .map_err(|_| "Data_key descifrada inválida".to_string())?,
+    );
     Ok(arr)
 }
 
@@ -102,7 +108,7 @@ pub fn save_master_wrap(
 
 /// Migra el legacy `.data_key` en hex plano a un wrap seguro.
 /// Devuelve la data_key y borra el archivo legacy.
-fn migrate_legacy(app_dir: &Path) -> Result<Option<[u8; 32]>, String> {
+fn migrate_legacy(app_dir: &Path) -> Result<Option<Zeroizing<[u8; 32]>>, String> {
     let path = legacy_path(app_dir);
     if !path.exists() {
         return Ok(None);
@@ -110,15 +116,15 @@ fn migrate_legacy(app_dir: &Path) -> Result<Option<[u8; 32]>, String> {
 
     let hex_str = std::fs::read_to_string(&path)
         .map_err(|e| format!("Error leyendo data_key legacy: {}", e))?;
-    let bytes =
-        hex::decode(hex_str.trim()).map_err(|_| "Data_key legacy corrupta".to_string())?;
+    let bytes: Zeroizing<Vec<u8>> =
+        Zeroizing::new(hex::decode(hex_str.trim()).map_err(|_| "Data_key legacy corrupta")?);
 
-    let mut key = [0u8; 32];
     if bytes.len() != 32 {
         let _ = std::fs::remove_file(&path);
         return Err("Data_key legacy longitud inválida".to_string());
     }
-    key.copy_from_slice(&bytes);
+    let mut key = Zeroizing::new([0u8; 32]);
+    key.copy_from_slice(bytes.as_slice());
 
     // Borrar el archivo en claro
     std::fs::remove_file(&path)
@@ -146,7 +152,7 @@ pub fn resolve_data_key(
     user_id: &str,
     master_key: &[u8; 32],
     seed_phrase: Option<&str>,
-) -> Result<[u8; 32], String> {
+) -> Result<Zeroizing<[u8; 32]>, String> {
     let user_path = user_wrap_path(app_dir, user_id);
 
     // 1. Fast path: wrap personal del usuario.
@@ -208,8 +214,8 @@ pub fn resolve_data_key(
     }
 
     // 5. Primera instalación: generar data_key nueva
-    let mut data_key = [0u8; 32];
-    OsRng.fill_bytes(&mut data_key);
+    let mut data_key = Zeroizing::new([0u8; 32]);
+    OsRng.fill_bytes(&mut *data_key);
     save_user_wrap(app_dir, user_id, &data_key, master_key)?;
     println!("🔑 [DataKey] Nueva data_key generada y envuelta para: {}", user_id);
     Ok(data_key)
@@ -236,7 +242,7 @@ mod tests {
         let wk = random_key();
         let blob = wrap_key(&data, &wk).unwrap();
         let recovered = unwrap_key(&blob, &wk).unwrap();
-        assert_eq!(data, recovered);
+        assert_eq!(data, *recovered);
     }
 
     #[test]
@@ -345,7 +351,7 @@ mod tests {
         std::fs::write(dir.path().join(".data_key"), hex::encode(legacy_key)).unwrap();
 
         let resolved = resolve_data_key(dir.path(), "user_a", &mk, None).unwrap();
-        assert_eq!(resolved, legacy_key);
+        assert_eq!(*resolved, legacy_key);
         // Legacy borrado
         assert!(!dir.path().join(".data_key").exists());
         // Wrap personal creado
@@ -364,6 +370,6 @@ mod tests {
         let seed_key = seed::derive_key_from_seed(phrase).unwrap();
         let blob = std::fs::read(dir.path().join(".data_key.master")).unwrap();
         let recovered = unwrap_key(&blob, &seed_key).unwrap();
-        assert_eq!(dk, recovered);
+        assert_eq!(dk, *recovered);
     }
 }

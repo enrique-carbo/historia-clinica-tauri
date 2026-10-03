@@ -4,17 +4,20 @@ use crate::types::{CryptoState, DataKey, DbState, SessionState, SessionUser};
 use crate::security::vault;
 use tauri::{Manager, State};
 use uuid::Uuid;
+use zeroize::Zeroizing;
 
 #[derive(serde::Deserialize)]
 pub struct RegisterInput {
     pub username: String,
-    pub password_plain: String,
+    // Zeroizing<String>: la contraseña se pone a cero al dropearse en vez de
+    // quedar como bytes residuales en el heap (feature `serde` de zeroize).
+    pub password_plain: Zeroizing<String>,
 }
 
 #[derive(serde::Deserialize)]
 pub struct LoginInput {
     pub username: String,
-    pub password_plain: String,
+    pub password_plain: Zeroizing<String>,
 }
 
 #[derive(serde::Serialize)]
@@ -129,8 +132,8 @@ pub fn login_user(
 #[tauri::command]
 pub fn unlock_vault(
     user_id: String,
-    password: String,
-    seed_phrase: Option<String>,
+    password: Zeroizing<String>,
+    seed_phrase: Option<Zeroizing<String>>,
     app_handle: tauri::AppHandle,
     db_state: State<'_, crate::types::DbState>,
     crypto_state: State<'_, CryptoState>,
@@ -215,7 +218,7 @@ pub fn unlock_vault(
         &app_dir,
         &user_id,
         &master_key,
-        seed_phrase.as_deref(),
+        seed_phrase.as_deref().map(|s| s.as_str()),
     )?;
 
     // 3. Inyectar llaves en RAM solo si TODO tuvo éxito
@@ -247,8 +250,8 @@ pub fn unlock_vault(
 #[tauri::command]
 pub fn change_password(
     user_id: String,
-    current_password: String,
-    new_password: String,
+    current_password: Zeroizing<String>,
+    new_password: Zeroizing<String>,
     app_handle: tauri::AppHandle,
     db_state: State<'_, DbState>,
     crypto_state: State<'_, CryptoState>,
@@ -270,7 +273,10 @@ pub fn change_password(
     //    puede re-envolver el wrap personal.
     let data_key = {
         let guard = data_key_state.0.lock().map_err(|_| "Lock poisoned")?;
-        guard.ok_or("La bóveda está cerrada. Abrila antes de cambiar la contraseña.".to_string())?
+        guard
+            .as_ref()
+            .cloned()
+            .ok_or("La bóveda está cerrada. Abrila antes de cambiar la contraseña.".to_string())?
     };
 
     // 2. Verifica contraseña actual + re-cifra vault → nueva master
@@ -334,7 +340,7 @@ pub fn lock_vault(
 /// Se llama desde SeedPhraseSetup después de verificar la frase.
 #[tauri::command]
 pub fn setup_seed_master_wrap(
-    phrase: String,
+    phrase: Zeroizing<String>,
     app_handle: tauri::AppHandle,
     data_key_state: State<'_, DataKey>,
 ) -> Result<(), String> {
@@ -345,6 +351,8 @@ pub fn setup_seed_master_wrap(
 
     let dk_guard = data_key_state.0.lock().map_err(|_| "Lock poisoned")?;
     let data_key = dk_guard
+        .as_ref()
+        .cloned()
         .ok_or("Data key no disponible. Abrí la bóveda primero.".to_string())?;
 
     data_key::save_master_wrap(&app_dir, &data_key, &phrase)?;
@@ -381,9 +389,9 @@ pub struct RecoveryOutcome {
     pub user_id: String,
     pub username: String,
     pub role: String,
-    pub master_key: [u8; 32],
-    pub private_signing_key: [u8; 32],
-    pub data_key: [u8; 32],
+    pub master_key: Zeroizing<[u8; 32]>,
+    pub private_signing_key: Zeroizing<[u8; 32]>,
+    pub data_key: Zeroizing<[u8; 32]>,
 }
 
 /// Restablece la contraseña del administrador (sin conocer la previa)
@@ -527,8 +535,8 @@ pub fn seed_recovery_core(
 /// sesión completamente abierta (vault, firma y data_key en RAM).
 #[tauri::command]
 pub fn seed_recovery(
-    seed_phrase: String,
-    new_password: String,
+    seed_phrase: Zeroizing<String>,
+    new_password: Zeroizing<String>,
     app_handle: tauri::AppHandle,
     db_state: State<'_, DbState>,
     session_state: State<'_, SessionState>,
@@ -597,7 +605,7 @@ mod tests {
     }
 
     /// Instalación de prueba: admin con vault propio, data_key y master wrap.
-    fn setup_installation() -> (TempDir, rusqlite::Connection, [u8; 32], String) {
+    fn setup_installation() -> (TempDir, rusqlite::Connection, Zeroizing<[u8; 32]>, String) {
         let dir = TempDir::new().unwrap();
         let conn = crate::db::database::init_db(dir.path().to_path_buf()).unwrap();
 
@@ -632,8 +640,8 @@ mod tests {
 
         // data_key + master wrap con la frase
         let data_key_val = {
-            let mut dk = [0u8; 32];
-            rand::RngCore::fill_bytes(&mut rand::rngs::OsRng, &mut dk);
+            let mut dk = Zeroizing::new([0u8; 32]);
+            rand::RngCore::fill_bytes(&mut rand::rngs::OsRng, &mut *dk);
             dk
         };
         data_key::save_master_wrap(dir.path(), &data_key_val, PHRASE).unwrap();
@@ -793,5 +801,50 @@ mod tests {
 
         let err = expect_err(seed_recovery_core(dir.path(), &conn, PHRASE, NEW_PASSWORD));
         assert!(err.contains("no tiene una frase semilla"), "error: {}", err);
+    }
+
+    #[test]
+    fn test_lock_vault_clears_all_keys() {
+        use std::sync::Mutex;
+        use tauri::Manager;
+
+        let app = tauri::test::mock_app();
+        app.manage(CryptoState(Mutex::new(Some(Zeroizing::new([9u8; 32])))));
+        app.manage(crate::types::SigningState(Mutex::new(Some(
+            Zeroizing::new([8u8; 32]),
+        ))));
+        app.manage(DataKey(Mutex::new(Some(Zeroizing::new([7u8; 32])))));
+        app.manage(SessionState(Mutex::new(Some(SessionUser {
+            user_id: "u1".into(),
+            username: "admin".into(),
+            role: "administrador".into(),
+        }))));
+
+        // Bóveda abierta → las extracciones funcionan
+        assert!(crate::commands::get_key(&app.state::<CryptoState>()).is_ok());
+        assert!(crate::commands::get_data_key(&app.state::<DataKey>()).is_ok());
+        assert!(is_vault_unlocked(app.state::<CryptoState>()));
+
+        lock_vault(
+            app.state::<CryptoState>(),
+            app.state::<crate::types::SigningState>(),
+            app.state::<DataKey>(),
+            app.state::<SessionState>(),
+        )
+        .unwrap();
+
+        // Tras lock_vault ninguna llave es extraíble y la sesión está limpia
+        let err = crate::commands::get_key(&app.state::<CryptoState>()).unwrap_err();
+        assert!(err.contains("no está en memoria"), "err: {}", err);
+        let err = crate::commands::get_data_key(&app.state::<DataKey>()).unwrap_err();
+        assert!(err.contains("no inicializada"), "err: {}", err);
+        assert!(!is_vault_unlocked(app.state::<CryptoState>()));
+        assert!(app.state::<SessionState>().0.lock().unwrap().is_none());
+        assert!(app
+            .state::<crate::types::SigningState>()
+            .0
+            .lock()
+            .unwrap()
+            .is_none());
     }
 }
