@@ -273,7 +273,7 @@ pub fn search_entities(
         let data = decrypt_entity_blob(&enc_data_blob, &data_key)?; // ← Usar data_key
 
         let mut found = false;
-        for (_, value) in &data {
+        for value in data.values() {
             if value.to_lowercase().contains(&query.to_lowercase()) {
                 found = true;
                 break;

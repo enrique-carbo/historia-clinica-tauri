@@ -815,10 +815,9 @@ mod tests {
         conn.execute(
             "INSERT INTO professional_profiles
                 (user_id, full_name_ciphertext, full_name_nonce,
-                 license_number_ciphertext, license_number_nonce,
                  specialty_ciphertext, specialty_nonce,
                  public_key, updated_at)
-             VALUES (?1, ?2, ?3, '', '', '', '', ?4, ?5)",
+             VALUES (?1, ?2, ?3, '', '', ?4, ?5)",
             params![
                 author_id,
                 name_enc.ciphertext,
@@ -1385,9 +1384,9 @@ mod tests {
         conn.execute(
             "INSERT INTO professional_profiles
                 (user_id, full_name_ciphertext, full_name_nonce,
-                 license_number_ciphertext, license_number_nonce,
-                 specialty_ciphertext, specialty_nonce, public_key, updated_at)
-             VALUES (?1, '', '', '', '', '', '', ?2, ?3)",
+                 specialty_ciphertext, specialty_nonce,
+                 public_key, updated_at)
+             VALUES (?1, '', '', '', '', ?2, ?3)",
             params![user_id, public_key, now],
         )
         .expect("insert profile");

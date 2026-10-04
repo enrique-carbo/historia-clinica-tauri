@@ -95,7 +95,7 @@ pub fn run() {
 }
 
 /// Genera o lee la sal de instalación para blind index.
-fn get_or_create_installation_salt(app_dir: &std::path::PathBuf) -> Result<Vec<u8>, String> {
+fn get_or_create_installation_salt(app_dir: &std::path::Path) -> Result<Vec<u8>, String> {
     let salt_path = app_dir.join(".installation_salt");
 
     if salt_path.exists() {

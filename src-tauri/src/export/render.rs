@@ -1,3 +1,4 @@
+use crate::commands::License;
 use crate::security::crypto;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
@@ -9,11 +10,14 @@ pub struct ExportPatient {
     pub created_at: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ExportProfessional {
     pub full_name: String,
-    pub license_number: String,
+    pub profession: String,
     pub specialty: String,
+    pub licenses: Vec<License>,
+    pub city: String,
+    pub country: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -111,7 +115,7 @@ fn label_of<'a>(list: &[(&'a str, &'a str)], key: &'a str) -> &'a str {
 }
 
 fn humanize(key: &str) -> String {
-    key.split(|c| c == '_' || c == '-')
+    key.split(['_', '-'])
         .map(|word| {
             let mut chars = word.chars();
             match chars.next() {
@@ -233,10 +237,35 @@ pub fn render_markdown(snapshot: &ExportSnapshot) -> String {
 
     out.push_str("## Profesional\n\n");
     out.push_str("| Campo | Valor |\n|---|---|\n");
-    let professional_rows: [(&str, &str); 3] = [
+    let licenses_joined = snapshot
+        .professional
+        .licenses
+        .iter()
+        .filter(|l| !l.number.trim().is_empty())
+        .map(|l| {
+            if l.jurisdiction.trim().is_empty() {
+                l.number.trim().to_string()
+            } else {
+                format!("{} — {}", l.number.trim(), l.jurisdiction.trim())
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" · ");
+    let location = match (
+        snapshot.professional.city.trim(),
+        snapshot.professional.country.trim(),
+    ) {
+        ("", "") => String::new(),
+        (city, "") => city.to_string(),
+        ("", country) => country.to_string(),
+        (city, country) => format!("{}, {}", city, country),
+    };
+    let professional_rows: Vec<(&str, &str)> = vec![
         ("Nombre", &snapshot.professional.full_name),
-        ("Matrícula", &snapshot.professional.license_number),
+        ("Profesión", &snapshot.professional.profession),
         ("Especialidad", &snapshot.professional.specialty),
+        ("Matrículas", &licenses_joined),
+        ("Ubicación", &location),
     ];
     for (label, value) in professional_rows {
         if value.trim().is_empty() {
@@ -398,8 +427,20 @@ mod tests {
             },
             professional: ExportProfessional {
                 full_name: "Dra. Ana Test".to_string(),
-                license_number: "MP-12345".to_string(),
+                profession: "Médica".to_string(),
                 specialty: "Clínica Médica".to_string(),
+                licenses: vec![
+                    License {
+                        number: "MP-12345".to_string(),
+                        jurisdiction: "Córdoba".to_string(),
+                    },
+                    License {
+                        number: "MN-67890".to_string(),
+                        jurisdiction: "CABA".to_string(),
+                    },
+                ],
+                city: "Córdoba".to_string(),
+                country: "Argentina".to_string(),
             },
             entries: vec![
                 ExportEntry {
@@ -435,7 +476,9 @@ mod tests {
         assert!(md.contains("# Historia Clínica — María José García López"));
         assert!(md.contains("| DNI / Documento | 12.345.678 |"));
         assert!(md.contains("| Nombre | Dra. Ana Test |"));
-        assert!(md.contains("| Matrícula | MP-12345 |"));
+        assert!(md.contains("| Profesión | Médica |"));
+        assert!(md.contains("| Matrículas | MP-12345 — Córdoba · MN-67890 — CABA |"));
+        assert!(md.contains("| Ubicación | Córdoba, Argentina |"));
         assert!(md.contains("> Documento generado el 30/09/2026 14:30"));
     }
 
@@ -495,11 +538,7 @@ mod tests {
                 data: HashMap::new(),
                 created_at: String::new(),
             },
-            professional: ExportProfessional {
-                full_name: String::new(),
-                license_number: String::new(),
-                specialty: String::new(),
-            },
+            professional: ExportProfessional::default(),
             entries: vec![],
             generated_at: String::new(),
         };

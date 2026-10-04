@@ -1,12 +1,15 @@
 use crate::export::render::{
     export_filename, render_markdown, ExportEntry, ExportPatient, ExportProfessional, ExportSnapshot,
 };
-use crate::types::{DataKey, DbState};
+use crate::types::{DataKey, DbState, SessionState};
 use serde::Serialize;
 use std::path::Path;
 use tauri::{AppHandle, Manager, State};
 
-use super::{get_entity, get_entries_by_subject, get_my_profile};
+use super::{
+    get_entity, get_entries_by_subject, professional_profile_commands::load_profile,
+    require_session,
+};
 
 #[derive(Debug, Serialize)]
 pub struct ExportResult {
@@ -17,13 +20,16 @@ pub struct ExportResult {
 
 /// Arma el snapshot completo (paciente + perfil + TODAS las entries) ya
 /// descifrado, listo para renderizar. Falla si la bóveda está cerrada.
+/// El perfil profesional es el de la sesión activa — no se acepta un
+/// `user_id` del frontend.
 #[tauri::command]
 pub fn get_export_snapshot(
     subject_id: i64,
-    professional_user_id: String,
+    session_state: State<'_, SessionState>,
     db_state: State<'_, DbState>,
     data_key_state: State<'_, DataKey>,
 ) -> Result<ExportSnapshot, String> {
+    let session = require_session(&session_state)?;
     let entity = get_entity(subject_id, db_state.clone(), data_key_state.clone())?;
 
     let entries = get_entries_by_subject(
@@ -34,19 +40,18 @@ pub fn get_export_snapshot(
         data_key_state.clone(),
     )?;
 
-    let professional = match get_my_profile(professional_user_id, db_state, data_key_state) {
+    let professional = match load_profile(&session.user_id, &db_state, &data_key_state) {
         Ok(profile) => ExportProfessional {
             full_name: profile.full_name,
-            license_number: profile.license_number,
+            profession: profile.profession,
             specialty: profile.specialty,
+            licenses: profile.licenses,
+            city: profile.city,
+            country: profile.country,
         },
         Err(e) => {
             eprintln!("[Export] Perfil profesional no disponible: {}", e);
-            ExportProfessional {
-                full_name: String::new(),
-                license_number: String::new(),
-                specialty: String::new(),
-            }
+            ExportProfessional::default()
         }
     };
 
@@ -132,7 +137,8 @@ mod tests {
     use super::*;
     use crate::security::crypto;
     use crate::db::database::init_db;
-    use crate::types::SigningState;
+    use crate::types::{SessionState, SessionUser, SigningState};
+    use super::super::professional_profile_commands::License;
     use std::collections::HashMap;
     use std::sync::Mutex;
     use tauri::Manager;
@@ -142,7 +148,6 @@ mod tests {
 
     struct TestEnv {
         app: tauri::App<tauri::test::MockRuntime>,
-        author_id: String,
         entity_id: i64,
         _dir: tempfile::TempDir,
     }
@@ -166,23 +171,40 @@ mod tests {
         .expect("insert user");
 
         let name_enc = crypto::encrypt_text("Dra. Export Test", &DATA_KEY).expect("enc");
-        let lic_enc = crypto::encrypt_text("MP-99999", &DATA_KEY).expect("enc");
         let spec_enc = crypto::encrypt_text("Pediatría", &DATA_KEY).expect("enc");
+        let prof_enc = crypto::encrypt_text("Médica", &DATA_KEY).expect("enc");
+        let city_enc = crypto::encrypt_text("Córdoba", &DATA_KEY).expect("enc");
+        let country_enc = crypto::encrypt_text("Argentina", &DATA_KEY).expect("enc");
+        let licenses_json = serde_json::to_string(&[License {
+            number: "MP-99999".to_string(),
+            jurisdiction: "Córdoba".to_string(),
+        }])
+        .expect("licenses json");
+        let lic_enc = crypto::encrypt_text(&licenses_json, &DATA_KEY).expect("enc");
         conn.execute(
             "INSERT INTO professional_profiles
                 (user_id, full_name_ciphertext, full_name_nonce,
-                 license_number_ciphertext, license_number_nonce,
                  specialty_ciphertext, specialty_nonce,
+                 profession_ciphertext, profession_nonce,
+                 licenses_ciphertext, licenses_nonce,
+                 city_ciphertext, city_nonce,
+                 country_ciphertext, country_nonce,
                  public_key, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
             rusqlite::params![
                 author_id,
                 name_enc.ciphertext,
                 name_enc.nonce,
-                lic_enc.ciphertext,
-                lic_enc.nonce,
                 spec_enc.ciphertext,
                 spec_enc.nonce,
+                prof_enc.ciphertext,
+                prof_enc.nonce,
+                lic_enc.ciphertext,
+                lic_enc.nonce,
+                city_enc.ciphertext,
+                city_enc.nonce,
+                country_enc.ciphertext,
+                country_enc.nonce,
                 public_hex,
                 now
             ],
@@ -216,10 +238,14 @@ mod tests {
             None
         })));
         app.manage(SigningState(Mutex::new(Some(Zeroizing::new(private_bytes)))));
+        app.manage(SessionState(Mutex::new(Some(SessionUser {
+            user_id: author_id.clone(),
+            username: "dra.export".to_string(),
+            role: "medico".to_string(),
+        }))));
 
         TestEnv {
             app,
-            author_id,
             entity_id,
             _dir: dir,
         }
@@ -228,7 +254,7 @@ mod tests {
     fn snapshot_of(env: &TestEnv) -> Result<ExportSnapshot, String> {
         get_export_snapshot(
             env.entity_id,
-            env.author_id.clone(),
+            env.app.state::<SessionState>(),
             env.app.state::<DbState>(),
             env.app.state::<DataKey>(),
         )
@@ -245,8 +271,17 @@ mod tests {
             Some("Pérez")
         );
         assert_eq!(snapshot.professional.full_name, "Dra. Export Test");
-        assert_eq!(snapshot.professional.license_number, "MP-99999");
+        assert_eq!(snapshot.professional.profession, "Médica");
         assert_eq!(snapshot.professional.specialty, "Pediatría");
+        assert_eq!(
+            snapshot.professional.licenses,
+            vec![License {
+                number: "MP-99999".to_string(),
+                jurisdiction: "Córdoba".to_string(),
+            }]
+        );
+        assert_eq!(snapshot.professional.city, "Córdoba");
+        assert_eq!(snapshot.professional.country, "Argentina");
         assert!(!snapshot.generated_at.is_empty());
     }
 

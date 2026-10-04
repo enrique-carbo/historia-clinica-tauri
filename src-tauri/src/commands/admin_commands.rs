@@ -17,6 +17,17 @@ pub fn require_admin(session_state: &State<'_, SessionState>) -> Result<SessionU
     Ok(session.clone())
 }
 
+/// Exige una sesión activa (cualquier rol). Para operaciones que todo
+/// usuario autenticado puede hacer sobre **su propio** recurso — el
+/// `user_id` nunca se confía en lo que manda el frontend.
+pub fn require_session(session_state: &State<'_, SessionState>) -> Result<SessionUser, String> {
+    let guard = session_state.0.lock().map_err(|_| "Lock poisoned")?;
+    guard
+        .as_ref()
+        .cloned()
+        .ok_or_else(|| "Sesión no iniciada. Ingresá de nuevo.".to_string())
+}
+
 /// Registra una acción sensible en `audit_log`.
 pub fn record_audit(
     conn: &rusqlite::Connection,
@@ -111,9 +122,9 @@ pub fn admin_create_user(
 
         conn.execute(
             "INSERT INTO professional_profiles (user_id, full_name_ciphertext, full_name_nonce,
-                license_number_ciphertext, license_number_nonce, specialty_ciphertext, specialty_nonce,
+                specialty_ciphertext, specialty_nonce,
                 public_key, updated_at)
-             VALUES (?1, '', '', '', '', '', '', '', ?2);",
+             VALUES (?1, '', '', '', '', ?, ?2);",
             rusqlite::params![&user_id, &now],
         )
         .map_err(|e| format!("Error al crear el perfil: {}", e))?;
@@ -408,7 +419,7 @@ pub fn admin_rotate_seed(
     let actor = require_admin(&session_state)?;
 
     // Validación de formato/checksum de la mnemonic antes de persistir.
-    if !crate::security::seed::verify_seed_phrase(&phrase.trim())? {
+    if !crate::security::seed::verify_seed_phrase(phrase.trim())? {
         return Err("La frase semilla no es válida.".to_string());
     }
 

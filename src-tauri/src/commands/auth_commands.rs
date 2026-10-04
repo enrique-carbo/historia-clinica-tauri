@@ -62,8 +62,8 @@ pub fn register_user(form: RegisterInput, db_state: State<'_, DbState>) -> Resul
 
         // 2. Insertamos un perfil profesional VACÍO (sin llaves todavía)
         conn.execute(
-            "INSERT INTO professional_profiles (user_id, full_name_ciphertext, full_name_nonce, license_number_ciphertext, license_number_nonce, specialty_ciphertext, specialty_nonce, public_key, updated_at)
-             VALUES (?1, '', '', '', '', '', '', '', ?2);",
+            "INSERT INTO professional_profiles (user_id, full_name_ciphertext, full_name_nonce, specialty_ciphertext, specialty_nonce, public_key, updated_at)
+             VALUES (?1, '', '', '', '', '', ?2);",
             rusqlite::params![&user_id, &now],
         ).map_err(|e| format!("Error al crear el perfil: {}", e))?;
 

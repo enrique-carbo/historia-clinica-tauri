@@ -8,7 +8,7 @@ use rand::rngs::OsRng;
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use zeroize::Zeroizing;
 
 const VAULT_MAGIC_BYTES: &str = "HISTORIA_CLINICA_VAULT_OK";
@@ -32,13 +32,13 @@ struct VaultPayload {
 
 /// Lee o genera la sal del KDF para un usuario.
 /// La sal se guarda en `vault_{user_id}.salt` (no es secreta, solo única por usuario).
-fn get_or_create_kdf_salt(app_dir: &PathBuf, user_id: &str) -> Result<SaltString, String> {
+fn get_or_create_kdf_salt(app_dir: &Path, user_id: &str) -> Result<SaltString, String> {
     let salt_path = app_dir.join(format!("vault_{}.salt", user_id));
 
     if salt_path.exists() {
         let salt_str = fs::read_to_string(&salt_path)
             .map_err(|e| format!("Error leyendo sal del vault: {}", e))?;
-        SaltString::from_b64(&salt_str.trim()).map_err(|e| format!("Sal corrupta: {}", e))
+        SaltString::from_b64(salt_str.trim()).map_err(|e| format!("Sal corrupta: {}", e))
     } else {
         let salt = SaltString::generate(&mut OsRng);
         fs::write(&salt_path, salt.as_str())
