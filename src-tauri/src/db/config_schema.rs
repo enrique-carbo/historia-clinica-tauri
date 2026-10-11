@@ -140,23 +140,62 @@ impl SchemaConfig {
 mod tests {
     use super::*;
 
-    fn schema() -> SchemaConfig {
-        from_embedded().expect("entity_schema.json embebido válido")
+    /// Fixture propia: estos tests prueban el MECANISMO (prefijo de groups +
+    /// required condicional), no el contenido de entity_schema.json — editar
+    /// labels, campos o required del schema real no debe romperlos.
+    fn fixture_schema() -> SchemaConfig {
+        serde_json::from_str(
+            r#"{
+                "version": 1,
+                "default_entity": "patient",
+                "entities": {
+                    "patient": {
+                        "label": "Paciente",
+                        "label_plural": "Pacientes",
+                        "blind_index_field": "dni",
+                        "fields": [
+                            {"name": "nombre", "label": "Nombre", "type": "text",
+                             "required": true, "encrypted": true},
+                            {"name": "telefono", "label": "Teléfono", "type": "tel",
+                             "required": false, "encrypted": true},
+                            {"name": "responsable", "label": "Responsable - Tutor",
+                             "type": "group", "required": false,
+                             "fields": [
+                                {"name": "nombre_completo", "label": "Nombre y Apellido Tutor",
+                                 "type": "text", "required": true, "encrypted": true},
+                                {"name": "telefono", "label": "Teléfono de Contacto",
+                                 "type": "tel", "required": true, "encrypted": true}
+                             ]}
+                        ]
+                    }
+                }
+            }"#,
+        )
+        .expect("fixture de schema válida")
     }
 
     fn base_patient_data() -> HashMap<String, String> {
         let mut data = HashMap::new();
         data.insert("nombre".to_string(), "Ana".to_string());
-        data.insert("apellido".to_string(), "Pérez".to_string());
-        data.insert("dni".to_string(), "30111222".to_string());
         data
     }
 
     #[test]
+    fn embedded_schema_parses_and_has_unique_keys() {
+        // Guardia de contenido: el JSON real debe parsear y el default_entity
+        // debe existir con labels sin claves duplicadas (los prefijos de
+        // groups evitan colisionar con campos top-level).
+        let s = from_embedded().expect("entity_schema.json embebido válido");
+        let labels = s.field_labels(&s.default_entity).expect("default_entity existe");
+        assert!(!labels.is_empty(), "sin campos para default_entity");
+        let unique: std::collections::HashSet<_> = labels.iter().map(|(k, _)| k).collect();
+        assert_eq!(unique.len(), labels.len(), "claves duplicadas en field_labels");
+    }
+
+    #[test]
     fn field_labels_flattens_groups_with_prefix() {
-        let labels = schema().field_labels("patient").expect("labels");
-        assert!(labels.contains(&("dni".to_string(), "DNI / Documento".to_string())));
-        assert!(labels.contains(&("ciudad".to_string(), "Ciudad".to_string())));
+        let labels = fixture_schema().field_labels("patient").expect("labels");
+        assert!(labels.contains(&("nombre".to_string(), "Nombre".to_string())));
         assert!(labels.contains(&(
             "responsable_nombre_completo".to_string(),
             "Nombre y Apellido Tutor".to_string()
@@ -165,20 +204,29 @@ mod tests {
             "responsable_telefono".to_string(),
             "Teléfono de Contacto".to_string()
         )));
-        // El prefijo evita la colisión con el teléfono del paciente.
+        // El prefijo desambigua: el teléfono del paciente NO lleva prefijo.
         assert!(labels.contains(&("telefono".to_string(), "Teléfono".to_string())));
+        // Orden: el grupo va al final, en la posición del schema.
+        let keys: Vec<&str> = labels.iter().map(|(k, _)| k.as_str()).collect();
+        assert_eq!(
+            keys,
+            vec!["nombre", "telefono", "responsable_nombre_completo", "responsable_telefono"]
+        );
     }
 
     #[test]
     fn group_required_applies_only_when_partially_filled() {
-        let s = schema();
+        let s = fixture_schema();
         let mut data = base_patient_data();
 
         // Grupo vacío con required:false → válido.
         s.validate_entity_data("patient", &data).expect("grupo vacío");
 
         // Grupo parcial → el subcampo required faltante debe rechazar.
-        data.insert("responsable_nombre_completo".to_string(), "Juan Tutor".to_string());
+        data.insert(
+            "responsable_nombre_completo".to_string(),
+            "Juan Tutor".to_string(),
+        );
         let err = s
             .validate_entity_data("patient", &data)
             .expect_err("grupo parcial debe fallar");
@@ -186,12 +234,13 @@ mod tests {
 
         // Grupo completo → válido.
         data.insert("responsable_telefono".to_string(), "555-1234".to_string());
-        s.validate_entity_data("patient", &data).expect("grupo completo");
+        s.validate_entity_data("patient", &data)
+            .expect("grupo completo");
     }
 
     #[test]
     fn top_level_required_still_enforced() {
-        let s = schema();
+        let s = fixture_schema();
         let mut data = base_patient_data();
         data.remove("nombre");
         let err = s

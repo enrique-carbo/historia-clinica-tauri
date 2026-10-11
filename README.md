@@ -303,7 +303,7 @@ Los commands se registran en `lib.rs` (`get_export_snapshot`, `export_history`),
 
 ## 🧪 Tests Automatizados
 
-El Core cuenta con 101 tests unitarios que cubren:
+El Core cuenta con 105 tests unitarios que cubren:
 | Módulo | Tests | Cobertura |
 |---|---|---|
 | `security/crypto.rs` | 13 | AES-GCM roundtrip, nonces únicos, clave incorrecta, manipulación, Blind Index, Firma Ed25519, derivación de pública desde privada |
@@ -312,6 +312,7 @@ El Core cuenta con 101 tests unitarios que cubren:
 | `security/data_key.rs` | 10 | Wrap/unwrap AES-GCM, prioridades de resolución, `SEED_REQUIRED`, migración legacy |
 | `security/backup.rs` | 6 | Creación de respaldo (manifest + copias idénticas), hash alterado rechazado, archivo faltante rechazado, schema más nuevo rechazado, path traversal rechazado, roundtrip restauración → DB con datos |
 | `db/migrations.rs` | 5 | DB nueva migra al latest, re-ejecución no-op con datos preservados, DB legacy sin versión migra idempotente, downgrade rechazado, migración fallida con rollback |
+| `db/config_schema.rs` | 4 | Parseo del schema embebido (claves de labels sin duplicados), aplanado de groups con prefijo `{group}_{campo}`, required condicional de grupo ("nada o todo"), required top-level |
 | `commands/auth_commands.rs` | 6 | **Break-glass `seed_recovery`**: happy path (vault nuevo, hash nuevo, firma rotada, auditoría, data_key intacta), frase incorrecta sin side-effects, contraseña corta, sin admin activo, sin master wrap; `lock_vault` limpia todas las claves de RAM |
 | `commands/entry_commands.rs` | 23 | CRUD completo end-to-end con DB real (roundtrip cifrado→descifrado, payload sin texto plano en DB, validaciones de categoría/status, states obligatorios, firma rota por manipulación, wrong data key, autor sin perfil, paginación e isolación por paciente, filtro por categoría, búsqueda case-insensitive, `decrypt_payload`, **histórico `public_key_at`** — clave vigente por timestamp, fallback sin histórico, usuario inexistente, **firma de todos los campos de la fila**: payload/created_at/id alterados rompen la firma, delimitadores sin ambigüedad) |
 | `commands/export_commands.rs` | 4 | Snapshot descifrado (paciente + perfil), bóveda cerrada, escritura del `.md` (heading, filename, footer) y rechazo con 0 entries |
@@ -319,7 +320,7 @@ El Core cuenta con 101 tests unitarios que cubren:
 | `export/render.rs` | 6 | Header con paciente/perfil, orden cronológico, orden/labels canónicos de campos, footer SHA-256 + aviso, filename sanitizado y fallback sin nombre |
 
 ```bash
-cargo test --lib  # 101 passed; 0 failed
+cargo test --lib  # 105 passed; 0 failed
 ```
 
 > Los tests de `entry_commands` usan `tauri::test` (feature habilitada solo en `[dev-dependencies]`; el binario de producción no la incluye).
@@ -442,6 +443,6 @@ pnpm tauri dev          # Levanta el entorno (Rust + React HMR)
 pnpm tauri build        # Compila en modo release para producción
 npx tsc --noEmit        # Verifica TypeScript sin generar archivos
 cargo check             # Verifica compilación Rust
-cargo test --lib        # Ejecuta los 101 tests unitarios del Core
+cargo test --lib        # Ejecuta los 105 tests unitarios del Core
 cargo add <crate>       # Añade dependencias al backend (desde src-tauri)
 ```

@@ -392,8 +392,35 @@ pub fn export_filename(snapshot: &ExportSnapshot) -> String {
 mod tests {
     use super::*;
 
+    /// Fixture propia: los tests de render prueban el mecanismo (labels
+    /// dinámicos desde el schema), no el contenido de entity_schema.json.
     fn test_schema() -> SchemaConfig {
-        crate::db::config_schema::from_embedded().expect("entity_schema.json embebido válido")
+        serde_json::from_str(
+            r#"{
+                "version": 1,
+                "default_entity": "patient",
+                "entities": {
+                    "patient": {
+                        "label": "Paciente",
+                        "label_plural": "Pacientes",
+                        "blind_index_field": "dni",
+                        "fields": [
+                            {"name": "nombre", "label": "Nombre", "type": "text",
+                             "required": true, "encrypted": true},
+                            {"name": "apellido", "label": "Apellido", "type": "text",
+                             "required": true, "encrypted": true},
+                            {"name": "dni", "label": "DNI / Documento", "type": "text",
+                             "required": true, "encrypted": false},
+                            {"name": "fecha_nacimiento", "label": "Fecha de Nacimiento",
+                             "type": "date", "required": false, "encrypted": true},
+                            {"name": "ciudad", "label": "Ciudad", "type": "text",
+                             "required": false, "encrypted": true}
+                        ]
+                    }
+                }
+            }"#,
+        )
+        .expect("fixture de schema válida")
     }
 
     fn sample_payload(category: &str) -> HashMap<String, String> {
@@ -477,8 +504,9 @@ mod tests {
         let md = render_markdown(&sample_snapshot(), &test_schema()).expect("render");
         assert!(md.contains("# Historia Clínica — María José García López"));
         assert!(md.contains("| DNI / Documento | 12.345.678 |"));
-        // Campo agregado al schema después de la versión inicial: el export
-        // lo incluye sin tocar código (labels dinámicos desde entity_schema.json).
+        // Campo presente en el fixture del schema pero ausente del sample
+        // histórico de datos → la etiqueta dinámica se renderiza solo si hay
+        // valor (mecanismo de labels desde entity_schema.json).
         assert!(md.contains("| Ciudad | Córdoba |"));
         assert!(md.contains("| Nombre | Dra. Ana Test |"));
         assert!(md.contains("| Profesión | Médica |"));
