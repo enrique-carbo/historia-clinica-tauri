@@ -12,6 +12,7 @@ cd src-tauri
 cargo test                    # baseline: 107 tests, 0 fallas
 cargo clippy --all-targets    # baseline: 3 warnings, 0 errores
 cd .. && npx tsc --noEmit     # baseline: sin errores
+pnpm test                     # baseline: 35 tests, 0 fallas (vitest; Node >= 22.12)
 ```
 
 - Los 3 warnings de clippy son `too_many_arguments` aceptados en
@@ -19,9 +20,15 @@ cd .. && npx tsc --noEmit     # baseline: sin errores
   inyecta Tauri). **No agregar warnings nuevos.**
 - **NO correr `cargo fmt`**: el repo no está formateado; fmt reescribiría
   archivos que no tocaste y arruina el diff.
-- `package.json` no tiene scripts de lint/test (solo
-  dev/build/preview/tauri). Gestor de paquetes: pnpm. Backend: `cargo`
-  desde `src-tauri/`.
+- Gestor de paquetes: pnpm. Backend: `cargo` desde `src-tauri/`.
+  Scripts npm: `dev/build/preview/tauri` y `test/test:watch` (vitest).
+  **Vitest 5 requiere Node >= 22.12** (el default del repo es nvm v22;
+  la CI usa node 22).
+- Tests frontend: co-located `src/**/*.test.ts`; `@tauri-apps/api/core`
+  se mockea con `vi.mock`. Igual que en Rust: los tests de lógica usan
+  **fixtures propios** — no acoplarlos al contenido de
+  `entity_schema.json` (rompió la CI una vez); solo tests de invariantes
+  estructurales.
 
 ## Estructura
 

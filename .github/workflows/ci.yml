@@ -8,7 +8,7 @@ on:
 
 jobs:
   frontend:
-    name: Frontend (typecheck + build)
+    name: Frontend (typecheck + test + build)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,6 +27,9 @@ jobs:
 
       - name: Typecheck (tsc --noEmit)
         run: npx tsc --noEmit
+
+      - name: Tests (vitest)
+        run: pnpm test
 
       - name: Build (vite)
         run: pnpm build

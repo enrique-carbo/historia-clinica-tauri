@@ -302,7 +302,7 @@ El único command registrado es `export_history` (en `lib.rs`), la lógica vive 
 
 ## 🧪 Tests Automatizados
 
-El Core cuenta con 107 tests unitarios que cubren:
+El Core (Rust) cuenta con 107 tests unitarios que cubren:
 | Módulo | Tests | Cobertura |
 |---|---|---|
 | `security/crypto.rs` | 13 | AES-GCM roundtrip, nonces únicos, clave incorrecta, manipulación, Blind Index, Firma Ed25519, derivación de pública desde privada |
@@ -323,6 +323,24 @@ cargo test --lib  # 107 passed; 0 failed
 ```
 
 > Los tests de `entry_commands` usan `tauri::test` (feature habilitada solo en `[dev-dependencies]`; el binario de producción no la incluye).
+
+### Frontend (Vitest)
+
+35 tests unitarios sobre la capa React (`pnpm test`; requiere Node >= 22.12). Config en `vitest.config.ts`; los tests son co-located (`src/**/*.test.ts`) y `@tauri-apps/api/core` se mockea con `vi.mock`.
+
+| Módulo | Tests | Cobertura |
+|---|---|---|
+| `utils/schema.test.ts` | 8 | `flattenFields` con fixtures propias (prefijo de group, anidados, sin mutar la entrada) + invariantes estructurales del schema embebido (labels no vacíos, claves únicas, sin groups residuales) — nunca contenido |
+| `utils/dateUtils.test.ts` | 8 | `calculateAge` con reloj congelado (timezone-safe) y `formatDate` (es-ES, fecha inválida → em dash) |
+| `stores/useEntityStore.test.ts` | 10 | fetch/search, query vacía al listado general, creación con sesión y sin ella (optimistic UI), errores de backend, blind index |
+| `stores/usePatientStore.test.ts` | 3 | selección de paciente, error, `clearSelection` |
+| `stores/useAuthStore.test.ts` | 3 | `unlockVault` / `lockVault` |
+| `stores/useNavigationStore.test.ts` | 3 | drawer (toggle/open/close), vistas y tabs |
+
+```bash
+pnpm test        # 35 passed; 0 failed (vitest run)
+pnpm test:watch  # modo watch
+```
 
 ## 🗺️ Mapa de Ruta del Desarrollo (Roadmap)
 
@@ -440,6 +458,8 @@ cargo test --lib  # 107 passed; 0 failed
 pnpm tauri dev          # Levanta el entorno (Rust + React HMR)
 pnpm tauri build        # Compila en modo release para producción
 npx tsc --noEmit        # Verifica TypeScript sin generar archivos
+pnpm test               # Ejecuta los 35 tests unitarios del frontend (vitest)
+pnpm test:watch         # Vitest en modo watch
 cargo check             # Verifica compilación Rust
 cargo test --lib        # Ejecuta los 107 tests unitarios del Core
 cargo add <crate>       # Añade dependencias al backend (desde src-tauri)

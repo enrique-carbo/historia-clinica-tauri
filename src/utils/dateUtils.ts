@@ -30,13 +30,11 @@ export const calculateAge = (birthDateStr?: string): number | null => {
  */
 export const formatDate = (dateStr?: string): string => {
   if (!dateStr) return "—";
-  try {
-    return new Date(dateStr).toLocaleDateString('es-ES', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
-  } catch {
-    return "—";
-  }
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return "—";
+  return date.toLocaleDateString("es-ES", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
 };
