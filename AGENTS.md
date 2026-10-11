@@ -84,5 +84,6 @@ pnpm test                     # baseline: 35 tests, 0 fallas (vitest; Node >= 22
 - `README.md` — seguridad, esquema, roles, tests, export (fuente del porqué).
 - `docs/estrategia_encriptacion.md` — diseño cripto por capas.
 - `docs/fase4-diseno-sync.md` — diseño de sync (fase 4) y deuda pendiente.
-- `docs/plugin-teleconsulta-v1.md` — diseño del plugin de teleconsulta (v3,
-  alcance mínimo: canal + pago + SOAP como entry del Core).
+- `docs/plugin-teleconsulta-v1.md` — diseño del plugin de teleconsulta (v4,
+  paciente como usuario `role: 'paciente'`; alcance mínimo: canal + pago +
+  SOAP como entry del Core).
