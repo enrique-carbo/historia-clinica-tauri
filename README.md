@@ -444,10 +444,9 @@ pnpm test:watch  # modo watch
 - [ ] `enroll_data_key`: admin envuelve DataKey al registrar médico (sin tipear seed)
 - [x] `change_password`: verifica actual, re-cifra vault, re-envuelve `.data_key.{user_id}`, actualiza `password_hash` (no toca master wrap) + UI en Perfil & 6 tests
 
-### 🟥 Fase 5: Teleconsulta Asíncrona (Multi-Usuario)
-- [ ] Tabla `asynchronous_threads` y linkage paciente-usuario
-- [ ] Cifrado asimétrico o clave de sesión compartida
-- [ ] Flujo de compartir `entity_keys` entre médicos
+### 🟥 Fase 5: Teleconsulta Asíncrona (plugin)
+- [x] Diseño v3: `docs/plugin-teleconsulta-v1.md` — canal único async + pago QR/transferencia (confirmación manual) + cierre SOAP como `entry` del Core; thread keys con wrap mínimo del paciente; datos del plugin en tablas namespaced de la DB del Core
+- [ ] Hitos P1–P5 del diseño (P4 — sync — depende de fase 4, M1–M3)
 
 ### ⬜ Fase 6: Interoperabilidad (Futuro)
 - [ ] Motor de exportación JSON y traducción a estándares FHIR (IA-Driven)

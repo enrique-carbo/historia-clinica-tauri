@@ -1,597 +1,275 @@
 # 🧩 Plugin: Teleconsulta Asíncrona
 
 ## Simplex Health Core — Arquitectura de Plugins
-### Versión 2.0 | 2026-07-09 | PatientDataKey
+### Versión 3.0 — 2026-10-11 | Alcance mínimo, realineado con fase4 v1.1
+
+> **v3.0 sustituye a v2.0** (2026-07-09, PatientDataKey). Cambios: alcance
+> reducido a canal único + workflow de pago + atajo a entry SOAP; los datos
+> clínicos viven **100% en el Core**; sync por las primitivas de fase4 v1.1
+> (outbox, unión inmutable, LWW con reloj de servidor); thread keys en vez
+> de la jerarquía completa PatientDataKey. v2.0 queda en el historial de git.
 
 ---
 
-## 1. Visión General
+## 1. Visión y alcance
 
-El plugin de Teleconsulta Asíncrona permite la comunicación estructurada entre pacientes y médicos fuera de la consulta presencial. Opera como un **plugin aislado** sobre el Core de Simplex Health.
+Un canal de comunicación **único y asíncrono** entre el profesional y un
+paciente, con workflow de cobro eventual y cierre clínico como entry SOAP.
 
-**Principios:**
-- **Aislamiento de errores:** Si el plugin falla, el Core médico sigue funcionando.
-- **Zero-Knowledge:** El servidor nunca descifra. Los datos viajan cifrados entre médico y paciente.
-- **PatientDataKey:** Cada paciente tiene su propia llave de cifrado para datos compartidos.
-- **Mismo binario:** La app Tauri tiene modo médico y modo paciente.
+| En alcance (v1) | Fuera de alcance |
+|---|---|
+| Un thread de conversación por paciente | Video / llamadas en tiempo real |
+| Mensajes de texto + foto de comprobante | Multi-thread, bitácora PGHD, signos vitales |
+| Pago eventual: QR/transferencia con **confirmación manual** | Pasarela de pago, webhooks, integraciones bancarias |
+| Cierre: SOAP como **entry del Core** (firmada, inmutable) | Compartir la nota SOAP con el paciente (requiere PatientDataKey — post-v1) |
+| Sync de canal/pago por las primitivas de fase4 | Realtime (suscripciones PocketBase — v2 del plugin) |
+| Credencial mínima del paciente (password → wrap) | Vault completo del paciente / identidad clínica autónoma |
 
----
-
-## 2. Arquitectura de Llaves
-
-| Llave | Quién la tiene | Dónde vive | Para qué |
-|-------|---------------|------------|----------|
-| **DataKey** | Consultorio (médicos, admin, dispositivos) | `.data_key` en disco de cada dispositivo del consultorio | Cifrar/descifrar datos médicos en producción |
-| **PatientDataKey** | Cada paciente (en su vault) | `vault_{patient_id}.bin` | Descifrar datos que el médico le comparte |
-| **SigningKey** | Cada médico (en su vault) | `vault_{user_id}.bin` | Firmar notas médicas |
+**Principio rector:** el plugin es *operativa*; lo clínico es *Core*. El
+historial del paciente (incluida la nota SOAP de la teleconsulta) nunca se
+duplica en datos del plugin — el thread solo la **referencia**.
 
 ---
 
-## 3. Creación del Paciente y PatientDataKey
+## 2. Qué vive dónde
 
-### 3.1 Flujo
+| Pieza | Hogar | Por qué |
+|---|---|---|
+| `threads`, `messages`, `payments` | Tablas namespaced en la **DB del Core** (`plugin_teleconsulta_*`) | Outbox atómica real (mismo archivo, misma transacción que `sync_queue`), backup/restore del Core las cubre, crypto y sync vía Core. Regla general: **datasets de referencia → DB propia del plugin; datos clínicos/operativos del plugin → DB del Core** |
+| Nota SOAP | `entries` del Core (`create_entry`) | Firma Ed25519, inmutabilidad, EHR, export `.md`, verificación, sync por unión — todo gratis |
+| Llaves de thread | Tabla en la DB del Core | Envueltas con DataKey (médico) y con la clave del paciente; blobs LWW |
+| Credencial del paciente | Tabla en la DB del Core | Wrap mínimo sin vault completo |
+| Datasets de referencia (futuro: SNOMED…) | DB propia del plugin (`data/*.db`) | No es sync: artefactos versionados |
+| UI | Componentes del plugin | Modo médico (Core + plugin); modo paciente (vista acotada) |
 
-```
-Médico/Admin crea paciente en Core:
-  → INSERT en entities (o patients legacy)
-  → Core genera PatientDataKey aleatoria: [u8; 32]
-  → Core guarda PatientDataKey en tabla del Core:
-      tabla: patient_keys
-      { patient_id, patient_data_key_ciphertext, patient_data_key_nonce }
-      (cifrado con DataKey del consultorio)
-  → Core entrega credenciales al paciente:
-      username: DNI
-      password: temporal (generado aleatoriamente)
-```
+El plugin **no corre su propio sync engine** ni toca `sync_queue`
+directamente: sus commandos (trait `Plugin`, mismo proceso) escriben la tabla
+del plugin y su evento de outbox **en la misma transacción**, igual que todo
+command del Core.
 
-### 3.2 Tabla `patient_keys` (Core)
+---
+
+## 3. Modelo de datos (DB del Core)
 
 ```sql
-CREATE TABLE patient_keys (
-    patient_user_id TEXT PRIMARY KEY,       -- FK a users.id (rol: paciente)
-    patient_data_key_ciphertext TEXT NOT NULL,
-    patient_data_key_nonce TEXT NOT NULL,
-    created_at TEXT NOT NULL,
-    FOREIGN KEY(patient_user_id) REFERENCES users(id)
+-- Un canal por paciente. Mutables → LWW (blob cifrado + updated_at).
+CREATE TABLE plugin_teleconsulta_threads (
+    id              TEXT PRIMARY KEY,            -- UUID
+    patient_entity_id INTEGER NOT NULL,          -- FK entities(id)
+    assigned_to_user_id TEXT,                    -- FK users(id); desde sesión
+    enc_data_blob   BLOB NOT NULL,               -- status, subject (cifrados, DataKey)
+    created_at      TEXT NOT NULL,
+    updated_at      TEXT NOT NULL,               -- toca en cada cambio (LWW)
+    closed_at       TEXT,
+    FOREIGN KEY(patient_entity_id) REFERENCES entities(id),
+    FOREIGN KEY(assigned_to_user_id) REFERENCES users(id)
+);
+
+-- Mensajes: hechos inmutables → unión por id (como entries).
+CREATE TABLE plugin_teleconsulta_messages (
+    id              TEXT PRIMARY KEY,            -- UUID
+    thread_id       TEXT NOT NULL,
+    sender_type     TEXT NOT NULL CHECK(sender_type IN ('patient', 'doctor', 'system')),
+    sender_user_id  TEXT NOT NULL,               -- doctor: desde require_session; patient: token del dispositivo
+    kind            TEXT NOT NULL CHECK(kind IN ('text', 'voucher_photo', 'note_reference')),
+    content_ciphertext BLOB NOT NULL,            -- con thread key
+    content_nonce   BLOB NOT NULL,
+    note_external_id TEXT,                       -- entries.id cuando kind = 'note_reference'
+    created_at      TEXT NOT NULL,
+    FOREIGN KEY(thread_id) REFERENCES plugin_teleconsulta_threads(id)
+);
+
+-- Pago: dato OPERATIVO (no clínico). LWW. Paciente se entera por
+-- mensaje 'system' en el canal, no leyendo esta tabla.
+CREATE TABLE plugin_teleconsulta_payments (
+    id              TEXT PRIMARY KEY,
+    thread_id       TEXT NOT NULL,
+    enc_data_blob   BLOB NOT NULL,               -- amount_ars, method, status, reference (DataKey)
+    confirmed_by_user_id TEXT,
+    created_at      TEXT NOT NULL,
+    updated_at      TEXT NOT NULL,               -- LWW
+    FOREIGN KEY(thread_id) REFERENCES plugin_teleconsulta_threads(id)
+);
+
+-- Llave de conversación por thread, envuelta dos veces.
+CREATE TABLE plugin_teleconsulta_thread_keys (
+    thread_id            TEXT PRIMARY KEY,
+    wrap_doctor_cipher   BLOB NOT NULL,          -- thread key con DataKey (oficina)
+    wrap_doctor_nonce    BLOB NOT NULL,
+    wrap_patient_cipher  BLOB NOT NULL,          -- thread key con patient_master
+    wrap_patient_nonce   BLOB NOT NULL,
+    created_at           TEXT NOT NULL,
+    FOREIGN KEY(thread_id) REFERENCES plugin_teleconsulta_threads(id)
+);
+
+-- Credencial del paciente: suficiente para derivar patient_master y
+-- abrir sus wraps. Sin vault, sin llaves de firma (v1).
+CREATE TABLE plugin_teleconsulta_patient_creds (
+    patient_entity_id INTEGER PRIMARY KEY,
+    kdf_salt       BLOB NOT NULL,                -- Argon2id(password) → patient_master
+    kdf_params     TEXT NOT NULL,                -- versionado de parámetros
+    created_at     TEXT NOT NULL,
+    FOREIGN KEY(patient_entity_id) REFERENCES entities(id)
 );
 ```
 
-### 3.3 Vault del Paciente
+Notas:
 
-```
-vault_{patient_id}.bin (cifrado con password del paciente):
-{
-  "magic": "SIMPLEX_PATIENT_VAULT",
-  "patient_data_key": "base64",     -- PatientDataKey de este paciente
-  "installation_id": "uuid"         -- Para vincular al consultorio
-}
-```
-
-### 3.4 Generación del Vault del Paciente
-
-```rust
-fn create_patient_vault(
-    app_dir: &PathBuf,
-    patient_user_id: &str,
-    password_temporal: &str,
-    patient_data_key: &[u8; 32],
-) -> Result<(), String> {
-    // 1. Derivar llave del password temporal con Argon2id
-    let salt = SaltString::generate(&mut OsRng);
-    let master_key = derive_key_from_password(password_temporal, &salt)?;
-
-    // 2. Crear payload
-    let payload = PatientVaultPayload {
-        magic: "SIMPLEX_PATIENT_VAULT".to_string(),
-        patient_data_key: BASE64.encode(patient_data_key),
-        installation_id: get_installation_id(app_dir)?,
-    };
-    let json_bytes = serde_json::to_vec(&payload)?;
-
-    // 3. Cifrar payload con master_key
-    let encrypted = encrypt_vault_data(&json_bytes, &master_key)?;
-
-    // 4. Guardar
-    fs::write(app_dir.join(format!("vault_{}.bin", patient_user_id)), encrypted)?;
-    fs::write(app_dir.join(format!("vault_{}.salt", patient_user_id)), salt.as_str())?;
-
-    Ok(())
-}
-```
+- `status` del thread (`open`, `waiting_payment`, `in_consultation`,
+  `note_created`, `closed`) va **dentro de `enc_data_blob`**: el servidor no
+  ve ni el estado del flujo ni el asunto de la consulta.
+- El servidor ve solo: UUIDs, timestamps, `updated` (LWW), ciphertexts y
+  `origin_device`. Residual aceptado: el volumen/timing correlaciona
+  mensajes con el mismo `thread_id` (mismo caso que fase4 §5.1).
 
 ---
 
-## 4. Compartir Datos con el Paciente
+## 4. Cripto: thread keys y credencial del paciente
 
-### 4.1 Flujo
+Cadena de descifrado por rol:
 
-```
-Médico quiere compartir nota con Juan Pérez:
-  → Core descifra nota con DataKey
-  → Core obtiene PatientDataKey de Juan de tabla patient_keys
-  → Core cifra copia de la nota con PatientDataKey de Juan
-  → Core sube al servidor:
-      tabla: shared_notes
-      { patient_id, note_external_id, note_copy_ciphertext, note_copy_nonce }
+```text
+Médico:  sesión → DataKey → unwrap wrap_doctor → thread key → mensajes
+Paciente: password + kdf_salt → Argon2id → patient_master
+          → unwrap wrap_patient → thread key → mensajes
 ```
 
-### 4.2 Tabla `shared_notes` (Servidor PocketBase)
-
-```javascript
-{
-  id: "uuid-v4",
-  installation_id: "uuid-v4",
-  patient_user_id: "uuid-v4",
-  original_note_external_id: "uuid-v4",   -- FK a core.notes.external_id
-  note_copy_ciphertext: "base64",         -- Cifrado con PatientDataKey
-  note_copy_nonce: "base64",
-  shared_by_user_id: "uuid-v4",           -- Médico que compartió
-  shared_at: "ISO8601",
-  expires_at: "ISO8601|null"              -- Opcional: expiración
-}
-```
-
-### 4.3 Comando Core: `share_note_with_patient`
-
-```rust
-#[tauri::command]
-pub fn share_note_with_patient(
-    note_id: i64,
-    patient_user_id: String,
-    db_state: State<'_, DbState>,
-    data_key_state: State<'_, DataKey>,
-) -> Result<String, String> {
-    let data_key = get_data_key(&data_key_state)?;
-
-    // 1. Obtener nota del Core
-    let note = get_note(note_id, &db_state, &data_key_state, ...)?;
-
-    // 2. Obtener PatientDataKey del paciente
-    let patient_data_key = with_conn(&db_state, |conn| {
-        conn.query_row(
-            "SELECT patient_data_key_ciphertext, patient_data_key_nonce 
-             FROM patient_keys WHERE patient_user_id = ?1",
-            params![&patient_user_id],
-            |row| {
-                let ct: String = row.get(0)?;
-                let nonce: String = row.get(1)?;
-                Ok((ct, nonce))
-            }
-        ).map_err(|e| e.to_string())
-    })?;
-
-    // 3. Descifrar PatientDataKey con DataKey
-    let enc_pdk = EncryptedData {
-        ciphertext: patient_data_key.0,
-        nonce: patient_data_key.1,
-    };
-    let pdk_hex = decrypt_text(&enc_pdk, &data_key)?;
-    let pdk_bytes = hex::decode(&pdk_hex).map_err(|_| "PatientDataKey corrupta")?;
-    let mut patient_data_key = [0u8; 32];
-    patient_data_key.copy_from_slice(&pdk_bytes);
-
-    // 4. Cifrar copia de la nota con PatientDataKey
-    let note_json = serde_json::to_string(&note.fields).map_err(|e| e.to_string())?;
-    let note_copy_enc = encrypt_text(&note_json, &patient_data_key)?;
-
-    // 5. Subir al servidor
-    let external_id = Uuid::new_v4().to_string();
-    upload_shared_note_to_server(
-        &patient_user_id,
-        &note.external_id.unwrap(),
-        &note_copy_enc,
-        &note.created_by_user_id,
-    )?;
-
-    Ok(external_id)
-}
-```
+- **Generación**: al abrir el thread, el Core genera la thread key (32 B),
+  cifra los mensajes con AES-GCM y escribe los dos wraps (operaciones con
+  la bóveda abierta, vía Core IPC — el plugin nunca ve claves).
+- **Rotación de password del paciente**: re-wrap de `wrap_patient` en todos
+  sus threads (blobs LWW, mismo patrón que los vaults de fase4). No se
+  re-cifran los mensajes.
+- **Rotación de DataKey del consultorio**: re-wrap de `wrap_doctor`
+  (idéntico al flujo de wraps de fase4).
+- **Mensajes sin firma Ed25519, por diseño**: el canal es workflow, no
+  registro clínico. El hecho clínico atribuible y firmado es la entry SOAP
+  (`create_entry`, `author_id` desde `require_session`). Atribución del
+  canal: `sender_user_id` de la sesión (doctor) o del device token (patient).
+- **PatientDataKey completo** (vault del paciente, `patient_keys`,
+  compartir notas históricas) queda como evolución post-v1 — las thread
+  keys son suficientes para el canal.
 
 ---
 
-## 5. Estructura del Plugin
+## 5. Flujo completo
 
+```text
+1. Dar acceso (una vez, desde el modo médico)
+   Profesional → "Dar acceso al paciente" → código de uso único + expiración
+   → paciente instala / abre modo paciente → ingresa código + elige password
+   → patient_master; server registra el device token acotado a su entity.
+
+2. Canal
+   Paciente inicia consulta (asunto opcional) → thread + thread key
+   → mensajes async ambos lados (texto o foto de comprobante).
+   El sync de fase4 (polling 60 s) transporta el canal: sin realtime en v1.
+
+3. Pago (eventual)
+   Plugin renderiza QR/alias estático del profesional → paciente paga
+   externamente (app bancaria) → envía foto del comprobante (voucher_photo)
+   → profesional confirma → payments.status = confirmed (LWW)
+   → mensaje 'system': "Pago confirmado".
+
+4. Cierre clínico
+   Profesional → "Crear nota SOAP" (formulario del Core) → create_entry
+   (subject = entity del paciente, firmada, inmutable)
+   → plugin encola mensaje note_reference con note_external_id
+   → thread.status = note_created / closed.
 ```
-plugins/teleconsulta/
-├── Cargo.toml
-├── teleconsulta.json
-├── src/
-│   ├── lib.rs              # Trait Plugin + implementación
-│   ├── db.rs               # Schema de teleconsulta.db
-│   ├── models.rs           # Structs: Thread, Message, SharedNote
-│   ├── api.rs              # API con servidor PocketBase
-│   ├── notifications.rs    # Push notifications
-│   ├── ipc.rs              # Comunicación con Core
-│   └── web/                # Portal web (futuro, opcional)
-│       ├── index.html
-│       ├── app.js
-│       └── styles.css
-└── migrations/
-    └── 001_initial.sql
-```
+
+El SOAP aparece solo en el EHR del paciente (y en su export `.md`): el
+plugin no guarda una copia.
 
 ---
 
-## 6. Base de Datos: teleconsulta.db
+## 6. Sync (mapeo a fase4 v1.1)
 
-### 6.1 Tablas
+| Dato | Mecanismo | Regla |
+|---|---|---|
+| `messages` | outbox + pull | **Unión por `id`** (inmutables, como entries) |
+| `threads` | outbox + pull | LWW con `updated` del servidor (blob + `updated_at`) |
+| `payments` | outbox + pull | LWW |
+| `thread_keys` (wraps) | outbox + pull | LWW por blob (rotaciones) |
+| `patient_creds` | outbox + pull | LWW por blob |
+| Nota SOAP | — | **No es dato del plugin**: entra y sync-ea como `entries` por el Core |
 
-```sql
--- Threads de conversación
-CREATE TABLE threads (
-    id TEXT PRIMARY KEY,
-    patient_user_id TEXT NOT NULL,
-    assigned_to_user_id TEXT,
-    entity_id TEXT NOT NULL,
-    status TEXT NOT NULL CHECK(status IN ('open', 'waiting_patient', 'waiting_doctor', 'closed')),
-    subject TEXT,
-    created_at TEXT NOT NULL,
-    closed_at TEXT,
-    last_message_at TEXT,
-    is_synced INTEGER DEFAULT 0
-);
-
--- Mensajes dentro de un thread
-CREATE TABLE messages (
-    id TEXT PRIMARY KEY,
-    thread_id TEXT NOT NULL,
-    sender_type TEXT NOT NULL CHECK(sender_type IN ('patient', 'doctor')),
-    sender_user_id TEXT NOT NULL,
-    message_type TEXT NOT NULL CHECK(message_type IN ('text', 'image', 'file', 'note_reference')),
-    content_ciphertext TEXT,
-    content_nonce TEXT,
-    note_external_id TEXT,
-    created_at TEXT NOT NULL,
-    is_synced INTEGER DEFAULT 0
-);
-
--- Notas compartidas descargadas (modo paciente)
-CREATE TABLE shared_notes_local (
-    id TEXT PRIMARY KEY,
-    original_note_external_id TEXT NOT NULL,
-    note_copy_ciphertext TEXT NOT NULL,
-    note_copy_nonce TEXT NOT NULL,
-    shared_by_user_id TEXT NOT NULL,
-    shared_at TEXT NOT NULL,
-    downloaded_at TEXT NOT NULL
-);
-
--- Índices
-CREATE INDEX idx_threads_patient ON threads(patient_user_id);
-CREATE INDEX idx_threads_doctor ON threads(assigned_to_user_id);
-CREATE INDEX idx_threads_status ON threads(status);
-CREATE INDEX idx_messages_thread ON messages(thread_id);
-```
+- Colecciones en el relé (mismo PocketBase, device token y pairing de
+  fase4): `sync_plugin_teleconsulta_{messages,threads,payments}` + los
+  wraps en la colección `files` con namespace `teleconsulta:*`.
+- **Orden de bootstrap**: las colecciones del plugin se pull-ean
+  **después de `entities`** (los threads referencian pacientes por
+  `external_id`), al final del orden de fase4 §6.4.
+- Reglas de falla heredadas: push con error → pull omitido (§4.1.4);
+  eco `origin_device`; cursores por colección; `min_app_version` del Core
+  gobierna también a las colecciones del plugin.
 
 ---
 
-## 7. Modos de la App
+## 7. Seguridad
 
-### 7.1 Modo Médico (Core + Plugin)
-
-| Función | Implementación |
-|---------|----------------|
-| Ver threads | Plugin: query a teleconsulta.db |
-| Responder mensaje | Plugin: cifra con DataKey (vía Core IPC), guarda en teleconsulta.db |
-| Crear nota formal | Core: `create_note` (cifrado + firma Ed25519) |
-| Compartir nota con paciente | Core: `share_note_with_patient` (cifra con PatientDataKey) |
-| Ver nota compartida | Core: descifra con DataKey |
-
-### 7.2 Modo Paciente (Plugin)
-
-| Función | Implementación |
-|---------|----------------|
-| Login | DNI + password → desbloquea vault → obtiene PatientDataKey |
-| Ver threads | Plugin: descarga del servidor, muestra |
-| Enviar mensaje | Plugin: envía texto plano al servidor, servidor cifra con DataKey para médico |
-| Ver notas compartidas | Plugin: descarga del servidor, descifra con PatientDataKey |
-| Ver nota formal | Plugin: llama Core IPC `decrypt_with_patient_key` |
+| Regla | Detalle |
+|---|---|
+| El plugin nunca ve claves | Todo descifrado/cifrado vía Core IPC con la bóveda abierta (contrato del microkernel) |
+| El servidor es tubo ciego | Ciphertexts + UUIDs + timestamps; status/asunto/contenido/pago van cifrados |
+| Credencial del paciente = wrap chico | Password del paciente solo abre thread keys; **no** da DataKey, no da otras entidades, no da notas del EHR |
+| Código de acceso del paciente | Uso único + expiración + rate-limit (mismo perfil que el pairing de dispositivos de fase4 §5.3) |
+| Atribución | Doctor: `require_session`; paciente: device token acotado a su `patient_entity_id`; hecho clínico firmado = entry SOAP |
+| Pago | Flujo externo (banca); el plugin solo rendering de QR estático + registro operativo. Sin datos de tarjeta/cuenta en la app |
 
 ---
 
-## 8. Flujos de Uso
+## 8. IPC con el Core
 
-### 8.1 Paciente inicia teleconsulta
-
-```
-Paciente (modo paciente):
-  → Login con DNI + password
-  → Desbloquea vault → PatientDataKey en RAM
-  → "Nueva consulta"
-  → Selecciona médico o especialidad
-  → Escribe: "Dolor de cabeza intenso desde ayer"
-  → Enviar
-
-App (modo paciente):
-  → POST /patient/thread
-  {
-    patient_user_id: "...",
-    subject: "Dolor de cabeza",
-    message: "Dolor de cabeza intenso desde ayer",
-    // Mensaje en texto plano, servidor lo cifra con DataKey
-  }
-
-Servidor:
-  → Crea thread
-  → Cifra mensaje con DataKey del consultorio
-  → Guarda en teleconsulta.db del servidor
-  → Notificación push al médico
-```
-
-### 8.2 Médico responde
-
-```
-Médico (modo médico):
-  → Notificación: "Nueva consulta de Juan Pérez"
-  → Abre thread
-  → Plugin descifra mensaje con DataKey (vía Core IPC)
-  → Responde: "Tome paracetamol y avise en 24hs"
-  → Enviar
-
-App (modo médico):
-  → Plugin cifra mensaje con DataKey (vía Core IPC)
-  → Guarda en teleconsulta.db local
-  → Inserta en sync_queue
-
-Sync Engine (Core):
-  → Push mensaje al servidor
-
-Servidor:
-  → Notificación push al paciente
-```
-
-### 8.3 Médico crea nota y comparte
-
-```
-Médico:
-  → En thread, click "Crear nota médica"
-  → Se abre formulario SOAP (Core)
-  → Redacta y guarda
-  → Core: create_note (cifrado con DataKey, firmado con SigningKey)
-  → Click "Compartir con paciente"
-  → Core: share_note_with_patient
-      1. Descifra nota con DataKey
-      2. Obtiene PatientDataKey de Juan
-      3. Cifra copia con PatientDataKey
-      4. Sube a servidor
-
-Paciente:
-  → Notificación: "El Dr. García compartió una nota"
-  → Abre nota
-  → App descarga del servidor
-  → Descifra con PatientDataKey (del vault)
-  → Ve nota SOAP completa
-```
-
-### 8.4 Paciente ve nota compartida
-
-```
-Paciente (modo paciente):
-  → Login, desbloquea vault
-  → "Mis notas"
-  → Descarga shared_notes del servidor
-  → Para cada nota:
-      descifra note_copy_ciphertext con PatientDataKey
-      muestra contenido
-  → Ve: "Consulta del 2026-07-09 - Dr. García"
-      Subjetivo: "..."
-      Objetivo: "..."
-      Análisis: "..."
-      Plan: "..."
-```
+- El plugin corre en el mismo proceso (trait `Plugin` de
+  `PLUGIN_ARCHITECTURE.md`) y usa la misma `Connection` que el Core — por
+  eso la outbox es atómica.
+- Comandos Core que el plugin necesita (ya existentes o casi):
+  `create_entry` (SOAP), `get_entity`/`decrypt` (paciente del thread),
+  `require_session` (atribución), API de sync de fase4 (encolar/aplicar
+  colecciones declaradas).
+- Comandos del plugin (nuevos, registrados en `lib.rs` como todo command):
+  `tc_open_thread`, `tc_send_message`, `tc_confirm_payment`,
+  `tc_create_sap_note` (atajo al formulario Core), `tc_grant_patient_access`.
 
 ---
 
-## 9. IPC con el Core
+## 9. Hitos
 
-### 9.1 Comandos del Plugin al Core
+| # | Hito | Contenido | Tamaño |
+|---|---|---|---|
+| P1 | Canal local | Tablas, thread keys, mensajes con Core IPC, sin sync ni paciente real (paciente simulado con password) | M |
+| P2 | Pago | QR/alias configurable, `voucher_photo`, confirmación manual, mensaje system | S |
+| P3 | Cierre SOAP | Atajo al formulario del Core, `note_reference`, cierre de thread | S |
+| P4 | Sync | Colecciones vía API de fase4 (requiere fase4 M1–M3); bootstrap después de entities | M |
+| P5 | Paciente real | Código de acceso, modo paciente, device token acotado, re-wrap por rotación | M |
 
-| Comando | Parámetros | Retorno | Uso |
-|---------|-----------|---------|-----|
-| `encrypt_with_datakey` | `plaintext: String` | `EncryptedData` | Médico envía mensaje |
-| `decrypt_with_datakey` | `ciphertext, nonce` | `String` | Médico lee mensaje |
-| `get_patient_datakey` | `patient_user_id: String` | `[u8; 32]` | Compartir nota con paciente |
-| `decrypt_with_patient_key` | `ciphertext, nonce, patient_user_id` | `String` | Paciente lee nota compartida |
-| `create_medical_note` | `entity_id, template_id, fields, user_id` | `note_external_id` | Médico crea nota formal |
-| `get_medical_note` | `note_external_id: String` | `NoteRecord` | Ver nota formal |
-
-### 9.2 Ejemplo: Paciente descifra nota compartida
-
-```rust
-// En Plugin (modo paciente)
-async fn view_shared_note(
-    &self,
-    shared_note_id: &str,
-    patient_data_key: &[u8; 32],
-) -> Result<NoteFields, String> {
-    // 1. Descargar del servidor
-    let shared = self.api.get_shared_note(shared_note_id).await?;
-
-    // 2. Descifrar con PatientDataKey
-    let enc = EncryptedData {
-        ciphertext: shared.note_copy_ciphertext,
-        nonce: shared.note_copy_nonce,
-    };
-    let note_json = decrypt_text(&enc, patient_data_key)?;
-
-    // 3. Parsear
-    let fields: NoteFields = serde_json::from_str(&note_json)
-        .map_err(|e| format!("Error parseando nota: {}", e))?;
-
-    Ok(fields)
-}
-```
+**Dependencia**: P4 requiere fase4 M1–M3 (outbox + engine). P1–P3 y P5 son
+independientes del servidor.
 
 ---
 
-## 10. Sync del Plugin
+## 10. Preguntas abiertas
 
-### 10.1 Mecanismo
-
-El plugin usa el Sync Engine del Core con su propia cola:
-
-```sql
--- teleconsulta.db
-CREATE TABLE plugin_sync_queue (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    table_name TEXT NOT NULL,
-    record_id TEXT NOT NULL,
-    operation TEXT NOT NULL,
-    created_at TEXT NOT NULL
-);
-```
-
-El Sync Engine del Core lee `plugin_sync_queue` y empuja al servidor junto con sus propios datos.
-
-### 10.2 Colecciones en Servidor
-
-```javascript
-// sync_threads
-{
-  id: "uuid-v4",
-  installation_id: "uuid-v4",
-  patient_user_id: "uuid-v4",
-  assigned_to_user_id: "uuid-v4|null",
-  entity_id: "uuid-v4",
-  status: "open|waiting_patient|waiting_doctor|closed",
-  subject: "Dolor de cabeza",
-  created_at: "ISO8601",
-  closed_at: "ISO8601|null",
-  last_message_at: "ISO8601"
-}
-
-// sync_messages
-{
-  id: "uuid-v4",
-  installation_id: "uuid-v4",
-  thread_id: "uuid-v4",
-  sender_type: "patient|doctor",
-  sender_user_id: "uuid-v4",
-  message_type: "text|image|file|note_reference",
-  content_ciphertext: "base64",       -- Cifrado con DataKey
-  content_nonce: "base64",
-  note_external_id: "uuid-v4|null",
-  created_at: "ISO8601"
-}
-
-// sync_shared_notes
-{
-  id: "uuid-v4",
-  installation_id: "uuid-v4",
-  patient_user_id: "uuid-v4",
-  original_note_external_id: "uuid-v4",
-  note_copy_ciphertext: "base64",       -- Cifrado con PatientDataKey
-  note_copy_nonce: "base64",
-  shared_by_user_id: "uuid-v4",
-  shared_at: "ISO8601",
-  expires_at: "ISO8601|null"
-}
-```
+- QR: v1 **estático** (alias/CVU configurable del profesional). ¿Monto
+  dinámico en v2 (requiere integración o al menos QR por importe)?
+- Límite de tamaño de `voucher_photo` (¿compresión a WebP en el Core?,
+  límite ~5 MB documentado).
+- ¿Un solo thread abierto por paciente a la vez? (v1: sí, simplifica).
+- Notificaciones: v1 = indicador/polling; v2 = realtime PocketBase.
+- Compartir la SOAP con el paciente: post-v1 con PatientDataKey
+  (`shared_notes` de v2.0, se reutiliza ese diseño).
 
 ---
 
-## 11. Seguridad
+## 11. Delta contra v2.0 (julio 2026)
 
-### 11.1 Lo que el plugin NUNCA hace
-
-| Operación | Quién la hace | Por qué el plugin no la hace |
-|-----------|---------------|------------------------------|
-| Firmar nota médica | **Core** (SigningState) | Plugin no tiene llave privada Ed25519 |
-| Cifrar con DataKey directamente | **Core** (DataKey) | Plugin accede vía IPC |
-| Crear nota médica formal | **Core** (`create_note`) | Plugin llama al Core |
-| Verificar firma de nota | **Core** (`verify_signature`) | Plugin llama al Core |
-
-### 11.2 Lo que el plugin SÍ hace
-
-| Operación | Cómo |
-|-----------|------|
-| Crear thread | Inserta en teleconsulta.db |
-| Enviar mensaje (modo médico) | Cifra con DataKey vía Core IPC |
-| Enviar mensaje (modo paciente) | Envía texto plano al servidor |
-| Descifrar nota compartida (modo paciente) | Descifra con PatientDataKey del vault |
-| Ver nota formal | Llama Core IPC `get_medical_note` |
-
-### 11.3 Modelo de amenazas
-
-| Amenaza | Mitigación |
-|---------|-----------|
-| Plugin comprometido | Solo accede a teleconsulta.db. No tiene DataKey ni SigningKey. |
-| Servidor comprometido | Tiene blobs cifrados con DataKey y PatientDataKey. Sin llaves, no descifra. |
-| Paciente ve datos de otro paciente | Queries filtradas por patient_user_id. Imposible sin autenticación. |
-| Paciente modifica nota médica | Imposible. Las notas solo las crea el Core. |
-| Robo de vault del paciente | El ladrón necesita el password para desbloquear. |
-
----
-
-## 12. Configuración
-
-```json
-// plugins/teleconsulta/teleconsulta.json
-{
-  "id": "teleconsulta",
-  "name": "Teleconsulta Asíncrona",
-  "version": "1.0.0",
-  "active": true,
-  "category": "communication",
-  "config": {
-    "server_url": "https://api.simplexhealth.io",
-    "sync_interval_seconds": 30,
-    "push_notifications": {
-      "enabled": true,
-      "provider": "firebase"
-    },
-    "patient_mode": {
-      "enabled": true,
-      "vault_encryption": "argon2id_aes256gcm"
-    }
-  }
-}
-```
-
----
-
-## 13. Dependencias
-
-```toml
-# plugins/teleconsulta/Cargo.toml
-[package]
-name = "teleconsulta-plugin"
-version = "1.0.0"
-edition = "2021"
-
-[dependencies]
-async-trait = "0.1"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-rusqlite = { version = "0.32", features = ["bundled", "chrono"] }
-reqwest = { version = "0.12", features = ["json", "multipart"] }
-tokio = { version = "1", features = ["full"] }
-chrono = "0.4"
-uuid = { version = "1.0", features = ["v4", "serde"] }
-
-# Core IPC
-simplex-core = { path = "../../src-tauri" }
-```
-
----
-
-## 14. Checklist de Implementación
-
-- [ ] Trait `Plugin` base en Core
-- [ ] Tabla `patient_keys` en Core
-- [ ] Comando `share_note_with_patient` en Core
-- [ ] Generación de vault del paciente
-- [ ] Estructura del plugin
-- [ ] Schema `teleconsulta.db`
-- [ ] IPC: `encrypt_with_datakey`, `decrypt_with_datakey`, `get_patient_datakey`
-- [ ] IPC: `decrypt_with_patient_key`, `create_medical_note`, `get_medical_note`
-- [ ] API con servidor PocketBase
-- [ ] Sync del plugin
-- [ ] Modo paciente en app Tauri
-- [ ] Modo médico: integración con Core
-- [ ] Notificaciones push
-- [ ] Tests de integración
-
----
-
-*Documento generado el 2026-07-09. Arquitectura validada: PatientDataKey, Zero-Knowledge, modo médico/modo paciente en mismo binario.*
+| v2.0 | v3.0 |
+|---|---|
+| PatientDataKey completo (vault, `patient_keys`, `shared_notes`) | Thread keys + wrap mínimo del paciente; PatientDataKey post-v1 |
+| `teleconsulta.db` propia del plugin | Tablas namespaced en la DB del Core |
+| `is_synced` por tabla | Outbox `sync_queue` (fase4 §3.4) |
+| `create_note` (pre-entries) | `create_entry` (entries firmadas) |
+| Compartir nota con el paciente en v1 | Fuera de alcance v1 |
+| Sin pago | Workflow de pago QR/transferencia con confirmación manual |
+| Sync propia del plugin | Primitivas de fase4 v1.1 (unión/LWW/relay mismo) |

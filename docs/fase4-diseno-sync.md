@@ -1,8 +1,8 @@
 # Fase 4 — Diseño de Sincronización: Desktop + Servidor
 
 **Proyecto:** Simplex Health Core
-**Versión:** 1.0 — 2026-10-03
-**Estado:** Diseño aprobado (decisiones §1)
+**Versión:** 1.1 — 2026-10-11 (correcciones de auditoría sobre v1.0 del 2026-10-03)
+**Estado:** Diseño aprobado (decisiones §1). v1.1 corrige hechos desactualizados respecto al código y agrega: regla anti-pérdida ante push fallido (§4.1), `enc_meta` pre-cifrado (§3.3/§6.2), `require_session` como prerequisito de atribución (§3.4/§4.5) y semántica de fallo parcial en el push (§6.2).
 
 ---
 
@@ -49,8 +49,8 @@ Principios heredados que se mantienen:
 | 3.5.4 Índices faltantes | `idx_entries_*` ya existen; `blind_index UNIQUE` ya indexa; `entity_id` de notes aplica a notes | Sin acción |
 | 3.5.5 Múltiples blind indexes (dni, teléfono…) | **Pendiente**, no bloquea v1 (la búsqueda server-side es post-v1) | Diferido |
 | 3.5.6 Zeroize de claves en RAM | **Resuelto**: estados y transitorios en `Zeroizing` (crate `zeroize`), args de comandos como `Zeroizing<String>` | Sin acción |
-| `entities.external_id` | Columna existe pero **no se puebla** | **Pre-requisito M1** |
-| `entities.updated_at` / soft delete | No existen (`update_entity` solo cambia `enc_data_blob`); no hay comando de borrado | `updated_at` en v002; soft delete solo si algún día hay delete |
+| `entities.external_id` | **Ya se puebla**: `create_entity` asigna UUIDv4 (crate `uuid`); filas legacy pueden tener NULL | Backfill v002 solo para NULLs, con el crate `uuid` |
+| `entities.updated_at` / soft delete | No existen. **Además `update_entity` pisa `created_by_user_id`** con el editor (borra al autor original) — bug de atribución | `updated_at` en v002; **update_entity deja de tocar `created_by_user_id`**; soft delete solo si algún día hay delete |
 
 ---
 
@@ -80,7 +80,7 @@ Principios heredados que se mantienen:
 
 Solución:
 
-- `entities.external_id TEXT UNIQUE` (ya existe) se **backfillea con UUIDv4 en v002** y se asigna en cada `create_entity`.
+- `entities.external_id TEXT UNIQUE` (ya existe): **`create_entity` ya lo asigna con el crate `uuid`**; el v002 solo backfillea las filas legacy con NULL (mismo formato UUIDv4).
 - El sync de entities usa `external_id` como clave externa; el `id` INTEGER sigue siendo local y privado.
 - El payload de sync de una entry lleva el `external_id` del paciente; al aplicar el pull se resuelve al `id` local (insert implícito del entity si aún no existe).
 - `entries.id` ya es TEXT UUID → sirve como clave externa directa.
@@ -89,12 +89,17 @@ Solución:
 ### 3.3 Migración v002 (pre-requisito)
 
 ```sql
--- backfill de UUIDs para entidades existentes
-UPDATE entities SET external_id = lower(hex(randomblob(4))) || '-' || ... WHERE external_id IS NULL;
+-- backfill de UUIDs solo para filas legacy sin external_id
+-- (en Rust, con el crate `uuid` — mismo formato que create_entity)
+UPDATE entities SET external_id = <uuid-v4> WHERE external_id IS NULL;
 -- timestamp de modificación para LWW
 ALTER TABLE entities ADD COLUMN updated_at TEXT NOT NULL DEFAULT '';
 UPDATE entities SET updated_at = created_at WHERE updated_at = '';
 CREATE INDEX idx_entities_updated ON entities(updated_at);
+-- title/status pre-cifrados con DataKey al crear la entry: el push de
+-- entries no depende de la bóveda abierta (§6.2). Nullable: las entries
+-- legacy no tienen enc_meta (ver notas).
+ALTER TABLE entries ADD COLUMN enc_meta BLOB;
 
 -- estado de sync por registro (LWW) y cursores por colección
 CREATE TABLE sync_state (
@@ -118,20 +123,24 @@ CREATE TABLE file_sync (
 Notas:
 
 - `entries.is_synced` queda **deprecado** (fuente única de verdad = `sync_queue`); no se elimina en v002 por prudencia.
+- `enc_meta` nullable: las **entries legacy** no lo tienen; el push de esas filas cifra title/status en el momento (transicional — requiere bóveda abierta solo para ellas; las entries nuevas siempre lo traen pre-cifrado).
+- `sync_queue.local_record_id` es INTEGER y `entries.id` es TEXT UUID: para **entries la clave de la cola es `external_record_id`** (el UUID); no depender de `local_record_id` en ese caso.
 - `users.last_login_at` **no se sincroniza** (churn en cada login, sin valor cross-device): va fuera del envelope.
-- `update_entity` (hoy: `enc_data_blob`, `created_by_user_id`) pasa a tocar `updated_at = datetime('now')` y a encolar.
+- `update_entity` (hoy: `enc_data_blob`, `created_by_user_id`) pasa a tocar `updated_at = datetime('now')` y a encolar, **y deja de sobrescribir `created_by_user_id`** (el autor original se preserva; la edición no es autoría).
 
 ### 3.4 Outbox: la cola se alimenta en la misma transacción
 
 Todo comando de escritura debe insertar en `sync_queue` **dentro de su transacción** (rollback atómico: o el cambio y su evento salen juntos, o ninguno). Comandos que encolan:
 
 - `create_entity`, `update_entity`
-- `create_entry`
+- `create_entry` (además **pre-cifra `enc_meta`** — title/status — en la misma transacción)
 - Admin: `create_user`, cambio de rol, `is_active`, reset de password, rotación de `signing_keys`, edición de perfil
 - Auth: cambio de password (también marca sucios los wrap/vault correspondientes)
 - Eventos de archivo (vault/wrap/salt): marcan `file_sync.dirty` (no son filas de tabla)
 
 Pull aplicado desde el servidor **no re-encola** (o se marca `origin_device` propio y se omite al empujar); los upserts idempotentes hacen inocuo el eco.
+
+**Atribución (requisito de M1, auditoría v1.1):** `create_entity`, `update_entity` y `create_entry` hoy reciben `user_id`/`author_id` del **frontend** — sin `require_session`. En entries el daño es parcial (el `author_id` entra en el material firmado, así que una entry forjada falla su verificación), pero en entities es forjable sin detección, y el sync **propagaría** filas venenosas. Todos estos commands deben derivar el autor de la sesión (`require_session`) antes de que el sync exista.
 
 ---
 
@@ -144,6 +153,7 @@ Los registros mutables resuelven por **orden de llegada al servidor**, nunca por
 1. **PUSH** de lo local pendiente → el servidor responde/registra `updated` (su reloj) → se guarda en `sync_state.remote_updated`.
 2. **PULL** de lo remoto → se aplica solo si `remote.updated > sync_state.remote_updated` (la última versión conocida del servidor).
 3. Una edición local **no pusheada** sobrevive al pull: el remoto solo la pisa si es más nuevo que la última versión conocida, no que la edición local. La ventana de riesgo (ediciones simultáneas en dos equipos dentro del mismo tick de 60 s) se resuelve en el siguiente ciclo a favor del que llegó después al servidor.
+4. **Si el PUSH de este ciclo tuvo errores, el PULL de colecciones mutables se omite.** Motivo (auditoría v1.1): sin esta regla, un remoto más nuevo que la última versión conocida del servidor pero más viejo que una edición local sin pushear **la pisaría en silencio**, y el siguiente push consolidaría la pérdida. El retry a los 60 s reintenta push y pull juntos.
 
 ### 4.2 Por tabla
 
@@ -155,6 +165,8 @@ Los registros mutables resuelven por **orden de llegada al servidor**, nunca por
 | `professional_profiles` | LWW del blob. |
 | `signing_keys` | Ver 4.4. |
 | Archivos (vault/wrap/salt) | LWW por blob. |
+
+> `entries.timestamp` viene del reloj del cliente (hora del evento — correcto clínicamente): el orden de evoluciones cross-device hereda el skew de relojes de los equipos. Aceptado; no afecta la unión por `id` ni la verificación de firmas.
 
 ### 4.3 Borde: `username` duplicado
 
@@ -175,6 +187,7 @@ Clave de dedupe: `(user_id, public_key, valid_from)`.
 
 Una entry creada en el equipo A y recibida por B debe verificar en B:
 
+- **Prerequisito (auditoría v1.1):** `author_id` se deriva de `require_session` en `create_entry`, no del argumento del frontend. Sin esto la atribución es un dato forjable y este invariante no se sostiene.
 - `author_id` resuelve en `users` sincronizado → FK OK.
 - La firma se verifica contra `signing_keys` sincronizado usando el rango vigente **en el `timestamp` de la entry** (query existente en `entry_commands`).
 - El `payload` se descifra con la DataKey compartida (D1/D3).
@@ -215,7 +228,7 @@ Residual aceptado: por volumen/timing y por los `blind_index` (propósito de bú
 
 - La **semilla no participa**: solo queda en el papel para break-glass.
 - El código de emparejamiento **solo autentica al dispositivo**, no libera secrets (a diferencia del diseño de julio): sin password de usuario, el pull entrega blobs inútiles.
-- Mitigaciones: código 6 caracteres alfanuméricos + expiración 10 min + uso único + **rate-limit en el endpoint de canje** (anti brute-force).
+- Mitigaciones: código 6 caracteres alfanuméricos + expiración 10 min + uso único + **rate-limit en el endpoint de canje** (anti brute-force). El rate-limit es la defensa real del espacio de búsqueda; ampliar a 8 caracteres es un upgrade opcional, no un requisito.
 
 ### 5.4 Revocación
 
@@ -258,11 +271,16 @@ PUSH:  para cada fila de sync_queue (y archivo con file_sync.dirty), en orden:
          files → users → profiles/signing_keys → entities → entries   (respeta FK lógicas)
        → PUT/POST al servidor → guardar remote_updated en sync_state
        → DELETE de sync_queue / limpiar dirty
+       Fallo parcial: se corta la colección actual (no se salta a la
+       siguiente); FIFO preservado, el resto se reintenta en el próximo ciclo.
 PULL:  por colección, desde sync_cursors[collection]:
          GET ?since=cursor → aplicar §4 → upsert idempotente → avanzar cursor
        → skip de records con origin_device propio
+       → si el PUSH de este ciclo tuvo errores: OMITIR pull (§4.1, punto 4)
 FIN:   checkpoint de WAL + UI "sincronizado hace Xs"
 ```
+
+**Dependencia de DataKey (auditoría v1.1):** el **push no la necesita** — `enc_meta` de entries va pre-cifrado en `create_entry` (§3.3); el resto de los blobs viajan tal cual como se guardan cifrados. El **pull de entries sí la necesita** para restaurar `title`/`status` en claro localmente: con bóveda cerrada, las entries recibidas **se aplazan** (buffer pendiente) y se aplican al desbloquear — nunca se escribe una entry sin sus columnas restauradas. M3 define el mecanismo exacto; el requisito de diseño es ese.
 
 ### 6.3 Modo offline
 
@@ -349,7 +367,7 @@ Timestamps de LWW: el campo `updated` de PocketBase (reloj del servidor) — no 
 | Unit red | Push/pull contra servidor simulado | `wiremock` |
 | Integración | Engine completo contra **PocketBase real en Docker** (compose de test): pairing → push → pull → revocación | test `#[ignore]` local + job opcional de CI |
 | 2 dispositivos | Dos directorios de datos temporales + dos `Connection` en el mismo test: A crea entry → B la recibe y **verifica la firma de A** (invariante §4.5); B edita entity → A aplica LWW; admin desactiva usuario en A → B lo bloquea en el próximo pull/re-login | `cargo test` |
-| Fallas | Servidor caído (backoff), token revocado, pull interrumpido a mitad (cursor no avanza), skew de reloj, eco `origin_device` | unit + integración |
+| Fallas | Servidor caído (backoff), token revocado, pull interrumpido a mitad (cursor no avanza), skew de reloj, eco `origin_device`, **push con error → pull omitido en el mismo ciclo (pérdida silenciosa §4.1.4)**, pull de entries con bóveda cerrada (buffer pendiente) | unit + integración |
 | E2E de flujo | Onboarding de equipo nuevo completo (§5.3) | manual en checklist de release + (futuro) tauri-driver |
 
 Cobertura objetivo: las reglas de §4 y el orden de §6.4 tienen test de invariantes, no solo happy path.
@@ -361,7 +379,7 @@ Cobertura objetivo: las reglas de §4 y el orden de §6.4 tienen test de invaria
 | # | Hito | Contenido | Tamaño |
 |---|---|---|---|
 | M0 | Este documento | Aprobado | ✅ |
-| M1 | Pre-requisitos locales | v002 (external_id, `updated_at`, `sync_state`/`sync_cursors`/`file_sync`), outbox en todos los comandos de escritura, verificación de zeroize, CI verde sin servidor | M |
+| M1 | Pre-requisitos locales | v002 (`external_id` backfill legacy con crate `uuid`, `updated_at`, `enc_meta` en entries, `sync_state`/`sync_cursors`/`file_sync`), outbox en todos los comandos de escritura (con `enc_meta` pre-cifrado en `create_entry`), **`require_session` en entity_commands y create_entry — autor desde la sesión, nunca del frontend**, **`update_entity` deja de pisar `created_by_user_id`**, verificación de zeroize, CI verde sin servidor | M |
 | M2 | Infra + identidad de dispositivo | Compose perfiles lan/vps, colecciones PB, pairing + tokens, panel admin "Dispositivos" | M |
 | M3 | Engine push/pull | Worker, reglas de conflicto, indicador de estado, tests unit + integración PB + 2 dispositivos | L |
 | M4 | Onboarding + vaults E2E | Flujo "Unirse al consultorio", sync de archivos (salt/vaults/wraps), re-login por rotación, invariante de firma cross-install | M |
@@ -391,6 +409,9 @@ Cobertura objetivo: las reglas de §4 y el orden de §6.4 tienen test de invaria
 ## 11. Checklist de entrega de la Fase 4
 
 - [ ] M1: v002 aplicada, outbox en todos los comandos, `external_id` siempre poblado
+- [ ] Ningún command confía `user_id`/`author_id` del frontend: `require_session` en entity_commands y `create_entry`; `update_entity` preserva `created_by_user_id`
+- [ ] `create_entry` pre-cifra `enc_meta`; el push de entries funciona con bóveda cerrada
+- [ ] Push con error → pull omitido en el mismo ciclo (test de pérdida silenciosa §4.1.4)
 - [ ] Compose perfil LAN y perfil VPS funcionando; PocketBase con colecciones y reglas por `installation_id`
 - [ ] Emparejamiento: generar código → canjear → token → revocación probada
 - [ ] Push: cola drena en orden; pull: cursores avanzan; eco `origin_device` descartado
@@ -407,4 +428,4 @@ Cobertura objetivo: las reglas de §4 y el orden de §6.4 tienen test de invaria
 
 ---
 
-*Diseño aprobado 2026-10-03: hosting híbrido, vaults sincronizados cifrados, cuentas sincronizadas, polling v1. Sustituye a la hoja de ruta de julio 2026 como referencia de la Fase 4.*
+*Diseño aprobado 2026-10-03: hosting híbrido, vaults sincronizados cifrados, cuentas sincronizadas, polling v1. Sustituye a la hoja de ruta de julio 2026 como referencia de la Fase 4. v1.1 (2026-10-11): correcciones de auditoría contra el código — external_id ya se puebla, update_entity pisaba created_by_user_id, regla anti-pérdida ante push fallido (§4.1.4), enc_meta pre-cifrado (§3.3/§6.2), require_session como prerequisito de atribución (§3.4/§4.5), semántica de fallo parcial del push (§6.2).*
