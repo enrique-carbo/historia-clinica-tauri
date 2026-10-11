@@ -1,4 +1,5 @@
 use crate::commands::License;
+use crate::db::config_schema::SchemaConfig;
 use crate::security::crypto;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
@@ -97,16 +98,6 @@ const STATUS_LABELS: &[(&str, &str)] = &[
     ("COMPLETED", "Completado"),
 ];
 
-const PATIENT_LABELS: &[(&str, &str)] = &[
-    ("nombre", "Nombre"),
-    ("apellido", "Apellido"),
-    ("dni", "DNI / Documento"),
-    ("fecha_nacimiento", "Fecha de Nacimiento"),
-    ("telefono", "Teléfono"),
-    ("email", "Correo Electrónico"),
-    ("direccion", "Dirección"),
-];
-
 fn label_of<'a>(list: &[(&'a str, &'a str)], key: &'a str) -> &'a str {
     list.iter()
         .find(|(k, _)| *k == key)
@@ -193,7 +184,10 @@ fn full_patient_name(snapshot: &ExportSnapshot) -> String {
         .to_string()
 }
 
-pub fn render_markdown(snapshot: &ExportSnapshot) -> String {
+pub fn render_markdown(
+    snapshot: &ExportSnapshot,
+    schema: &SchemaConfig,
+) -> Result<String, String> {
     let mut out = String::new();
 
     let patient_name = full_patient_name(snapshot);
@@ -213,20 +207,23 @@ pub fn render_markdown(snapshot: &ExportSnapshot) -> String {
         snapshot.entries.len()
     ));
 
+    // Labels y orden de los campos del paciente: fuente única = entity_schema.json.
+    let patient_labels = schema.field_labels("patient")?;
+
     out.push_str("## Datos del paciente\n\n");
     out.push_str("| Campo | Valor |\n|---|---|\n");
-    for (key, label) in PATIENT_LABELS {
+    for (key, label) in &patient_labels {
         let value = snapshot
             .patient
             .data
-            .get(*key)
+            .get(key.as_str())
             .map(String::as_str)
             .unwrap_or("");
         if value.trim().is_empty() {
             continue;
         }
         let mut display = value.to_string();
-        if *key == "fecha_nacimiento" {
+        if key == "fecha_nacimiento" {
             if let Some(age) = age_from_birth(value) {
                 display = format!("{} ({} años)", value, age);
             }
@@ -347,7 +344,7 @@ pub fn render_markdown(snapshot: &ExportSnapshot) -> String {
         "*Documento confidencial que contiene información clínica protegida. Generado por Simplex Health Core.*\n",
     );
 
-    out
+    Ok(out)
 }
 
 fn sanitize_component(raw: &str) -> String {
@@ -395,6 +392,10 @@ pub fn export_filename(snapshot: &ExportSnapshot) -> String {
 mod tests {
     use super::*;
 
+    fn test_schema() -> SchemaConfig {
+        crate::db::config_schema::from_embedded().expect("entity_schema.json embebido válido")
+    }
+
     fn sample_payload(category: &str) -> HashMap<String, String> {
         let mut payload = HashMap::new();
         match category {
@@ -419,6 +420,7 @@ mod tests {
         data.insert("apellido".to_string(), "García López".to_string());
         data.insert("dni".to_string(), "12.345.678".to_string());
         data.insert("fecha_nacimiento".to_string(), "1980-05-12".to_string());
+        data.insert("ciudad".to_string(), "Córdoba".to_string());
 
         ExportSnapshot {
             patient: ExportPatient {
@@ -472,9 +474,12 @@ mod tests {
 
     #[test]
     fn renders_header_with_patient_and_professional() {
-        let md = render_markdown(&sample_snapshot());
+        let md = render_markdown(&sample_snapshot(), &test_schema()).expect("render");
         assert!(md.contains("# Historia Clínica — María José García López"));
         assert!(md.contains("| DNI / Documento | 12.345.678 |"));
+        // Campo agregado al schema después de la versión inicial: el export
+        // lo incluye sin tocar código (labels dinámicos desde entity_schema.json).
+        assert!(md.contains("| Ciudad | Córdoba |"));
         assert!(md.contains("| Nombre | Dra. Ana Test |"));
         assert!(md.contains("| Profesión | Médica |"));
         assert!(md.contains("| Matrículas | MP-12345 — Córdoba · MN-67890 — CABA |"));
@@ -484,7 +489,7 @@ mod tests {
 
     #[test]
     fn renders_entries_in_chronological_order() {
-        let md = render_markdown(&sample_snapshot());
+        let md = render_markdown(&sample_snapshot(), &test_schema()).expect("render");
         let allergy_pos = md.find("### 1.").expect("primera entry");
         let soap_pos = md.find("### 2.").expect("segunda entry");
         assert!(allergy_pos < soap_pos, "la entry más antigua debe ir primero");
@@ -497,7 +502,7 @@ mod tests {
 
     #[test]
     fn uses_canonical_field_order_and_labels() {
-        let md = render_markdown(&sample_snapshot());
+        let md = render_markdown(&sample_snapshot(), &test_schema()).expect("render");
         let s = md.find("#### Subjetivo").expect("subjetivo");
         let o = md.find("#### Objetivo").expect("objetivo");
         let e = md.find("#### Evaluación").expect("evaluacion");
@@ -509,7 +514,7 @@ mod tests {
 
     #[test]
     fn footer_contains_sha256_and_warning() {
-        let md = render_markdown(&sample_snapshot());
+        let md = render_markdown(&sample_snapshot(), &test_schema()).expect("render");
         assert!(md.contains("> **SHA-256 del documento:** `"));
         assert!(md.contains("Documento confidencial"));
     }

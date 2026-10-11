@@ -1,3 +1,4 @@
+use crate::db::config_schema::SchemaConfig;
 use crate::export::render::{
     export_filename, render_markdown, ExportEntry, ExportPatient, ExportProfessional, ExportSnapshot,
 };
@@ -84,21 +85,26 @@ pub fn get_export_snapshot(
 pub fn export_history(
     app: AppHandle,
     snapshot: ExportSnapshot,
+    schema_state: State<'_, SchemaConfig>,
 ) -> Result<ExportResult, String> {
     let base_dir = app
         .path()
         .app_local_data_dir()
         .map_err(|_| "No se pudo determinar la ruta de almacenamiento".to_string())?;
 
-    write_export(&base_dir.join("exports"), &snapshot)
+    write_export(&base_dir.join("exports"), &snapshot, &schema_state)
 }
 
-fn write_export(dir: &Path, snapshot: &ExportSnapshot) -> Result<ExportResult, String> {
+fn write_export(
+    dir: &Path,
+    snapshot: &ExportSnapshot,
+    schema: &SchemaConfig,
+) -> Result<ExportResult, String> {
     if snapshot.entries.is_empty() {
         return Err("El paciente no tiene entries para exportar.".to_string());
     }
 
-    let markdown = render_markdown(snapshot);
+    let markdown = render_markdown(snapshot, schema)?;
     let filename = export_filename(snapshot);
 
     std::fs::create_dir_all(dir)
@@ -136,6 +142,7 @@ fn write_export(dir: &Path, snapshot: &ExportSnapshot) -> Result<ExportResult, S
 mod tests {
     use super::*;
     use crate::security::crypto;
+    use crate::db::config_schema::from_embedded;
     use crate::db::database::init_db;
     use crate::types::{SessionState, SessionUser, SigningState};
     use super::super::professional_profile_commands::License;
@@ -312,7 +319,8 @@ mod tests {
         });
 
         let dir = tempfile::tempdir().expect("tempdir");
-        let result = write_export(dir.path(), &snapshot).expect("write_export");
+        let result = write_export(dir.path(), &snapshot, &from_embedded().expect("schema"))
+            .expect("write_export");
 
         assert!(result.filename.ends_with(".md"));
         assert!(result.filename.starts_with("HistoriaClinica_Pérez_Juan_"));
@@ -332,7 +340,8 @@ mod tests {
         assert!(snapshot.entries.is_empty());
 
         let dir = tempfile::tempdir().expect("tempdir");
-        let err = write_export(dir.path(), &snapshot).expect_err("debe rechazar 0 entries");
+        let err = write_export(dir.path(), &snapshot, &from_embedded().expect("schema"))
+            .expect_err("debe rechazar 0 entries");
         assert!(err.contains("no tiene entries"));
     }
 }

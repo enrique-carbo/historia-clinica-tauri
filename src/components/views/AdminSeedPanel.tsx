@@ -41,6 +41,8 @@ export function AdminSeedPanel() {
         return;
       }
       await invoke("admin_rotate_seed", { phrase: confirmInput.trim() });
+      // Referencia liberada tras usarse (no garantía de borrado en V8 — ver README)
+      setConfirmInput("");
       setPhase("done");
     } catch (err) {
       setError(String(err));

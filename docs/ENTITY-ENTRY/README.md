@@ -1,6 +1,6 @@
 # 🩺 Simplex Health Core — Historia Clínica Digital (Entity-Entry Paradigm)
 
-Aplicación de escritorio nativa orientada a la gestión de historias clínicas multi-dominio (medicina humana, veterinaria, odontología) con un enfoque **Local-First**, arquitectura de seguridad **Zero-Knowledge** (Cifrado de Extremo a Extremo) y **Máxima Simplicidad Relacional**.
+Aplicación de escritorio nativa orientada a la gestión de historias clínicas multi-dominio (medicina humana, veterinaria, odontología) con un enfoque **Local-First**, arquitectura de seguridad **Zero-Knowledge Parcial** (Cifrado de Extremo a Extremo) y **Máxima Simplicidad Relacional**.
 
 El sistema garantiza la máxima privacidad procesando y cifrando toda la información médica sensible directamente en la RAM del hardware local antes de persistirla en el disco o sincronizarla. La persistencia central del Core se rige por un principio purista: **indestructible, inmutable y reducida a solo dos conceptos universales (`Entity` y `Entry`)**.
 
@@ -17,8 +17,9 @@ El sistema garantiza la máxima privacidad procesando y cifrando toda la informa
 * **Manejo de Datos de Plugins:** Cualquier funcionalidad operativa extendida (Agenda, Telemedicina, Facturación, Gestión de Stock) tiene terminantemente prohibido crear tablas dentro de `core_clinical.db`. Cada plugin debe inicializar y gestionar **su propio archivo SQLite independiente** (ej: `scheduler.db`, `telemed.db`).
 * **Flujo de Interacción:** Un plugin de telemedicina gestiona el chat informal (textos, audios, adjuntos) pura y exclusivamente dentro de su propia base de datos (`telemed.db`). Al finalizar la teleconsulta, el plugin extrae el resumen relevante y obliga al profesional a guardar una única `Entry` inmutable tipo `SOAP_NOTE` en el Core. El Core jamás almacena logs de mensajería informal.
 
-### 3. Soberanía Criptográfica Absoluta (Zero-Knowledge)
+### 3. Soberanía Criptográfica (Zero-Knowledge Parcial)
 * **Regla:** El desarrollador/servidor central no posee, no conoce y no puede recuperar jamás la llave de acceso a los datos de ninguna instalación.
+* **Alcance:** la protección es contra el disco robado y el servidor central. **No** aísla a los co-usuarios de la misma instalación: la DataKey es compartida por diseño.
 * **Frase Semilla Local:** Cada instalación genera una única clave global a partir de una frase semilla de **3 o 6 palabras** (estándar mnemónico). Esta frase es la llave maestra para descifrar el archivo local mediante **SQLCipher (AES-256)**.
 * **Responsabilidad del Usuario:** Se entrena explícitamente al cliente para que grabe estas palabras en una **placa de metal** física (resistente a incendios/inundaciones). Si la computadora se rompe y el usuario pierde el metal, los datos son matemáticamente irrecuperables. No existe el soporte de "recuperar contraseña".
 
@@ -99,7 +100,7 @@ Tus tres archivos de configuración (`schema.json`, `medical_history_schema.json
 
 ---
 
-## 🔒 Especificación de Seguridad (Zero-Knowledge & Vault)
+## 🔒 Especificación de Seguridad (Zero-Knowledge Parcial & Vault)
 
 ### Modelo de Cifrado por Capas Actualizado
 

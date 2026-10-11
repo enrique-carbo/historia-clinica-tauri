@@ -265,7 +265,7 @@ Registrar y evitar replicar; se limpia al migrar (Fase B):
 | ~~`text-zinc-600/700` en texto no-placeholder~~ | 13 usos en 8 archivos (meta, empty states, iconos decorativos) | ✅ Todos a `text-zinc-500` (`text-muted`). Placeholders (`zinc-700`) intactos por diseño |
 | ~~Animaciones muertas (`animate-in` sin plugin)~~ | `Entity:355`, `PatientEhrView:155` | ✅ Instalado `tw-animate-css` (compatible Tailwind v4) + import en `index.css` |
 | Sombras ad-hoc sin token (`shadow-md`, `shadow-emerald-*`) | Puntuales | ⏳ Mapear a §7 al migrar |
-| Doble fuente de verdad de `schema.json` (frontend/backend) | `src/config/` + `src-tauri/config/` | ⏳ Unificar en Fase B (fuera del alcance visual) |
+| ~~Doble fuente de verdad de `schema.json` (frontend/backend)~~ | `src/config/` + `src-tauri/config/` | ✅ Unificado: única copia en `src-tauri/config/entity_schema.json`; `Entity.tsx` y `PatientEhrView.tsx` importan ese mismo archivo. Export y EHR derivan labels del schema (sin listas hardcodeadas) |
 
 ---
 

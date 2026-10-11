@@ -1,6 +1,6 @@
 # 🩺 Simplex Health Core — Historia Clínica Digital
 
-Aplicación de escritorio nativa orientada a la gestión de historias clínicas y telemedicina asíncrona con un enfoque **Local-First** y arquitectura de seguridad **Zero-Knowledge** (Cifrado de Extremo a Extremo).
+Aplicación de escritorio nativa orientada a la gestión de historias clínicas y telemedicina asíncrona con un enfoque **Local-First** y arquitectura de seguridad **Zero-Knowledge Parcial** (Cifrado de Extremo a Extremo).
 
 El sistema garantiza la máxima privacidad procesando y cifrando toda la información médica sensible directamente en la RAM del hardware local antes de persistirla en el disco o sincronizarla. El servidor remoto actuará en el futuro únicamente como un "tubo ciego" que almacena texto cifrado, sin capacidad de leer la información.
 
@@ -46,7 +46,7 @@ src-tauri/src/
  │   └── vault.rs         # Gestión de Bóvedas criptográficas por usuario (Cold Start + Llave Privada de Firma).
  │
  ├── db/                  # Capa de persistencia.
- │   ├── config_schema.rs # Structs para parsear schema.json dinámicamente.
+ │   ├── config_schema.rs # Structs del schema de entities + `from_embedded()` (include_str! de entity_schema.json) + `field_labels()`.
  │   ├── database.rs      # Apertura de SQLite (WAL) + delegación en `run_migrations`.
  │   └── migrations/      # Migraciones append-only versionadas con `PRAGMA user_version`
  │       └── mod.rs       # (v001 baseline, transacción por migración, guard de downgrade).
@@ -78,9 +78,6 @@ src/
  │   ├── useNavigationStore.ts # Estado de navegación (tabs, drawer).
  │   ├── useSeedStore.ts     # Flag de seed configurada (persistido; la frase NO se persiste).
  │   └── usePatientStore.ts  # Fuente única de verdad para paciente seleccionado.
- │
- ├── config/
- │   └── schema.json              # Definición de entidades (copia empaquetada del backend en src-tauri/config/).
  │
  ├── components/
  │   ├── layouts/
@@ -118,11 +115,13 @@ src/
 - **Store Unificado de Paciente**: `usePatientStore` es la fuente única de verdad para la selección de paciente. `PatientEhrView`, `Entity`, `EntryForm` y `EntryTimeline` consumen el mismo estado, garantizando sincronización instantánea sin props-drilling.
 - **Entries Append-Only**: Las entries son inmutables una vez creadas. No existen operaciones de update ni delete, garantizando integridad y no-repudio. La corrección se hace con nuevas entries (ej: "Corrección de...").
 - **Flujo Unificado de EHR**: La interfaz `PatientEhrView` consolida búsqueda, ficha y evoluciones en una sola vista, eliminando el context-switching entre tabs.
-- **Limpieza de Datos Sensibles**: El frontend nunca retiene la contraseña en estado de React. Se limpia inmediatamente después de `unlock_vault`. `lock_vault` destruye CryptoState, SigningState y DataKey de la RAM, y limpia la `SessionState` (sesión activa).
+- **Limpieza de Datos Sensibles**: El frontend limpia las referencias de la contraseña y la frase en React apenas se usan (tras `unlock_vault` o `seed_recovery`). En Rust, las llaves viven en `Zeroizing<[u8; 32]>` y las contraseñas/frases en `Zeroizing<String>`: al liberarse (unlock, `lock_vault`, fin de cada command) los bytes se **ponen a cero con `zeroize`** en vez de quedar como residuo en el heap. `lock_vault` además descarta los `Option` de `CryptoState`, `SigningState` y `DataKey` y limpia la `SessionState`. Ver §"Límites de zeroize" abajo — esto es *best-effort*, no borrado criptográfico garantizado.
 - **DataKey Nunca en Claro**: La llave de cifrado de datos médicos no se persiste en texto plano. Se envuelve con Argon2id(password) por usuario (fast path) y con SHA-256(seed) en el master wrap (bootstrap/recovery). La seed vive en papel, no en disco.
 - **Seed Phrase en Papel**: La frase semilla (6 palabras) no se persiste en `localStorage`. Solo el flag `isSeedConfigured` se guarda; la frase se muestra una vez en `SeedPhraseSetup` para anotarla. Se tipea únicamente en bootstrap de usuarios nuevos o recovery.
 
-## 🔒 Especificación de Seguridad (Zero-Knowledge & Vault)
+## 🔒 Especificación de Seguridad (Zero-Knowledge Parcial & Vault)
+
+> **Alcance del Zero-Knowledge:** protege el **disco** — sin la contraseña o la frase semilla, la base local es incomprensible para alguien con acceso físico. **No** aísla a los co-usuarios de la misma instalación: la DataKey es compartida por diseño (ver `docs/estrategia_encriptacion.md` §4.3), así que todos los usuarios con sesión abierta descifran los mismos datos clínicos. Entre usuarios el control es de autorización, no criptográfico.
 
 ### 1. Ciclo de Vida de las Claves (Cold Start)
 El sistema no utiliza claves hardcodeadas. Las claves nacen y mueren en la RAM:
@@ -132,9 +131,17 @@ El sistema no utiliza claves hardcodeadas. Las claves nacen y mueren en la RAM:
 4. Se desbloquea el archivo `vault_{user_id}.bin`, el cual contiene la Llave Privada de Firma (Ed25519) cifrada con la Llave Maestra.
 5. Se resuelve la **DataKey** (ver §3.1): wrap personal → seed+master wrap → migración legacy → generación.
 6. Las tres llaves (Master, Signing, DataKey) se inyectan en `CryptoState`, `SigningState` y `DataKey` (RAM volátil de Rust).
-7. Al cerrar sesión, React llama a `lock_vault`. Rust destruye los `Option` de la RAM. Las claves dejan de existir.
+7. Al cerrar sesión, React llama a `lock_vault`. Rust descarta los `Option` de las tres llaves: cada `Zeroizing` se **pone a cero al caer** (`Drop`), en vez de dejar los 32 bytes residuales en la memoria. Las llaves dejan de estar disponibles para cualquier lectura posterior del proceso.
 
 **Nota**: la DataKey **no** se carga al arrancar la app — solo existe en RAM después de un `unlock_vault` exitoso.
+
+### 1.1 Límites de zeroize (honestidad sobre la limpieza de RAM)
+
+`zeroize` es un borrado de **best-effort**, no una garantía criptográfica:
+
+- **Sí hace:** poner a cero el buffer exacto que posee el `Zeroizing` (llaves de 32 bytes, contraseñas/frases `String`, buffers intermedios de desencriptación del vault y de unwrap de data_key) cuando se libera, de forma resistente a la optimización del compilador (writes volátiles).
+- **No puede garantizar:** copias que escape del `Zeroizing` — buffers de `serde_json` en el canal IPC (el IPC copia argumentos y resultados), registros/dump de pila del runtime, memoria de swap o de archivos de página si el OS intercambia el proceso, ni el heap de V8. En el frontend solo se limpian **referencias** (`setPassword("")`): V8 no permite borrado criptográfico de strings.
+- **Máximo práctico:** la ventana que se protege es la que va *después* de liberar la llave (`lock_vault`, fin de command, cierre de sesión). **Con la bóveda abierta, un volcado de memoria del proceso expone las llaves vivas** — esa es una limitación de cualquier app que necesite usar las llaves en RAM. No se usan `mlock`/`VirtualLock` ni se audita el swap.
 
 ### 2. Aislamiento Multi-Usuario (Vaults)
 Cada médico tiene su propio archivo de bóveda (`vault_{user_id}.bin`), su propia sal de KDF (`vault_{user_id}.salt`) y su propio wrap de DataKey (`.data_key.{user_id}`).
@@ -170,7 +177,7 @@ La DataKey (llave que cifra todos los datos médicos) **nunca se persiste en cla
 Hash determinista SHA-256 (DNI normalizado + sal de instalación) para búsqueda exacta sin exponer el dato real. La sal es global a la instalación (`/.installation_salt`) para permitir búsqueda compartida entre médicos de la misma máquina.
 
 ### 5. Firma Digital y No-Repudio
-Cada entry se firma con Ed25519 usando la llave privada del médico en RAM. El payload de firma es `category|subject_id|title|status|timestamp` (consistente entre creación y verificación). La llave pública vive en dos lugares:
+Cada entry se firma con Ed25519 usando la llave privada del médico en RAM. El material de firma es un **JSON canónico** con todos los campos de la fila — `category`, `subject_id`, `title`, `status`, `timestamp`, `author_id`, `id`, `created_at` y `hex(payload_cifrado)` — serializado en orden de declaración (consistente entre creación y verificación, centralizado en `signed_hash`). Se firman los bytes **tal cual se persisten**: alterar cualquier atributo de la fila —el contenido clínico aunque se re-cifre correctamente con la DataKey, la identidad de la fila o su fecha de creación— rompe la firma. La llave pública vive en dos lugares:
 - `professional_profiles.public_key`: la **vigente** (se sincroniza en cada `unlock_vault`).
 - `signing_keys` (histórico): rangos `valid_from`/`valid_to` por clave. **La verificación de cada entry usa la clave del autor vigente en el timestamp de la entry** (`public_key_at`), de modo que un reset de contraseña o una rotación de llave no invalidan las firmas históricas. Registros previos al histórico caen en fallback a `professional_profiles`.
 
@@ -252,13 +259,13 @@ CREATE INDEX idx_entries_sync ON entries(is_synced) WHERE is_synced = 0;
 ### Archivos de Configuración Empaquetados
 | Archivo | Propósito | Consumidor |
 |---|---|---|
-| `src/config/schema.json` (copia del backend en `src-tauri/config/`) | Define entidades y campos de filiación | `entity_commands.rs` (via `include_str!`) + `Entity.tsx` |
+| `src-tauri/config/entity_schema.json` (fuente única) | Define entidades, campos de filiación y groups (ej. Responsable - Tutor) | `entity_commands.rs` (validación + blind index), `export_commands.rs` (labels del .md), `src/utils/schema.ts` → `Entity.tsx` + `PatientEhrView.tsx` |
 | `config/entry_templates/soap.json` | Template de entry SOAP | `EntryForm.tsx` |
 | `config/entry_templates/allergy.json` | Template de alergia | `EntryForm.tsx` |
 | `config/entry_templates/medication.json` | Template de medicación | `EntryForm.tsx` |
 | `config/entry_templates/condition.json` | Template de condición médica | `EntryForm.tsx` |
 
-`schema.json` se empaqueta en el binario con `include_str!` en `lib.rs`. Los `entry_templates/` se embeben en el bundle de Vite con `import.meta.glob(..., { eager: true })`: `EntryForm.tsx` los descubre del disco en build time, valida el shape (`category`, `label`, `fields`) y arma el diccionario de templates. Todo funciona offline y es inmutable en runtime.
+`entity_schema.json` se empaqueta en el binario con `include_str!` (`config_schema.rs::from_embedded()`) y el frontend consume el mismo archivo vía `src/utils/schema.ts` — es la fuente única: labels y orden del export Markdown y del grid de contacto del EHR se derivan del schema, así que agregar un campo al JSON lo propaga a form, ficha EHR y export sin tocar código. Los groups (`type: "group"`) se renderizan como sección en el form pero se guardan aplanados con prefijo `{group}_{campo}` (ej. `responsable_nombre_completo`), con validación "nada o todo". Los `entry_templates/` se embeben en el bundle de Vite con `import.meta.glob(..., { eager: true })`: `EntryForm.tsx` los descubre del disco en build time, valida el shape (`category`, `label`, `fields`) y arma el diccionario de templates. Todo funciona offline y es inmutable en runtime.
 
 **Paradigma Entity-Entry**: El core no conoce el significado clínico de cada campo. Simplemente almacena `entries` cifradas con su categoría y las presenta según el template JSON correspondiente. Agregar nuevos tipos de entries solo requiere crear un nuevo archivo JSON en `config/entry_templates/` (y sumar la categoría al tipo `EntryCategory` y al CHECK de SQLite).
 
@@ -296,7 +303,7 @@ Los commands se registran en `lib.rs` (`get_export_snapshot`, `export_history`),
 
 ## 🧪 Tests Automatizados
 
-El Core cuenta con 91 tests unitarios que cubren:
+El Core cuenta con 101 tests unitarios que cubren:
 | Módulo | Tests | Cobertura |
 |---|---|---|
 | `security/crypto.rs` | 13 | AES-GCM roundtrip, nonces únicos, clave incorrecta, manipulación, Blind Index, Firma Ed25519, derivación de pública desde privada |
@@ -305,13 +312,14 @@ El Core cuenta con 91 tests unitarios que cubren:
 | `security/data_key.rs` | 10 | Wrap/unwrap AES-GCM, prioridades de resolución, `SEED_REQUIRED`, migración legacy |
 | `security/backup.rs` | 6 | Creación de respaldo (manifest + copias idénticas), hash alterado rechazado, archivo faltante rechazado, schema más nuevo rechazado, path traversal rechazado, roundtrip restauración → DB con datos |
 | `db/migrations.rs` | 5 | DB nueva migra al latest, re-ejecución no-op con datos preservados, DB legacy sin versión migra idempotente, downgrade rechazado, migración fallida con rollback |
-| `commands/auth_commands.rs` | 5 | **Break-glass `seed_recovery`**: happy path (vault nuevo, hash nuevo, firma rotada, auditoría, data_key intacta), frase incorrecta sin side-effects, contraseña corta, sin admin activo, sin master wrap |
-| `commands/entry_commands.rs` | 18 | CRUD completo end-to-end con DB real (roundtrip cifrado→descifrado, payload sin texto plano en DB, validaciones de categoría/status, states obligatorios, firma rota por manipulación, wrong data key, autor sin perfil, paginación e isolación por paciente, filtro por categoría, búsqueda case-insensitive, `decrypt_payload`, **histórico `public_key_at`** — clave vigente por timestamp, fallback sin histórico, usuario inexistente) |
+| `commands/auth_commands.rs` | 6 | **Break-glass `seed_recovery`**: happy path (vault nuevo, hash nuevo, firma rotada, auditoría, data_key intacta), frase incorrecta sin side-effects, contraseña corta, sin admin activo, sin master wrap; `lock_vault` limpia todas las claves de RAM |
+| `commands/entry_commands.rs` | 23 | CRUD completo end-to-end con DB real (roundtrip cifrado→descifrado, payload sin texto plano en DB, validaciones de categoría/status, states obligatorios, firma rota por manipulación, wrong data key, autor sin perfil, paginación e isolación por paciente, filtro por categoría, búsqueda case-insensitive, `decrypt_payload`, **histórico `public_key_at`** — clave vigente por timestamp, fallback sin histórico, usuario inexistente, **firma de todos los campos de la fila**: payload/created_at/id alterados rompen la firma, delimitadores sin ambigüedad) |
 | `commands/export_commands.rs` | 4 | Snapshot descifrado (paciente + perfil), bóveda cerrada, escritura del `.md` (heading, filename, footer) y rechazo con 0 entries |
+| `commands/professional_profile_commands.rs` | 4 | Roundtrip update→get con matrículas múltiples (orden preservado, número vacío descartado, auditoría registra campos y **nunca** valores), user_id ajeno rechazado, commands exigen sesión activa, perfil sin editar vacío con `public_key` intacta |
 | `export/render.rs` | 6 | Header con paciente/perfil, orden cronológico, orden/labels canónicos de campos, footer SHA-256 + aviso, filename sanitizado y fallback sin nombre |
 
 ```bash
-cargo test --lib  # 91 passed; 0 failed
+cargo test --lib  # 101 passed; 0 failed
 ```
 
 > Los tests de `entry_commands` usan `tauri::test` (feature habilitada solo en `[dev-dependencies]`; el binario de producción no la incluye).
@@ -434,6 +442,6 @@ pnpm tauri dev          # Levanta el entorno (Rust + React HMR)
 pnpm tauri build        # Compila en modo release para producción
 npx tsc --noEmit        # Verifica TypeScript sin generar archivos
 cargo check             # Verifica compilación Rust
-cargo test --lib        # Ejecuta los 91 tests unitarios del Core
+cargo test --lib        # Ejecuta los 101 tests unitarios del Core
 cargo add <crate>       # Añade dependencias al backend (desde src-tauri)
 ```

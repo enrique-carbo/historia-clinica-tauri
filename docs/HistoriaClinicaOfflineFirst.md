@@ -47,7 +47,7 @@ El sistema no utiliza claves hardcodeadas. La clave de cifrado nace y muere en l
 1. El usuario ingresa su contraseña en React.
 2. Rust verifica el hash en la tabla `users` (Argon2id).
 3. La misma contraseña deriva 32 bytes (Argon2id en modo KDF) que se inyectan en el `CryptoState`.
-4. Al cerrar la app, la RAM se destruye. La clave deja de existir.
+4. Al cerrar la app, la clave se pone a cero en el `Drop` de su `Zeroizing` y el proceso muere: la clave deja de estar disponible (borrado *best-effort*, ver README §"Límites de zeroize").
 
 ### 2. Aislamiento Multi-Usuario (Vaults)
 Cada médico tiene su propio archivo de bóveda (`vault_{user_id}.bin`). Las notas cifradas por el Dr. House no pueden ser descifradas por la Dra. Cameron (aislamiento criptográfico por defecto).

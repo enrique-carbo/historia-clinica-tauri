@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useAuthStore } from "../stores/useAuthStore";
 import { usePatientStore } from "../stores/usePatientStore";
-import schemaConfig from "../config/schema.json";
+import { PATIENT_FIELDS, PATIENT_LABEL, flattenFields } from "../utils/schema";
 import { Button } from "./ui/Button";
 
 type EntityData = Record<string, string>;
@@ -23,8 +23,9 @@ interface EntityRecord {
   created_at: string;
 }
 
-const PATIENT_SCHEMA = schemaConfig.entities.patient;
-const FIELDS_CONFIG = PATIENT_SCHEMA.fields;
+const FIELDS_CONFIG = PATIENT_FIELDS;
+// Vista aplanada (con prefijo de groups) para prefill/reset del form.
+const FLAT_FIELDS = flattenFields(FIELDS_CONFIG);
 
 export function Entity() {
   const { activeUser, isVaultUnlocked } = useAuthStore();
@@ -42,7 +43,7 @@ export function Entity() {
   useEffect(() => {
     if (editingId && selected?.patient && selected.patient.id === editingId) {
       const formData: EntityData = {};
-      FIELDS_CONFIG.forEach((field: any) => {
+      FLAT_FIELDS.forEach((field) => {
         formData[field.name] = selected.patient.data[field.name] || "";
       });
       setForm(formData);
@@ -55,7 +56,7 @@ export function Entity() {
 
   const resetForm = () => {
     const clean: EntityData = {};
-    FIELDS_CONFIG.forEach((field: any) => {
+    FLAT_FIELDS.forEach((field) => {
       clean[field.name] = "";
     });
     setForm(clean);
@@ -134,7 +135,7 @@ export function Entity() {
       const patient = usePatientStore.getState().selected?.patient;
       if (patient) {
         const formData: EntityData = {};
-        FIELDS_CONFIG.forEach((field: any) => {
+        FLAT_FIELDS.forEach((field) => {
           formData[field.name] = patient.data[field.name] || "";
         });
         setForm(formData);
@@ -366,7 +367,7 @@ export function Entity() {
         >
           <div className="flex justify-between items-center mb-6">
             <h3 className="font-semibold text-zinc-300 uppercase tracking-wider text-sm flex items-center gap-2">
-              {editingId ? "✏️ Editar" : "➕ Nuevo"} {PATIENT_SCHEMA.label}
+              {editingId ? "✏️ Editar" : "➕ Nuevo"} {PATIENT_LABEL}
             </h3>
             {editingId && (
               <button
@@ -380,17 +381,62 @@ export function Entity() {
 
           {/* Grid responsivo de inputs: 1 col en móviles, 2 col en tablets/desktops */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {FIELDS_CONFIG.map((field: any) => (
-              <div
-                key={field.name}
-                className={field.type === "textarea" ? "col-span-1 sm:col-span-2" : "col-span-1"}
-              >
-                <label className="block text-xs font-bold text-zinc-500 mb-1.5 uppercase tracking-wide">
-                  {field.label} {field.required && <span className="text-red-500">*</span>}
-                </label>
-                {renderFieldInput(field)}
-              </div>
-            ))}
+            {FIELDS_CONFIG.map((field: any) =>
+              field.type === "group" ? (
+                <div
+                  key={field.name}
+                  className="col-span-1 sm:col-span-2 rounded-lg border border-zinc-800 bg-zinc-950/40 p-4"
+                >
+                  <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wide mb-3">
+                    {field.label}{" "}
+                    {field.required && <span className="text-red-500">*</span>}
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {field.fields.map((sub: any) => {
+                      // Misma convención de storage que el backend:
+                      // clave prefijada `{group}_{campo}`.
+                      const prefixed = {
+                        ...sub,
+                        name: `${field.name}_${sub.name}`,
+                      };
+                      return (
+                        <div
+                          key={prefixed.name}
+                          className={
+                            prefixed.type === "textarea"
+                              ? "col-span-1 sm:col-span-2"
+                              : "col-span-1"
+                          }
+                        >
+                          <label className="block text-xs font-bold text-zinc-500 mb-1.5 uppercase tracking-wide">
+                            {prefixed.label}{" "}
+                            {prefixed.required && (
+                              <span className="text-red-500">*</span>
+                            )}
+                          </label>
+                          {renderFieldInput(prefixed)}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                <div
+                  key={field.name}
+                  className={
+                    field.type === "textarea"
+                      ? "col-span-1 sm:col-span-2"
+                      : "col-span-1"
+                  }
+                >
+                  <label className="block text-xs font-bold text-zinc-500 mb-1.5 uppercase tracking-wide">
+                    {field.label}{" "}
+                    {field.required && <span className="text-red-500">*</span>}
+                  </label>
+                  {renderFieldInput(field)}
+                </div>
+              ),
+            )}
           </div>
 
           {/* Footer sticky responsivo */}

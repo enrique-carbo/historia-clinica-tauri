@@ -48,6 +48,12 @@ export function AuthBox() {
 
     // INYECTAMOS DIRECTAMENTE EN EL ESTADO GLOBAL:
     unlockVault(user);
+
+    // Limpiamos las referencias a la contraseña y la frase en JS. Ojo: en V8
+    // esto solo libera referencias — no es un borrado criptográfico (ver
+    // README, "Límites de zeroize").
+    setPassword("");
+    setSeedPhrase("");
   };
 
   const handleSubmit = async (e: React.SubmitEvent) => {
@@ -112,6 +118,9 @@ export function AuthBox() {
         newPassword: recoverPassword,
       });
       unlockVault(user);
+      // Referencias limpiadas (no garantía de borrado en V8 — ver README).
+      setRecoverSeed("");
+      setRecoverPassword("");
     } catch (err) {
       setError(String(err));
     } finally {

@@ -7,7 +7,7 @@ Este documento describe la arquitectura de extensibilidad del Simplex Health Cor
 ## 🎯 Visión General
 
 El sistema separa radicalmente dos responsabilidades:
-1. **El Núcleo (Core):** Encargado exclusivamente de la criptografía (Zero-Knowledge), la gestión de la base de datos relacional local (SQLite), el ciclo de vida de las Bóvedas (Vaults) y la autenticación.
+1. **El Núcleo (Core):** Encargado exclusivamente de la criptografía (Zero-Knowledge Parcial), la gestión de la base de datos relacional local (SQLite), el ciclo de vida de las Bóvedas (Vaults) y la autenticación.
 2. **Los Plugins:** Módulos independientes que añaden funcionalidades específicas (Terminología médica, exportación a estándares, integración con obras sociales, IA) sin contaminar el núcleo.
 
 ### Principios Fundamentales

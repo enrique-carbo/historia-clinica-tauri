@@ -1,6 +1,6 @@
 # 🔐 Estrategia de Cifrado y Privacidad — Simplex Health Core
 
-Este documento detalla la arquitectura de seguridad, los algoritmos criptográficos y el flujo de datos del Core. El sistema está diseñado bajo el principio de **Zero-Knowledge (Conocimiento Cero)** y **Local-First**, garantizando que los datos de salud e identificación de los pacientes nunca sean expuestos en texto plano fuera del dispositivo local del profesional autorizado.
+Este documento detalla la arquitectura de seguridad, los algoritmos criptográficos y el flujo de datos del Core. El sistema está diseñado bajo el principio de **Zero-Knowledge Parcial (Conocimiento Cero)** y **Local-First**, garantizando que los datos de salud e identificación de los pacientes nunca sean expuestos en texto plano fuera del dispositivo local del profesional autorizado.
 
 ---
 
@@ -29,7 +29,8 @@ El sistema clínico vive en la tabla `entries` (paradigma Entity-Entry): un regi
        │──► 1. Extrae la DataKey del estado `DataKey` (Mutex en RAM).
        │──► 2. Serializa el payload y genera un Nonce de 12 bytes (OsRng).
        │──► 3. AES-GCM-256 sobre el payload → `entries.payload` (BLOB cifrado).
-       │──► 4. Hash SHA-256 de `category|subject_id|title|status|timestamp`.
+       │──► 4. Hash SHA-256 del material de firma (JSON canónico: category, subject_id,
+       │       title, status, timestamp, author_id, id, created_at, hex(payload_cifrado)).
        │──► 5. Firma Ed25519 del hash con la llave privada del autor → `entries.signature`.
        ▼
 [ SQLite Local ] (Solo texto cifrado + firma — nunca payload legible)
@@ -70,7 +71,7 @@ $$\text{Blind Index} = \text{SHA-256}(\text{DNI Normalizado} + \text{BLIND\_INDE
 
 ## 🔑 4. Ciclo de Vida de las Claves
 
-La seguridad descansa sobre la generación y destrucción estricta de las llaves en la memoria volátil (RAM). **No existen claves hardcodeadas en el binario.** El sistema maneja **dos familias de claves** con responsabilidades distintas:
+La seguridad descansa sobre la generación y destrucción estricta de las llaves en la memoria volátil (RAM). **No existen claves hardcodeadas en el binario.** Las llaves viven envueltas en `Zeroizing` (crate `zeroize`): al liberarse se **ponen a cero** en vez de dejar bytes residuales en el heap — borrado *best-effort*, con los límites documentados en `README.md` §"Límites de zeroize". El sistema maneja **dos familias de claves** con responsabilidades distintas:
 
 ### 4.1 Vault por usuario → llave de firma Ed25519
 
@@ -78,7 +79,7 @@ La seguridad descansa sobre la generación y destrucción estricta de las llaves
 2. **Validación (`vault.rs`):** esos 32 bytes descifran `vault_{user}.bin` (AES-GCM). Si la firma mágica `HISTORIA_CLINICA_VAULT_OK` aparece, la contraseña es correcta y el payload contiene la **llave privada Ed25519** del usuario.
 3. **Primer login:** si el vault no existe, se crea con un keypair nuevo.
 4. **Inyección en Memoria:** la llave privada y la master key viven solo en `Mutex` de Rust (`CryptoState`/`SigningState`); el frontend (React) nunca las ve — solo recibe datos ya descifrados por el canal IPC.
-5. **Destrucción:** `lock_vault` limpia los states y la sesión (`SessionState`); al cerrar la aplicación, el proceso de Rust muere y todo desaparece de la RAM.
+5. **Destrucción:** `lock_vault` descarta los `Option` de los states y limpia la sesión (`SessionState`); cada `Zeroizing` se pone a cero en su `Drop`. Al cerrar la aplicación, el proceso de Rust muere y todo desaparece de la RAM. Nota: es borrado *best-effort* — con la bóveda abierta, un volcado de memoria del proceso expone las llaves vivas (ver `README.md` §"Límites de zeroize").
 
 ### 4.2 DataKey de instalación → datos clínicos
 
@@ -99,7 +100,7 @@ Lo que el modelo Zero-Knowledge protege de verdad es el **disco**: sin la contra
 
 ### 4.4 Firmas y el histórico `signing_keys`
 
-* Cada entry se firma con Ed25519 sobre `SHA-256(category|subject_id|title|status|timestamp)`. La verificación usa la **llave pública del autor**.
+* Cada entry se firma con Ed25519 sobre `SHA-256(JSON_canónico)` — un struct con **todos los campos de la fila** (`category`, `subject_id`, `title`, `status`, `timestamp`, `author_id`, `id`, `created_at`) más `hex(payload_cifrado)`, serializado en orden de declaración (`signed_hash`, la única fuente de verdad del formato). Se firman los bytes persistidos, no el plaintext: alterar el payload rompe la firma aunque el atacante tenga la DataKey para re-cifrar; alterar `id` o `created_at` también. El JSON canónico elimina la ambigüedad de re-partición del viejo formato concatenado con `|` (un pipe en el title ya no puede desplazar la frontera con los campos vecinos). La verificación usa la **llave pública del autor**.
 * `professional_profiles.public_key` guarda la clave **vigente** (se sincroniza en cada `unlock_vault`).
 * `signing_keys` guarda el **histórico**: rangos `valid_from`/`valid_to` por clave. La verificación contrasta cada entry contra la clave vigente en **el timestamp de la entry** (`public_key_at`), con fallback al perfil para registros previos al histórico.
 * **Cambio de contraseña propio:** mismo keypair → nada cambia en las firmas.

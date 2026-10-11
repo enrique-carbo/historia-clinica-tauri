@@ -48,7 +48,6 @@ export function MedicoView() {
     try {
       const snapshot = await invoke("get_export_snapshot", {
         subjectId: selectedPatient.id,
-        professionalUserId: activeUser.user_id,
       });
       const result = await invoke<ExportResult>("export_history", { snapshot });
       setExportResult(result);

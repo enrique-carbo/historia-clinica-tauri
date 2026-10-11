@@ -6,6 +6,17 @@ import { useEntryStore } from "../stores/useEntryStore";
 import { SoapCard } from "./SoapCard";
 import { AllergyCard } from "./AllergyCard";
 import { calculateAge } from "../utils/dateUtils";
+import { FLAT_PATIENT_FIELDS } from "../utils/schema";
+
+// Campos ya mostrados en el encabezado de la ficha (nombre/apellido como
+// título, dni como badge, fecha_nacimiento como edad). El resto de los
+// campos del schema (incluidos los aplanados de groups como
+// responsable_*) se listan en "Datos de contacto" — un campo nuevo en
+// entity_schema.json aparece acá sin tocar este archivo.
+const HEADER_FIELDS = ["nombre", "apellido", "dni", "fecha_nacimiento"];
+const CONTACT_FIELDS = FLAT_PATIENT_FIELDS.filter(
+  (f) => !HEADER_FIELDS.includes(f.name),
+);
 
 export function PatientEhrView() {
   const { entities, isLoading: entityLoading, searchEntities } = useEntityStore();
@@ -155,11 +166,10 @@ export function PatientEhrView() {
                 <div className="p-4 sm:p-5 pt-4 border-t border-zinc-800 bg-zinc-950/30 animate-in slide-in-from-top-2 duration-200">
                   {/* Datos de contacto */}
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    {[
-                      { label: "Teléfono", value: patient.data.telefono },
-                      { label: "Email", value: patient.data.email },
-                      { label: "Dirección", value: patient.data.direccion },
-                    ].map((item, idx) => (
+                    {CONTACT_FIELDS.map((field) => ({
+                      label: field.label,
+                      value: patient.data[field.name],
+                    })).map((item, idx) => (
                       <div key={idx} className="bg-zinc-900/50 rounded-lg p-3 border border-zinc-800/50">
                         <div className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider">{item.label}</div>
                         <div className="text-sm text-zinc-300 mt-0.5 truncate">{item.value || "—"}</div>

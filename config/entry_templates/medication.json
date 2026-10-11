@@ -21,14 +21,14 @@
       "name": "frecuencia",
       "label": "Frecuencia",
       "type": "select",
-      "required": true,
-      "options": ["Cada 8 horas", "Cada 12 horas", "Cada 24 horas", "Según necesidad", "Una vez"]
+      "required": false,
+      "options": ["Cada 6 horas", "Cada 8 horas", "Cada 12 horas", "Cada 24 horas", "Según necesidad", "Una vez"]
     },
     {
       "name": "via_administracion",
       "label": "Vía de Administración",
       "type": "select",
-      "required": true,
+      "required": false,
       "options": ["Oral", "Intravenosa", "Intramuscular", "Subcutánea", "Tópica", "Inhalatoria"]
     },
     {

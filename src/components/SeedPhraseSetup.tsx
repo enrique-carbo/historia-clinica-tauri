@@ -36,6 +36,8 @@ export function SeedPhraseSetup({ onComplete }: SeedPhraseSetupProps) {
       if (isValid) {
         // Persistir master wrap (.data_key.master) con la seed-derived key
         await invoke("setup_seed_master_wrap", { phrase: verifyInput.trim() });
+        // Referencia liberada tras usarse (no garantía de borrado en V8 — ver README)
+        setVerifyInput("");
         setStep("success");
         setTimeout(() => onComplete(true), 1500);
       } else {

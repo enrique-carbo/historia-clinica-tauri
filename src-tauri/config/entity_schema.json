@@ -55,9 +55,45 @@
         {
           "name": "direccion",
           "label": "Dirección",
-          "type": "textarea",
+          "type": "text",
           "required": false,
           "encrypted": true
+        },
+        {
+          "name": "ciudad",
+          "label": "Ciudad",
+          "type": "text",
+          "required": false,
+          "encrypted": true
+        },
+        {
+          "name": "provincia_estado",
+          "label": "Provincia - Estado",
+          "type": "text",
+          "required": false,
+          "encrypted": true
+        },
+        {
+          "name": "responsable",
+          "label": "Responsable - Tutor",
+          "type": "group",
+          "required": false,
+          "fields": [
+            {
+              "name": "nombre_completo",
+              "label": "Nombre y Apellido Tutor",
+              "type": "text",
+              "required": false,
+              "encrypted": true
+            },
+            {
+              "name": "telefono",
+              "label": "Teléfono Responsable",
+              "type": "tel",
+              "required": false,
+              "encrypted": true
+            }
+          ]
         }
       ]
     }

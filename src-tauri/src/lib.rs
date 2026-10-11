@@ -41,10 +41,8 @@ pub fn run() {
             let state = app.state::<DbState>();
             *state.0.lock().unwrap() = Some(conn);
 
-            // CARGAR SCHEMAS EMPAQUETADOS
-            const SCHEMA_JSON: &str = include_str!("../config/schema.json");
-            let schema: db::config_schema::SchemaConfig =
-                serde_json::from_str(SCHEMA_JSON).map_err(|e| format!("Schema inválido: {}", e))?;
+            // CARGAR SCHEMA EMPAQUETADO (entity_schema.json, fuente única)
+            let schema = db::config_schema::from_embedded()?;
 
             app.manage(schema);
 

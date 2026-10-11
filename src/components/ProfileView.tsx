@@ -4,17 +4,50 @@ import { useState, useEffect } from "react";
 import { useAuthStore } from "../stores/useAuthStore";
 import { invoke } from "@tauri-apps/api/core";
 
+type License = { number: string; jurisdiction: string };
+
+type ProfileState = {
+  full_name: string;
+  profession: string;
+  specialty: string;
+  licenses: License[];
+  city: string;
+  country: string;
+  address: string;
+  phone: string;
+  email: string;
+  website: string;
+};
+
+const EMPTY_PROFILE: ProfileState = {
+  full_name: "",
+  profession: "",
+  specialty: "",
+  licenses: [],
+  city: "",
+  country: "",
+  address: "",
+  phone: "",
+  email: "",
+  website: "",
+};
+
+const PROFESSION_SUGGESTIONS = [
+  "Médico/a",
+  "Enfermero/a",
+  "Lic. en Psicología",
+  "Kinesiólogo/a",
+  "Odontólogo/a",
+  "Farmacéutico/a",
+  "Nutricionista",
+  "Fonoaudiólogo/a",
+  "Lic. en Trabajo Social",
+  "Técnico/a en Enfermería",
+];
+
 export function ProfileView() {
   const { activeUser } = useAuthStore();
-  const [profile, setProfile] = useState({
-    full_name: "",
-    license_number: "",
-    specialty: "",
-    address: "",
-    phone: "",
-    email: "",
-    website: "",
-  });
+  const [profile, setProfile] = useState<ProfileState>(EMPTY_PROFILE);
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -34,10 +67,12 @@ export function ProfileView() {
 
   const loadProfile = async () => {
     try {
-      const data = await invoke<any>("get_my_profile", {
-        userId: activeUser!.user_id,
+      const data = await invoke<any>("get_my_profile");
+      setProfile({
+        ...EMPTY_PROFILE,
+        ...data,
+        licenses: Array.isArray(data.licenses) ? data.licenses : [],
       });
-      setProfile(data);
     } catch (e) {
       console.error("Error cargando perfil:", e);
     }
@@ -54,6 +89,7 @@ export function ProfileView() {
         },
       });
       setIsEditing(false);
+      await loadProfile();
     } catch (e) {
       console.error("Error guardando perfil:", e);
     } finally {
@@ -63,6 +99,27 @@ export function ProfileView() {
 
   const handleChange = (field: string, value: string) => {
     setProfile((p) => ({ ...p, [field]: value }));
+  };
+
+  const handleLicenseChange = (index: number, field: keyof License, value: string) => {
+    setProfile((p) => ({
+      ...p,
+      licenses: p.licenses.map((l, i) => (i === index ? { ...l, [field]: value } : l)),
+    }));
+  };
+
+  const addLicense = () => {
+    setProfile((p) => ({
+      ...p,
+      licenses: [...p.licenses, { number: "", jurisdiction: "" }],
+    }));
+  };
+
+  const removeLicense = (index: number) => {
+    setProfile((p) => ({
+      ...p,
+      licenses: p.licenses.filter((_, i) => i !== index),
+    }));
   };
 
   const handleChangePassword = async () => {
@@ -120,21 +177,33 @@ export function ProfileView() {
             Identidad Clínica
           </h3>
 
-          {[
-            { label: "Nombre Completo", field: "full_name" },
-            { label: "Matrícula Profesional", field: "license_number" },
-            { label: "Especialidad", field: "specialty" },
-          ].map((item) => (
+          {(
+            [
+              { label: "Nombre Completo", field: "full_name" },
+              { label: "Profesión", field: "profession", list: "profession-suggestions" },
+              { label: "Especialidad", field: "specialty" },
+            ] as { label: string; field: string; list?: string }[]
+          ).map((item) => (
             <div key={item.field}>
               <label className="block text-xs font-semibold text-zinc-500 mb-1.5 uppercase">
                 {item.label}
               </label>
               {isEditing ? (
-                <input
-                  value={(profile as any)[item.field]}
-                  onChange={(e) => handleChange(item.field, e.target.value)}
-                  className="w-full rounded-lg bg-zinc-950 border border-zinc-700 px-3 py-2.5 text-sm text-zinc-200 focus:border-blue-500 outline-none transition-colors"
-                />
+                <>
+                  <input
+                    list={item.list}
+                    value={(profile as any)[item.field]}
+                    onChange={(e) => handleChange(item.field, e.target.value)}
+                    className="w-full rounded-lg bg-zinc-950 border border-zinc-700 px-3 py-2.5 text-sm text-zinc-200 focus:border-blue-500 outline-none transition-colors"
+                  />
+                  {item.list && (
+                    <datalist id={item.list}>
+                      {PROFESSION_SUGGESTIONS.map((s) => (
+                        <option key={s} value={s} />
+                      ))}
+                    </datalist>
+                  )}
+                </>
               ) : (
                 <p className="text-sm text-zinc-300 font-medium py-2.5 border-b border-zinc-800/50">
                   {(profile as any)[item.field] || "—"}
@@ -142,6 +211,75 @@ export function ProfileView() {
               )}
             </div>
           ))}
+
+          {/* Matrículas profesionales (múltiples: número + jurisdicción) */}
+          <div>
+            <label className="block text-xs font-semibold text-zinc-500 mb-1.5 uppercase">
+              Matrículas Profesionales
+            </label>
+            {isEditing ? (
+              <div className="space-y-2">
+                {profile.licenses.map((lic, i) => (
+                  <div key={i} className="flex gap-2">
+                    <input
+                      value={lic.number}
+                      placeholder="Número (ej. MP-12345)"
+                      onChange={(e) => handleLicenseChange(i, "number", e.target.value)}
+                      className="flex-1 min-w-0 rounded-lg bg-zinc-950 border border-zinc-700 px-3 py-2.5 text-sm text-zinc-200 focus:border-blue-500 outline-none transition-colors"
+                    />
+                    <input
+                      value={lic.jurisdiction}
+                      placeholder="Jurisdicción (ej. Córdoba)"
+                      onChange={(e) =>
+                        handleLicenseChange(i, "jurisdiction", e.target.value)
+                      }
+                      className="flex-1 min-w-0 rounded-lg bg-zinc-950 border border-zinc-700 px-3 py-2.5 text-sm text-zinc-200 focus:border-blue-500 outline-none transition-colors"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeLicense(i)}
+                      title="Quitar matrícula"
+                      className="rounded-lg border border-zinc-700 px-3 text-sm text-zinc-400 hover:border-red-700 hover:text-red-400 transition-colors"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+                <div className="flex items-center gap-3 pt-1">
+                  <button
+                    type="button"
+                    onClick={addLicense}
+                    className="rounded-lg border border-dashed border-zinc-700 px-3 py-2 text-xs font-semibold text-zinc-400 hover:border-blue-600 hover:text-blue-400 transition-colors"
+                  >
+                    + Agregar matrícula
+                  </button>
+                  <span className="text-xs text-zinc-600">
+                    La primera es la matrícula principal.
+                  </span>
+                </div>
+              </div>
+            ) : profile.licenses.length > 0 ? (
+              <ul className="space-y-1.5 py-2 border-b border-zinc-800/50">
+                {profile.licenses.map((lic, i) => (
+                  <li key={i} className="text-sm text-zinc-300 font-medium">
+                    {lic.number.trim() || "—"}
+                    {lic.jurisdiction.trim() && (
+                      <span className="text-zinc-500"> — {lic.jurisdiction.trim()}</span>
+                    )}
+                    {i === 0 && (
+                      <span className="ml-2 text-[10px] uppercase tracking-wider text-blue-500">
+                        principal
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-zinc-300 font-medium py-2.5 border-b border-zinc-800/50">
+                —
+              </p>
+            )}
+          </div>
         </div>
 
         {/* Columna Derecha: Contacto Profesional */}
@@ -152,6 +290,8 @@ export function ProfileView() {
 
           {[
             { label: "Domicilio Profesional", field: "address", type: "text" },
+            { label: "Ciudad", field: "city", type: "text" },
+            { label: "País", field: "country", type: "text" },
             { label: "Teléfono de Consultorio", field: "phone", type: "tel" },
             { label: "Correo Electrónico", field: "email", type: "email" },
             { label: "Sitio Web / Agenda", field: "website", type: "url" },
