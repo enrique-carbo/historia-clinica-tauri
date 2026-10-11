@@ -46,10 +46,11 @@ export function MedicoView() {
     setExportResult(null);
     setExportError(null);
     try {
-      const snapshot = await invoke("get_export_snapshot", {
+      // Un solo roundtrip: el backend descifra, renderiza y escribe —
+      // el snapshot (datos sensibles) nunca cruza el IPC.
+      const result = await invoke<ExportResult>("export_history", {
         subjectId: selectedPatient.id,
       });
-      const result = await invoke<ExportResult>("export_history", { snapshot });
       setExportResult(result);
     } catch (e) {
       setExportError(typeof e === "string" ? e : "Error al exportar la historia clínica.");

@@ -1,17 +1,17 @@
 use crate::commands::License;
 use crate::db::config_schema::SchemaConfig;
 use crate::security::crypto;
-use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+// Los Export* son internos: el snapshot se renderiza en Rust y nunca
+// cruza el IPC, por eso no llevan serde.
+#[derive(Debug, Clone)]
 pub struct ExportPatient {
     pub data: HashMap<String, String>,
-    pub created_at: String,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default)]
 pub struct ExportProfessional {
     pub full_name: String,
     pub profession: String,
@@ -21,7 +21,7 @@ pub struct ExportProfessional {
     pub country: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct ExportEntry {
     pub category: String,
     pub title: String,
@@ -33,7 +33,7 @@ pub struct ExportEntry {
     pub is_verified: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct ExportSnapshot {
     pub patient: ExportPatient,
     pub professional: ExportProfessional,
@@ -452,7 +452,6 @@ mod tests {
         ExportSnapshot {
             patient: ExportPatient {
                 data,
-                created_at: "2026-01-01".to_string(),
             },
             professional: ExportProfessional {
                 full_name: "Dra. Ana Test".to_string(),
@@ -569,7 +568,6 @@ mod tests {
         let snapshot = ExportSnapshot {
             patient: ExportPatient {
                 data: HashMap::new(),
-                created_at: String::new(),
             },
             professional: ExportProfessional::default(),
             entries: vec![],

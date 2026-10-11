@@ -61,7 +61,7 @@ src-tauri/src/
      ├── backup_commands.rs   # Respaldo/restore de la instalación (solo administrador, auditado; cierra y reabre la DB).
      ├── entity_commands.rs    # Endpoints genéricos de entidades (Template v1).
      ├── entry_commands.rs     # CRUD append-only de entries (inmutables, con firma + búsqueda + verificación histórica).
-     ├── export_commands.rs    # `get_export_snapshot` (descifrado completo) + `export_history` (escritura en `exports/`).
+     ├── export_commands.rs    # `export_history`: descifrado + render + escritura en `exports/` (roundtrip único).
      ├── professional_profile_commands.rs # Endpoints de perfil profesional.
      └── seed_commands.rs      # Generación, verificación y derivación de la frase semilla.
 ```
@@ -271,20 +271,19 @@ CREATE INDEX idx_entries_sync ON entries(is_synced) WHERE is_synced = 0;
 
 ## 📤 Exportación de Historia Clínica (Markdown)
 
-La historia completa de un paciente se exporta a un archivo `.md` legible y versionable. El diseño es **stateless respecto a claves**: los datos se descifran en Rust y el frontend solo recibe el snapshot ya resuelto (nunca la DataKey).
+La historia completa de un paciente se exporta a un archivo `.md` legible y versionable. El diseño es **stateless respecto a claves y de confianza mínima**: el snapshot (paciente + perfil + entries ya descifrados) se arma y se renderiza **dentro de Rust** y nunca cruza el IPC — el frontend solo manda el `subject_id` y recibe `{ path, filename, entries_count }`.
 
 ### Flujo
 
 ```text
 MedicoView (tab Entries) ─ "Exportar .md"
   │
-  ├─ 1. get_export_snapshot(subject_id, professional_user_id)
-  │      Descifra en un solo roundtrip: paciente + perfil profesional + TODAS las entries.
-  │      Falla con error claro si la bóveda está cerrada.
-  │
-  └─ 2. export_history(snapshot)
-         Render puro a Markdown → escritura en <app_local_data_dir>/exports/
-         Devuelve { path, filename, entries_count } → banner "Revelar en carpeta"
+  └─ export_history(subject_id)          ← único roundtrip IPC
+         1. build_export_snapshot: descifra paciente + perfil + TODAS las
+            entries (sesión activa; error claro si la bóveda está cerrada).
+         2. render puro a Markdown (labels/orden desde entity_schema.json)
+         3. escritura en <app_local_data_dir>/exports/
+         → { path, filename, entries_count } → banner "Revelar en carpeta"
 ```
 
 ### Decisiones de diseño
@@ -299,11 +298,11 @@ MedicoView (tab Entries) ─ "Exportar .md"
 | Integridad | SHA-256 del contenido en el footer + aviso de confidencialidad | Permite detectar alteraciones del archivo exportado |
 | "Revelar en carpeta" | `revealItemInDir` de `@tauri-apps/plugin-opener` | Ya instalado y concedido vía `opener:default` (sin cambios de capability) |
 
-Los commands se registran en `lib.rs` (`get_export_snapshot`, `export_history`), la lógica vive en `commands/export_commands.rs` y el render puro en `export/render.rs` (sin estado, sin I/O → 6 tests unitarios directos).
+El único command registrado es `export_history` (en `lib.rs`), la lógica vive en `commands/export_commands.rs` y el render puro en `export/render.rs` (sin estado, sin I/O → 6 tests unitarios directos). Los `Export*` no llevan serde: al no cruzar IPC, el compilador hace cumplir que el snapshot queda en Rust.
 
 ## 🧪 Tests Automatizados
 
-El Core cuenta con 105 tests unitarios que cubren:
+El Core cuenta con 107 tests unitarios que cubren:
 | Módulo | Tests | Cobertura |
 |---|---|---|
 | `security/crypto.rs` | 13 | AES-GCM roundtrip, nonces únicos, clave incorrecta, manipulación, Blind Index, Firma Ed25519, derivación de pública desde privada |
@@ -315,12 +314,12 @@ El Core cuenta con 105 tests unitarios que cubren:
 | `db/config_schema.rs` | 4 | Parseo del schema embebido (claves de labels sin duplicados), aplanado de groups con prefijo `{group}_{campo}`, required condicional de grupo ("nada o todo"), required top-level |
 | `commands/auth_commands.rs` | 6 | **Break-glass `seed_recovery`**: happy path (vault nuevo, hash nuevo, firma rotada, auditoría, data_key intacta), frase incorrecta sin side-effects, contraseña corta, sin admin activo, sin master wrap; `lock_vault` limpia todas las claves de RAM |
 | `commands/entry_commands.rs` | 23 | CRUD completo end-to-end con DB real (roundtrip cifrado→descifrado, payload sin texto plano en DB, validaciones de categoría/status, states obligatorios, firma rota por manipulación, wrong data key, autor sin perfil, paginación e isolación por paciente, filtro por categoría, búsqueda case-insensitive, `decrypt_payload`, **histórico `public_key_at`** — clave vigente por timestamp, fallback sin histórico, usuario inexistente, **firma de todos los campos de la fila**: payload/created_at/id alterados rompen la firma, delimitadores sin ambigüedad) |
-| `commands/export_commands.rs` | 4 | Snapshot descifrado (paciente + perfil), bóveda cerrada, escritura del `.md` (heading, filename, footer) y rechazo con 0 entries |
+| `commands/export_commands.rs` | 6 | Snapshot descifrado (paciente + perfil), bóveda cerrada, escritura del `.md` (heading, filename, footer), rechazo con 0 entries y 2 tests e2e del command único `export_history` (bóveda cerrada / 0 entries) |
 | `commands/professional_profile_commands.rs` | 4 | Roundtrip update→get con matrículas múltiples (orden preservado, número vacío descartado, auditoría registra campos y **nunca** valores), user_id ajeno rechazado, commands exigen sesión activa, perfil sin editar vacío con `public_key` intacta |
 | `export/render.rs` | 6 | Header con paciente/perfil, orden cronológico, orden/labels canónicos de campos, footer SHA-256 + aviso, filename sanitizado y fallback sin nombre |
 
 ```bash
-cargo test --lib  # 105 passed; 0 failed
+cargo test --lib  # 107 passed; 0 failed
 ```
 
 > Los tests de `entry_commands` usan `tauri::test` (feature habilitada solo en `[dev-dependencies]`; el binario de producción no la incluye).
@@ -388,8 +387,7 @@ cargo test --lib  # 105 passed; 0 failed
 - [x] 60 tests pasando
 
 ### 🟩 Fase 3.9: Exportación de Historia Clínica + Orden del Core (✅ Completado)
-- [x] **`get_export_snapshot`**: descifra paciente + perfil + todas las entries en un solo roundtrip IPC (la DataKey nunca llega al frontend); error claro si la bóveda está cerrada
-- [x] **`export_history`**: render puro a Markdown → escritura en `<app_local_data_dir>/exports/` (sin plugin de diálogos, compatible con mobile futuro)
+- [x] **`export_history` (roundtrip único)**: descifra paciente + perfil + todas las entries, render puro a Markdown y escritura en `<app_local_data_dir>/exports/` — el snapshot nunca cruza el IPC; el frontend solo manda `subject_id` (sin plugin de diálogos, compatible con mobile futuro); error claro si la bóveda está cerrada
 - [x] **Render `export/render.rs`**: tabla de filiación y perfil, resumen por categoría, entries cronológicas con labels canónicos de los templates, check de firma ✓/✗, footer con SHA-256 + aviso de confidencialidad
 - [x] **UI en `MedicoView` (tab Entries)**: botón "Exportar .md", banner de éxito con "Revelar en carpeta" (`revealItemInDir`), banners descartables y reset al cambiar de paciente
 - [x] **Reorganización `src-tauri/src/` por dominio**: `security/` (auth, crypto, data_key, seed, vault), `db/`, `export/` y `commands/` (incluye `seed_commands`); `lib_types.rs` → `types.rs`
@@ -443,6 +441,6 @@ pnpm tauri dev          # Levanta el entorno (Rust + React HMR)
 pnpm tauri build        # Compila en modo release para producción
 npx tsc --noEmit        # Verifica TypeScript sin generar archivos
 cargo check             # Verifica compilación Rust
-cargo test --lib        # Ejecuta los 105 tests unitarios del Core
+cargo test --lib        # Ejecuta los 107 tests unitarios del Core
 cargo add <crate>       # Añade dependencias al backend (desde src-tauri)
 ```

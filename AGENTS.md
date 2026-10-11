@@ -9,7 +9,7 @@ El "porqué" del diseño vive en `README.md` y `docs/` — acá va lo operativo.
 
 ```bash
 cd src-tauri
-cargo test                    # baseline: 105 tests, 0 fallas
+cargo test                    # baseline: 107 tests, 0 fallas
 cargo clippy --all-targets    # baseline: 3 warnings, 0 errores
 cd .. && npx tsc --noEmit     # baseline: sin errores
 ```

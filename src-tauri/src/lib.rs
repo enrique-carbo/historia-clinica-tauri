@@ -77,7 +77,6 @@ pub fn run() {
             commands::get_entries_by_subject,
             commands::get_entries_by_category,
             commands::search_entries,
-            commands::get_export_snapshot,
             commands::export_history,
             commands::generate_seed,
             commands::verify_seed,

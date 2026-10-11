@@ -20,11 +20,11 @@ pub struct ExportResult {
 }
 
 /// Arma el snapshot completo (paciente + perfil + TODAS las entries) ya
-/// descifrado, listo para renderizar. Falla si la bóveda está cerrada.
+/// descifrado, listo para renderizar. Solo corre en Rust — el snapshot
+/// **nunca cruza el IPC**. Falla si la bóveda está cerrada.
 /// El perfil profesional es el de la sesión activa — no se acepta un
 /// `user_id` del frontend.
-#[tauri::command]
-pub fn get_export_snapshot(
+fn build_export_snapshot(
     subject_id: i64,
     session_state: State<'_, SessionState>,
     db_state: State<'_, DbState>,
@@ -59,7 +59,6 @@ pub fn get_export_snapshot(
     Ok(ExportSnapshot {
         patient: ExportPatient {
             data: entity.data,
-            created_at: entity.created_at,
         },
         professional,
         entries: entries
@@ -79,14 +78,21 @@ pub fn get_export_snapshot(
     })
 }
 
-/// Renderiza el .md y lo escribe en <app_local_data_dir>/exports/.
-/// Nombre único con timestamp: sin diálogos ni conflictos de sobrescritura.
+/// Descifra y escribe el `.md` en <app_local_data_dir>/exports/ en un solo
+/// command: el frontend manda únicamente el `subject_id` y recibe
+/// `{ path, filename, entries_count }` — los datos descifrados no viajan
+/// por el IPC. Nombre único con timestamp: sin diálogos ni conflictos.
 #[tauri::command]
-pub fn export_history(
-    app: AppHandle,
-    snapshot: ExportSnapshot,
+pub fn export_history<R: tauri::Runtime>(
+    app: AppHandle<R>,
+    subject_id: i64,
+    session_state: State<'_, SessionState>,
+    db_state: State<'_, DbState>,
+    data_key_state: State<'_, DataKey>,
     schema_state: State<'_, SchemaConfig>,
 ) -> Result<ExportResult, String> {
+    let snapshot = build_export_snapshot(subject_id, session_state, db_state, data_key_state)?;
+
     let base_dir = app
         .path()
         .app_local_data_dir()
@@ -250,6 +256,7 @@ mod tests {
             username: "dra.export".to_string(),
             role: "medico".to_string(),
         }))));
+        app.manage(from_embedded().expect("entity_schema.json embebido válido"));
 
         TestEnv {
             app,
@@ -259,7 +266,7 @@ mod tests {
     }
 
     fn snapshot_of(env: &TestEnv) -> Result<ExportSnapshot, String> {
-        get_export_snapshot(
+        build_export_snapshot(
             env.entity_id,
             env.app.state::<SessionState>(),
             env.app.state::<DbState>(),
@@ -343,5 +350,40 @@ mod tests {
         let err = write_export(dir.path(), &snapshot, &from_embedded().expect("schema"))
             .expect_err("debe rechazar 0 entries");
         assert!(err.contains("no tiene entries"));
+    }
+
+    #[test]
+    fn export_history_command_builds_snapshot_and_writes() {
+        // Flujo completo por el único command: subject_id → snapshot
+        // interno → render → archivo. La bóveda está abierta pero la
+        // historia está vacía: el command debe llegar hasta write_export
+        // (sesión + schema + estados inyectados) y rechazar en la última
+        // barrera.
+        let env = setup(true);
+        let err = export_history(
+            env.app.handle().clone(),
+            env.entity_id,
+            env.app.state::<SessionState>(),
+            env.app.state::<DbState>(),
+            env.app.state::<DataKey>(),
+            env.app.state::<SchemaConfig>(),
+        )
+        .expect_err("0 entries");
+        assert!(err.contains("no tiene entries"), "err: {}", err);
+    }
+
+    #[test]
+    fn export_history_command_requires_open_vault() {
+        let env = setup(false);
+        let err = export_history(
+            env.app.handle().clone(),
+            env.entity_id,
+            env.app.state::<SessionState>(),
+            env.app.state::<DbState>(),
+            env.app.state::<DataKey>(),
+            env.app.state::<SchemaConfig>(),
+        )
+        .expect_err("bóveda cerrada");
+        assert!(err.contains("Data key"), "err: {}", err);
     }
 }
