@@ -2,7 +2,7 @@
 
 **Proyecto:** Simplex Health Core
 **Versión:** 1.0 — 2026-10-03
-**Estado:** Diseño aprobado (decisiones §1). Sustituye a `docs/2026-julio8-hoja-de-ruta-fase-4-POSIBLE.md` como fuente vigente; ese documento se conserva como histórico.
+**Estado:** Diseño aprobado (decisiones §1)
 
 ---
 

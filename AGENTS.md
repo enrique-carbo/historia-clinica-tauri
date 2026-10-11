@@ -77,5 +77,3 @@ cd .. && npx tsc --noEmit     # baseline: sin errores
 - `README.md` — seguridad, esquema, roles, tests, export (fuente del porqué).
 - `docs/estrategia_encriptacion.md` — diseño cripto por capas.
 - `docs/fase4-diseno-sync.md` — diseño de sync (fase 4) y deuda pendiente.
-- `docs/2026-julio8-documentacion-maestra.md` — snapshot histórico; puede
-  estar desactualizado respecto del esquema actual.
