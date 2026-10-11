@@ -174,7 +174,7 @@ fn v002_audit_log_notes(conn: &Connection) -> Result<(), String> {
 # Opción A (recomendada para probar el camino incremental):
 #   mantener la DB de dev existente y relanzar → debe aplicar solo v2.
 # Opción B (camino desde cero):
-rm ~/.local/share/com.ecarbo.historia-clinica-app/historia_clinica.db*
+rm ~/.local/share/com.ecarbo.fichiocare/historia_clinica.db*
 pnpm tauri dev   # recrea y corre v1 + v2
 ```
 
@@ -245,7 +245,7 @@ Para no llevar expectativas equivocadas:
 
 ```bash
 # ¿En qué versión está una DB?
-sqlite3 ~/.local/share/com.ecarbo.historia-clinica-app/historia_clinica.db "PRAGMA user_version;"
+sqlite3 ~/.local/share/com.ecarbo.fichiocare/historia_clinica.db "PRAGMA user_version;"
 
 # Log de migraciones al arrancar (tauri dev / app)
 # 🧬 [DB] Migración aplicada: v2 — audit_log: agregar columna notes

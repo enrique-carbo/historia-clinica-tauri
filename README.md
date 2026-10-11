@@ -1,4 +1,4 @@
-# 🩺 Simplex Health Core — Historia Clínica Digital
+# 🩺 Fichio Care — Historia Clínica Digital
 
 Aplicación de escritorio nativa orientada a la gestión de historias clínicas y telemedicina asíncrona con un enfoque **Local-First** y arquitectura de seguridad **Zero-Knowledge Parcial** (Cifrado de Extremo a Extremo).
 

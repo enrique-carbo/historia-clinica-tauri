@@ -32,7 +32,7 @@ pnpm test                     # baseline: 35 tests, 0 fallas (vitest; Node >= 22
 
 ## Estructura
 
-- `src-tauri/` — backend Rust (Tauri 2), crate `historia_clinica_app_lib`.
+- `src-tauri/` — backend Rust (Tauri 2), crate `fichio_care_lib`.
   - `src/commands/*.rs` — comandos Tauri. Un command nuevo **debe
     registrarse en `src-tauri/src/lib.rs`** (invoke_handler): si no, el
     `invoke` del frontend falla en runtime y nada lo detecta al compilar.

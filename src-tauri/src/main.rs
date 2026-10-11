@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    historia_clinica_app_lib::run()
+    fichio_care_lib::run()
 }

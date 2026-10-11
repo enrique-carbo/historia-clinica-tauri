@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "historia-clinica-app",
+  "productName": "Fichio Care",
   "version": "0.1.0",
-  "identifier": "com.ecarbo.historia-clinica-app",
+  "identifier": "com.ecarbo.fichiocare",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "historia-clinica-app",
+        "title": "Fichio Care",
         "width": 1280,
         "height": 720
       }
