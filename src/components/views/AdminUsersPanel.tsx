@@ -4,6 +4,7 @@ import { Button } from "../ui/Button";
 import { Alert } from "../ui/Alert";
 import { Input } from "../ui/Input";
 import { useAuthStore } from "../../stores/useAuthStore";
+import { formatDateTime } from "../../utils/dateUtils";
 
 interface UserRow {
   id: string;
@@ -29,15 +30,6 @@ const ROLE_BADGE: Record<string, string> = {
   enfermeria: "bg-cyan-900/40 text-cyan-300 border-cyan-700/50",
   paciente: "bg-zinc-800 text-zinc-300 border-zinc-700",
 };
-
-function formatDate(iso: string | null): string {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleString();
-  } catch {
-    return iso;
-  }
-}
 
 export function AdminUsersPanel() {
   const { activeUser } = useAuthStore();
@@ -287,7 +279,7 @@ export function AdminUsersPanel() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-zinc-400">
-                      {formatDate(u.last_login_at)}
+                      {formatDateTime(u.last_login_at)}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="inline-flex gap-2">

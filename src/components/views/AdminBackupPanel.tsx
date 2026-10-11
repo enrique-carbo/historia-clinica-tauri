@@ -5,6 +5,7 @@ import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { Button } from "../ui/Button";
 import { Alert } from "../ui/Alert";
 import { useAuthStore } from "../../stores/useAuthStore";
+import { formatDateTime } from "../../utils/dateUtils";
 
 interface BackupFile {
   name: string;
@@ -26,14 +27,6 @@ interface BackupInfo {
   created_at: string;
   file_count: number;
   total_bytes: number;
-}
-
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString();
-  } catch {
-    return iso;
-  }
 }
 
 function formatBytes(bytes: number): string {
@@ -165,7 +158,7 @@ export function AdminBackupPanel() {
             </div>
             <div className="flex justify-between">
               <span className="text-zinc-500">Fecha</span>
-              <span className="text-zinc-200">{formatDate(created.created_at)}</span>
+                      <span className="text-zinc-200">{formatDateTime(created.created_at)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-zinc-500">Archivos</span>
@@ -208,7 +201,7 @@ export function AdminBackupPanel() {
               </div>
               <div className="flex justify-between">
                 <span className="text-zinc-500">Creado</span>
-                <span className="text-zinc-200">{formatDate(pending.manifest.created_at)}</span>
+                      <span className="text-zinc-200">{formatDateTime(pending.manifest.created_at)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-zinc-500">Versión / esquema</span>

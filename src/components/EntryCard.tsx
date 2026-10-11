@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Entry, EntryCategory } from "../stores/useEntryStore";
+import { formatDateTime } from "../utils/dateUtils";
 
 interface EntryCardProps {
   entry: Entry;
@@ -74,20 +75,6 @@ export function EntryCard({ entry, onClick }: EntryCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const categoryConfig = CATEGORY_CONFIG[entry.category] || CATEGORY_CONFIG.SOAP_NOTE;
   const statusConfig = STATUS_CONFIG[entry.status] || STATUS_CONFIG.ACTIVE;
-
-  const formatDate = (dateStr: string) => {
-    try {
-      return new Date(dateStr).toLocaleDateString("es-AR", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-    } catch {
-      return dateStr;
-    }
-  };
 
   const handleToggle = () => {
     setIsExpanded((prev) => !prev);
@@ -176,7 +163,7 @@ export function EntryCard({ entry, onClick }: EntryCardProps) {
 
       {/* Footer */}
       <div className="flex items-center justify-between text-[10px] text-zinc-500 mt-2">
-        <span>{formatDate(entry.timestamp)}</span>
+        <span>{formatDateTime(entry.timestamp)}</span>
         <span>ID: {entry.id.slice(0, 8)}...</span>
       </div>
     </div>

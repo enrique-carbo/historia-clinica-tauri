@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { formatDateTime } from "../../utils/dateUtils";
 
 interface AuditRow {
   id: number;
@@ -19,14 +20,6 @@ const ACTION_LABELS: Record<string, string> = {
   password_reset: "Contraseña reseteada",
   seed_rotate: "Frase semilla rotada",
 };
-
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString();
-  } catch {
-    return iso;
-  }
-}
 
 export function AdminAuditPanel() {
   const [entries, setEntries] = useState<AuditRow[]>([]);
@@ -72,7 +65,7 @@ export function AdminAuditPanel() {
                   className="border-b border-zinc-800/60 last:border-0 text-zinc-300"
                 >
                   <td className="px-4 py-3 text-zinc-400 whitespace-nowrap">
-                    {formatDate(e.created_at)}
+                      {formatDateTime(e.created_at)}
                   </td>
                   <td className="px-4 py-3 font-semibold">
                     {ACTION_LABELS[e.action] || e.action}

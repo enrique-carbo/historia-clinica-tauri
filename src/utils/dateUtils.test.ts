@@ -10,7 +10,7 @@
 // correr un día hacia atrás (ej: UTC-3).
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { calculateAge, formatDate } from "./dateUtils";
+import { calculateAge, formatDateTime } from "./dateUtils";
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -44,18 +44,22 @@ describe("calculateAge", () => {
   });
 });
 
-describe("formatDate", () => {
+describe("formatDateTime", () => {
   it("devuelve em dash con fecha ausente o vacía", () => {
-    expect(formatDate()).toBe("—");
-    expect(formatDate("")).toBe("—");
+    expect(formatDateTime()).toBe("—");
+    expect(formatDateTime("")).toBe("—");
+    expect(formatDateTime(null)).toBe("—");
   });
 
   it("devuelve em dash con fecha inválida", () => {
-    expect(formatDate("garbage")).toBe("—");
+    expect(formatDateTime("garbage")).toBe("—");
   });
 
-  it("formatea una fecha ISO en español", () => {
-    // Mediodía UTC: mismo día en UTC (CI) y en UTC-3 (hora local).
-    expect(formatDate("2026-07-15T12:00:00Z")).toBe("15 jul 2026");
+  it("formatea un timestamp ISO en es-AR (dd/mm/yyyy, hh:mm)", () => {
+    // Mediodía UTC: mismo día en UTC (CI) y en UTC-3 (hora local);
+    // la hora del assert es variable, por eso el regex.
+    expect(formatDateTime("2026-07-15T12:00:00Z")).toMatch(
+      /^15\/07\/2026, \d{2}:\d{2} [ap]\. m\.$/,
+    );
   });
 });

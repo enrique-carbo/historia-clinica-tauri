@@ -26,15 +26,19 @@ export const calculateAge = (birthDateStr?: string): number | null => {
 };
 
 /**
- * Formatea una fecha ISO a un string legible (ej: "15 Jul 2026")
+ * Formatea un timestamp ISO a "dd/mm/yyyy, hh:mm a. m./p. m." (es-AR,
+ * 12 horas) — el formato histórico de los entry cards. Fecha ausente,
+ * vacía o inválida → "—".
  */
-export const formatDate = (dateStr?: string): string => {
-  if (!dateStr) return "—";
-  const date = new Date(dateStr);
+export const formatDateTime = (iso?: string | null): string => {
+  if (!iso) return "—";
+  const date = new Date(iso);
   if (isNaN(date.getTime())) return "—";
-  return date.toLocaleDateString("es-ES", {
+  return date.toLocaleString("es-AR", {
+    day: "2-digit",
+    month: "2-digit",
     year: "numeric",
-    month: "short",
-    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   });
 };

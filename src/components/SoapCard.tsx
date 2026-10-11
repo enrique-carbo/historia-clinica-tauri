@@ -1,4 +1,5 @@
 import { Entry } from "../stores/useEntryStore";
+import { formatDateTime } from "../utils/dateUtils";
 
 interface SoapCardProps {
   entry: Entry;
@@ -17,20 +18,6 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   RESOLVED: { label: "Resuelto", color: "bg-green-900/30 text-green-400" },
   COMPLETED: { label: "Completado", color: "bg-zinc-700 text-zinc-300" },
 };
-
-function formatDate(dateStr: string) {
-  try {
-    return new Date(dateStr).toLocaleDateString("es-AR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return dateStr;
-  }
-}
 
 export function SoapCard({ entry, onClick }: SoapCardProps) {
   const statusConfig = STATUS_CONFIG[entry.status] || STATUS_CONFIG.ACTIVE;
@@ -102,7 +89,7 @@ export function SoapCard({ entry, onClick }: SoapCardProps) {
 
       {/* Footer */}
       <div className="flex items-center justify-between text-[10px] text-zinc-500">
-        <span>{formatDate(entry.timestamp)}</span>
+        <span>{formatDateTime(entry.timestamp)}</span>
         <span>ID: {entry.id.slice(0, 8)}...</span>
       </div>
     </div>
