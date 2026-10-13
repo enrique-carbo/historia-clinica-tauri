@@ -31,7 +31,9 @@ cierre clínico como entry SOAP.
 historial del paciente (incluida la nota SOAP de la teleconsulta) nunca se
 duplica en datos del plugin — el thread solo la **referencia**. Y el rol
 `paciente` **nunca** tiene DataKey (§4): esa separación es estructural, no
-una lista de permisos.
+una lista de permisos. Además el paciente **no ve el EHR ni las entries**
+del Core — lo clínico que percibe le llega solo por el thread
+(`note_reference`).
 
 ---
 
@@ -41,6 +43,7 @@ una lista de permisos.
 |---|---|---|
 | `threads`, `messages`, `payments` | Tablas namespaced en la **DB del Core** (`plugin_teleconsulta_*`) | Outbox atómica real (mismo archivo, misma transacción que `sync_queue`), backup/restore del Core las cubre, crypto y sync vía Core. Regla general: **datasets de referencia → DB propia del plugin; datos clínicos/operativos del plugin → DB del Core** |
 | Usuario paciente | `users` (rol `'paciente'`, ya en el CHECK de v001) | Identidad uniforme: vault, login, sesión, `require_session`, `change_password`, pairing, audit — todo lo construido y testeado se reutiliza |
+| Vínculo ficha ↔ usuario | `users.entity_id` (FK `entities`, NULL en staff) — **Core** | Creado por `grant_patient_access(entity_id, …)` desde la ficha (**alta lazy, opción B**): sin usuarios fantasma para pacientes que nunca entran. Gate admin+asistente; temp password (v1) |
 | Nota SOAP | `entries` del Core (`create_entry`) | Firma Ed25519, inmutabilidad, EHR, export `.md`, verificación, sync por unión — todo gratis |
 | Llaves de thread | Tabla en la DB del Core | Envueltas con DataKey (médico) y con la master de la vault del paciente; blobs LWW |
 | Datasets de referencia (futuro: SNOMED…) | DB propia del plugin (`data/*.db`) | No es sync: artefactos versionados |
@@ -65,7 +68,7 @@ es ahora perfil + contraseña, funcional y mínimo).
 CREATE TABLE plugin_teleconsulta_threads (
     id              TEXT PRIMARY KEY,            -- UUID
     patient_user_id TEXT NOT NULL,               -- FK users(id), role 'paciente': contraparte del canal
-    patient_entity_id INTEGER,                   -- FK entities(id): sujeto clínico del SOAP (se liga al cerrar; puede abrirse tarde)
+    patient_entity_id INTEGER,                   -- FK entities(id): sujeto clínico del SOAP (al abrir el thread: users.entity_id del patient_user_id; "linkeo tardío" solo como fallback)
     assigned_to_user_id TEXT,                    -- FK users(id) staff: profesional a cargo
     enc_data_blob   BLOB NOT NULL,               -- status, subject (cifrados, DataKey)
     created_at      TEXT NOT NULL,
@@ -286,7 +289,7 @@ plugin no guarda una copia.
 
 | # | Hito | Contenido | Tamaño |
 |---|---|---|---|
-| P0 | Prerequisitos Core | `unlock_vault` role-aware (paciente: sin resolve_data_key, sin professional_profiles) — lo único pendiente; `require_session` y gates no-clínicos ya resueltos | S |
+| P0 | Prerequisitos Core | `unlock_vault` role-aware (paciente: sin resolve_data_key, sin professional_profiles), `change_password` sin rewrap de data_key, **`grant_patient_access`** (`users.entity_id`, alta lazy desde la ficha), vista paciente = username + contraseña (sin entries/EHR); `require_session` y gates no-clínicos ya resueltos | M |
 | P1 | Canal local | Tablas, thread keys, mensajes con Core IPC, sin sync (paciente simulado con su password) | M |
 | P2 | Pago | QR/alias configurable, `voucher_photo`, confirmación manual, mensaje system | S |
 | P3 | Cierre SOAP | Linkeo de entity, atajo al formulario del Core, `note_reference`, cierre de thread | S |
