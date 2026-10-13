@@ -111,8 +111,7 @@ const MENU_ITEMS: Record<string, MenuItem[]> = {
       ),
     },
   ],
-  medico: MEDICO_MENU,
-  enfermeria: MEDICO_MENU,
+  profesional: MEDICO_MENU,
   paciente: [
     {
       key: "mi_historial",
@@ -156,7 +155,7 @@ export function NavigationDrawer({ onLogout }: NavigationDrawerProps) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isDrawerOpen, closeDrawer]);
 
-  const usesMedicoTabs = user?.role === "medico" || user?.role === "enfermeria";
+  const usesMedicoTabs = user?.role === "profesional";
   const usesAdminTabs = user?.role === "administrador" || user?.role === "asistente";
 
   const handleMenuClick = (key: string) => {

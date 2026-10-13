@@ -1,7 +1,7 @@
 // src/stores/useNavigationStore.ts
 import { create } from "zustand";
 
-export type ViewKey = "administrador" | "asistente" | "medico" | "enfermeria" | "paciente";
+export type ViewKey = "administrador" | "asistente" | "profesional" | "paciente";
 
 export type MedicoTab =
   | "perfil"
@@ -26,7 +26,7 @@ interface NavigationState {
 
 export const useNavigationStore = create<NavigationState>((set) => ({
   isDrawerOpen: false,
-  activeView: "medico",
+  activeView: "profesional",
   activeMedicoTab: "paciente",
   activeAdminTab: "usuarios",
 

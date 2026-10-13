@@ -117,6 +117,9 @@ export function EntryCard({ entry, onClick }: EntryCardProps) {
         <div className="flex items-center gap-1.5 min-w-0">
           <span className="text-zinc-500 shrink-0">Firmado por:</span>
           <span className="text-zinc-300 font-medium truncate">{entry.author_name}</span>
+          {entry.author_profession && (
+            <span className="text-zinc-500 shrink-0">· {entry.author_profession}</span>
+          )}
         </div>
         <div className="flex items-center gap-1 shrink-0">
           {entry.is_verified ? (

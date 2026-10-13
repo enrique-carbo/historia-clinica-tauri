@@ -35,12 +35,12 @@ fn v001_baseline(conn: &Connection) -> Result<(), String> {
         -- TABLAS PADRE (se crean primero, son referenciadas por hijas)
         -- ============================================================
 
-        -- 1. Usuarios (administrador, asistente, medico, enfermeria, paciente)
+        -- 1. Usuarios (administrador, asistente, profesional, paciente)
         CREATE TABLE IF NOT EXISTS users (
             id TEXT PRIMARY KEY,
             username TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
-            role TEXT CHECK(role IN ('administrador', 'asistente', 'medico', 'enfermeria', 'paciente')) NOT NULL,
+            role TEXT CHECK(role IN ('administrador', 'asistente', 'profesional', 'paciente')) NOT NULL,
             entity_id INTEGER,
             created_at TEXT NOT NULL,
             is_active INTEGER NOT NULL DEFAULT 1 CHECK(is_active IN (0, 1)),

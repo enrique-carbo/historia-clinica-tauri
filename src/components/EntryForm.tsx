@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { useEntryStore, EntryCategory, EntryStatus } from "../stores/useEntryStore";
 import { usePatientStore } from "../stores/usePatientStore";
+import { useNavigationStore } from "../stores/useNavigationStore";
 import { Button } from "./ui/Button";
 
 interface EntryFormProps {
@@ -78,6 +80,29 @@ export function EntryForm({ onSuccess }: EntryFormProps) {
 
   const { createEntry, isLoading } = useEntryStore();
   const selectedPatient = usePatientStore((s) => s.selected);
+  const setActiveMedicoTab = useNavigationStore((s) => s.setActiveMedicoTab);
+  const [profileBlocked, setProfileBlocked] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    invoke<{ full_name: string; profession: string; licenses: { number: string }[] }>(
+      "get_my_profile"
+    )
+      .then((p) => {
+        if (cancelled) return;
+        const hasLicense = (p.licenses ?? []).some((l) => l.number?.trim());
+        setProfileBlocked(
+          !(p.full_name?.trim() && p.profession?.trim() && hasLicense)
+        );
+      })
+      .catch(() => {
+        // Sin perfil (o error): el backend también rechaza — mostrar gate.
+        if (!cancelled) setProfileBlocked(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const template = selectedCategory ? TEMPLATES[selectedCategory] : null;
 
@@ -96,7 +121,23 @@ export function EntryForm({ onSuccess }: EntryFormProps) {
     e.preventDefault();
     setError(null);
 
-    if (!selectedPatient) {
+  if (profileBlocked) {
+    return (
+      <div className="p-4 rounded-lg bg-amber-950/40 border border-amber-800 text-amber-200 text-sm flex flex-col gap-3">
+        <p>
+          Para crear entries necesitás completar tu perfil profesional:
+          <strong> nombre, profesión y matrícula</strong>.
+        </p>
+        <div>
+          <Button onClick={() => setActiveMedicoTab("perfil")}>
+            Completar mi perfil
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!selectedPatient) {
       setError("No hay paciente seleccionado");
       return;
     }

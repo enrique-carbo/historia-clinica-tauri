@@ -1,13 +1,13 @@
 use crate::db::config_schema::SchemaConfig;
 use crate::security::crypto;
-use crate::types::{DataKey, DbState}; // ← Cambiar CryptoState por DataKey
+use crate::types::{DataKey, DbState, SessionState}; // ← Cambiar CryptoState por DataKey
 use rusqlite::params;
 use serde::Serialize;
 use std::collections::HashMap;
 use tauri::State;
 use uuid::Uuid;
 
-use super::{get_data_key, with_conn}; // ← Usar get_data_key
+use super::{get_data_key, require_session, with_conn}; // ← Usar get_data_key
 
 pub type EntityData = HashMap<String, String>;
 
@@ -32,12 +32,14 @@ pub struct EntityRecord {
 pub fn create_entity(
     entity_type: String,
     data: EntityData,
-    user_id: String,
+    session_state: State<'_, SessionState>,
     db_state: State<'_, DbState>,
     data_key_state: State<'_, DataKey>, // ← Cambiar CryptoState por DataKey
     schema: State<'_, SchemaConfig>,
 ) -> Result<EntityCreated, String> {
     let data_key = get_data_key(&data_key_state)?; // ← Usar data_key
+    // Identidad desde la sesión: el user_id nunca se confía en el frontend.
+    let created_by = require_session(&session_state)?.user_id;
     schema.validate_entity_data(&entity_type, &data)?;
 
     let blind_index_field = schema.get_blind_index_field(&entity_type)?;
@@ -69,7 +71,7 @@ pub fn create_entity(
         conn.execute(
             "INSERT INTO entities (external_id, entity_type, created_by_user_id, blind_index, enc_data_blob, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5, datetime('now'))",
-            params![external_id, entity_type, user_id, blind_index, enc_data_json],
+            params![external_id, entity_type, created_by, blind_index, enc_data_json],
         ).map_err(|e| e.to_string())?;
         Ok(conn.last_insert_rowid())
     })?;
@@ -323,12 +325,14 @@ fn decrypt_entity_blob(enc_data_blob: &[u8], data_key: &[u8; 32]) -> Result<Enti
 pub fn update_entity(
     id: i64,
     data: EntityData,
-    user_id: String,
+    session_state: State<'_, SessionState>,
     db_state: State<'_, DbState>,
     data_key_state: State<'_, DataKey>,
     schema: State<'_, SchemaConfig>,
 ) -> Result<(), String> {
     let data_key = get_data_key(&data_key_state)?;
+    // Solo autenticación: created_by_user_id conserva al creador original.
+    require_session(&session_state)?;
 
     // 1. Validar que la entidad existe y obtener su tipo
     let entity_type = with_conn(&db_state, |conn| {
@@ -358,8 +362,8 @@ pub fn update_entity(
     // 5. Actualizar en SQLite
     with_conn(&db_state, |conn| {
         conn.execute(
-            "UPDATE entities SET enc_data_blob = ?, created_by_user_id = ? WHERE id = ?",
-            params![enc_data_json, user_id, id],
+            "UPDATE entities SET enc_data_blob = ? WHERE id = ?",
+            params![enc_data_json, id],
         )
         .map_err(|e| format!("Error actualizando entidad: {}", e))?;
         Ok(())

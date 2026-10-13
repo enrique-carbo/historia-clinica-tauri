@@ -1,14 +1,78 @@
 use crate::security::crypto;
-use crate::types::{DataKey, DbState, SigningState};
+use crate::types::{DataKey, DbState, SessionState, SigningState};
 use rusqlite::params;
 use serde::Serialize;
 use std::collections::HashMap;
 use tauri::State;
 use uuid::Uuid;
 
-use super::{get_data_key, with_conn};
+use super::{get_data_key, require_session, with_conn};
 
 pub type EntryPayload = HashMap<String, String>;
+
+/// Descifra un campo opcional de professional_profiles (vacío si no existe).
+fn decrypt_profile_field(ct: Option<String>, nonce: Option<String>, data_key: &[u8; 32]) -> String {
+    match (ct, nonce) {
+        (Some(ct), Some(nonce)) if !ct.is_empty() => {
+            let enc = crypto::EncryptedData { ciphertext: ct, nonce };
+            crypto::decrypt_text(&enc, data_key).unwrap_or_default()
+        }
+        _ => String::new(),
+    }
+}
+
+/// Exige un perfil profesional completo (nombre, profesión y matrícula) antes
+/// de crear entries: la card y el export muestran la identidad del firmante.
+fn require_complete_profile(
+    conn: &rusqlite::Connection,
+    author_id: &str,
+    data_key: &[u8; 32],
+) -> Result<(), String> {
+    const INCOMPLETO: &str = "Perfil profesional incompleto: completá nombre, profesión y matrícula antes de crear entries.";
+
+    #[derive(serde::Deserialize)]
+    struct LicenseNum {
+        number: String,
+    }
+
+    let row: Option<(
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+    )> = conn
+        .query_row(
+            "SELECT full_name_ciphertext, full_name_nonce,
+                    profession_ciphertext, profession_nonce,
+                    licenses_ciphertext, licenses_nonce
+             FROM professional_profiles WHERE user_id = ?1",
+            params![author_id],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?)),
+        )
+        .ok();
+
+    let Some((fn_ct, fn_n, pr_ct, pr_n, li_ct, li_n)) = row else {
+        return Err(INCOMPLETO.to_string());
+    };
+
+    let full_name = decrypt_profile_field(fn_ct, fn_n, data_key);
+    let profession = decrypt_profile_field(pr_ct, pr_n, data_key);
+    let licenses_json = decrypt_profile_field(li_ct, li_n, data_key);
+    let licenses: Vec<LicenseNum> = if licenses_json.trim().is_empty() {
+        Vec::new()
+    } else {
+        serde_json::from_str(&licenses_json)
+            .map_err(|_| "No se pudieron leer las matrículas del perfil.".to_string())?
+    };
+    let has_license = licenses.iter().any(|l| !l.number.trim().is_empty());
+
+    if full_name.trim().is_empty() || profession.trim().is_empty() || !has_license {
+        return Err(INCOMPLETO.to_string());
+    }
+    Ok(())
+}
 
 #[derive(Serialize, Debug)]
 pub struct EntryRecord {
@@ -17,6 +81,7 @@ pub struct EntryRecord {
     pub subject_id: i64,
     pub author_id: String,
     pub author_name: String,
+    pub author_profession: String,
     pub title: String,
     pub status: String,
     pub timestamp: String,
@@ -32,7 +97,7 @@ pub struct EntryRecord {
 pub fn create_entry(
     category: String,
     subject_id: i64,
-    author_id: String,
+    session_state: State<'_, SessionState>,
     title: String,
     status: String,
     payload: EntryPayload,
@@ -41,6 +106,9 @@ pub fn create_entry(
     signing_state: State<'_, SigningState>,
 ) -> Result<String, String> {
     let data_key = get_data_key(&data_key_state)?;
+    // Autor desde la sesión: mantiene author_id y llave de firma del mismo
+    // usuario por construcción (el parámetro no existe para suplantar).
+    let author_id = require_session(&session_state)?.user_id;
 
     // Validar categoría
     let valid_categories = ["SOAP_NOTE", "MEDICATION", "ALLERGY", "CONDITION"];
@@ -59,6 +127,9 @@ pub fn create_entry(
             status, valid_statuses
         ));
     }
+
+    // Perfil profesional completo: identidad del firmante en cards/export.
+    with_conn(&db_state, |conn| require_complete_profile(conn, &author_id, &data_key))?;
 
     // Cifrar cada campo del payload con DataKey
     let mut encrypted_payload: HashMap<String, String> = HashMap::new();
@@ -138,7 +209,8 @@ pub fn get_entry(
             .prepare(
                 "SELECT e.id, e.category, e.subject_id, e.author_id, e.title, e.status, e.timestamp,
                     e.payload, e.signature, e.created_at,
-                    pp.full_name_ciphertext, pp.full_name_nonce
+                    pp.full_name_ciphertext, pp.full_name_nonce,
+                    pp.profession_ciphertext, pp.profession_nonce
                  FROM entries e
                  LEFT JOIN professional_profiles pp ON pp.user_id = e.author_id
                  WHERE e.id = ?1",
@@ -160,6 +232,8 @@ pub fn get_entry(
                     row.get::<_, String>(9)?,
                     row.get::<_, Option<String>>(10)?, // full_name_ciphertext
                     row.get::<_, Option<String>>(11)?, // full_name_nonce
+                    row.get::<_, Option<String>>(12)?, // profession_ciphertext
+                    row.get::<_, Option<String>>(13)?, // profession_nonce
                 ))
             })
             .map_err(|e| e.to_string())?;
@@ -180,6 +254,8 @@ pub fn get_entry(
         created_at,
         name_ct,
         name_nonce,
+        profession_ct,
+        profession_nonce,
     ) = row;
 
     // Descifrar nombre del autor
@@ -194,6 +270,8 @@ pub fn get_entry(
         }
         _ => "Autor desconocido".to_string(),
     };
+    let author_profession =
+        decrypt_profile_field(profession_ct, profession_nonce, &data_key);
 
     let payload = decrypt_payload(&payload_blob, &data_key)?;
 
@@ -226,6 +304,7 @@ pub fn get_entry(
         subject_id,
         author_id,
         author_name,
+        author_profession,
         title,
         status,
         timestamp,
@@ -252,7 +331,8 @@ pub fn get_entries_by_subject(
             .prepare(
                 "SELECT e.id, e.category, e.subject_id, e.author_id, e.title, e.status, e.timestamp,
                     e.payload, e.signature, e.created_at,
-                    pp.full_name_ciphertext, pp.full_name_nonce
+                    pp.full_name_ciphertext, pp.full_name_nonce,
+                    pp.profession_ciphertext, pp.profession_nonce
                  FROM entries e
                  LEFT JOIN professional_profiles pp ON pp.user_id = e.author_id
                  WHERE e.subject_id = ?1
@@ -276,6 +356,8 @@ pub fn get_entries_by_subject(
                     row.get::<_, String>(9)?,
                     row.get::<_, Option<String>>(10)?,
                     row.get::<_, Option<String>>(11)?,
+                    row.get::<_, Option<String>>(12)?,
+                    row.get::<_, Option<String>>(13)?,
                 ))
             })
             .map_err(|e| e.to_string())?;
@@ -301,6 +383,8 @@ pub fn get_entries_by_subject(
         created_at,
         name_ct,
         name_nonce,
+        profession_ct,
+        profession_nonce,
     ) in rows
     {
         // Descifrar nombre del autor
@@ -315,6 +399,8 @@ pub fn get_entries_by_subject(
             }
             _ => "Autor desconocido".to_string(),
         };
+        let author_profession =
+            decrypt_profile_field(profession_ct, profession_nonce, &data_key);
 
         let payload = decrypt_payload(&payload_blob, &data_key)?;
         let hash = signed_hash(
@@ -344,6 +430,7 @@ pub fn get_entries_by_subject(
             subject_id,
             author_id,
             author_name,
+            author_profession,
             title,
             status,
             timestamp,
@@ -374,7 +461,8 @@ pub fn get_entries_by_category(
             .prepare(
                 "SELECT e.id, e.category, e.subject_id, e.author_id, e.title, e.status, e.timestamp,
                     e.payload, e.signature, e.created_at,
-                    pp.full_name_ciphertext, pp.full_name_nonce
+                    pp.full_name_ciphertext, pp.full_name_nonce,
+                    pp.profession_ciphertext, pp.profession_nonce
                  FROM entries e
                  LEFT JOIN professional_profiles pp ON pp.user_id = e.author_id
                  WHERE e.subject_id = ?1 AND e.category = ?2
@@ -398,6 +486,8 @@ pub fn get_entries_by_category(
                     row.get::<_, String>(9)?,
                     row.get::<_, Option<String>>(10)?,
                     row.get::<_, Option<String>>(11)?,
+                    row.get::<_, Option<String>>(12)?,
+                    row.get::<_, Option<String>>(13)?,
                 ))
             })
             .map_err(|e| e.to_string())?;
@@ -423,6 +513,8 @@ pub fn get_entries_by_category(
         created_at,
         name_ct,
         name_nonce,
+        profession_ct,
+        profession_nonce,
     ) in rows
     {
         // Descifrar nombre del autor
@@ -437,6 +529,8 @@ pub fn get_entries_by_category(
             }
             _ => "Autor desconocido".to_string(),
         };
+        let author_profession =
+            decrypt_profile_field(profession_ct, profession_nonce, &data_key);
 
         let payload = decrypt_payload(&payload_blob, &data_key)?;
         let hash = signed_hash(
@@ -466,6 +560,7 @@ pub fn get_entries_by_category(
             subject_id,
             author_id,
             author_name,
+            author_profession,
             title,
             status,
             timestamp,
@@ -506,6 +601,8 @@ pub fn search_entries(
         String,
         Option<String>,
         Option<String>,
+        Option<String>,
+        Option<String>,
     );
 
     let rows: Vec<RowTuple> = with_conn(&db_state, |conn| {
@@ -513,7 +610,8 @@ pub fn search_entries(
             Some(_) => (
                 "SELECT e.id, e.category, e.subject_id, e.author_id, e.title, e.status, e.timestamp,
                     e.payload, e.signature, e.created_at,
-                    pp.full_name_ciphertext, pp.full_name_nonce
+                    pp.full_name_ciphertext, pp.full_name_nonce,
+                    pp.profession_ciphertext, pp.profession_nonce
                  FROM entries e
                  LEFT JOIN professional_profiles pp ON pp.user_id = e.author_id
                  WHERE e.subject_id = ?1 AND e.category = ?2
@@ -525,7 +623,8 @@ pub fn search_entries(
             None => (
                 "SELECT e.id, e.category, e.subject_id, e.author_id, e.title, e.status, e.timestamp,
                     e.payload, e.signature, e.created_at,
-                    pp.full_name_ciphertext, pp.full_name_nonce
+                    pp.full_name_ciphertext, pp.full_name_nonce,
+                    pp.profession_ciphertext, pp.profession_nonce
                  FROM entries e
                  LEFT JOIN professional_profiles pp ON pp.user_id = e.author_id
                  WHERE e.subject_id = ?1
@@ -552,6 +651,8 @@ pub fn search_entries(
                 row.get(9)?,
                 row.get(10)?,
                 row.get(11)?,
+                row.get(12)?,
+                row.get(13)?,
             ))
         };
 
@@ -592,6 +693,8 @@ pub fn search_entries(
         created_at,
         name_ct,
         name_nonce,
+        profession_ct,
+        profession_nonce,
     ) in rows
     {
         let author_name = match (name_ct, name_nonce) {
@@ -605,6 +708,8 @@ pub fn search_entries(
             }
             _ => "Autor desconocido".to_string(),
         };
+        let author_profession =
+            decrypt_profile_field(profession_ct, profession_nonce, &data_key);
 
         let payload = decrypt_payload(&payload_blob, &data_key)?;
         let hash = signed_hash(
@@ -634,6 +739,7 @@ pub fn search_entries(
             subject_id,
             author_id,
             author_name,
+            author_profession,
             title,
             status,
             timestamp,
@@ -776,6 +882,7 @@ fn decrypt_payload(
 mod tests {
     use super::*;
     use crate::db::database::init_db;
+    use crate::types::SessionUser;
     use std::sync::Mutex;
     use std::thread;
     use std::time::Duration;
@@ -806,22 +913,34 @@ mod tests {
 
         conn.execute(
             "INSERT INTO users (id, username, password_hash, role, created_at)
-             VALUES (?1, ?2, 'hash_test', 'medico', ?3)",
+             VALUES (?1, ?2, 'hash_test', 'profesional', ?3)",
             params![author_id, "dra.test", now],
         )
         .expect("insert user");
 
         let name_enc = crypto::encrypt_text("Dra. Test", &DATA_KEY).expect("encrypt name");
+        let profession_enc = crypto::encrypt_text("Médica", &DATA_KEY).expect("encrypt profession");
+        let licenses_enc = crypto::encrypt_text(
+            r#"[{"number":"MP-12345","jurisdiction":"Córdoba"}]"#,
+            &DATA_KEY,
+        )
+        .expect("encrypt licenses");
         conn.execute(
             "INSERT INTO professional_profiles
                 (user_id, full_name_ciphertext, full_name_nonce,
+                 profession_ciphertext, profession_nonce,
+                 licenses_ciphertext, licenses_nonce,
                  specialty_ciphertext, specialty_nonce,
                  public_key, updated_at)
-             VALUES (?1, ?2, ?3, '', '', ?4, ?5)",
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, '', '', ?8, ?9)",
             params![
                 author_id,
                 name_enc.ciphertext,
                 name_enc.nonce,
+                profession_enc.ciphertext,
+                profession_enc.nonce,
+                licenses_enc.ciphertext,
+                licenses_enc.nonce,
                 public_hex,
                 now
             ],
@@ -838,6 +957,11 @@ mod tests {
 
         let app = tauri::test::mock_app();
         app.manage(DbState(Mutex::new(Some(conn))));
+        app.manage(SessionState(Mutex::new(Some(SessionUser {
+            user_id: author_id.clone(),
+            username: "dra.test".to_string(),
+            role: "profesional".to_string(),
+        }))));
         app.manage(DataKey(Mutex::new(if data_key_present {
             Some(Zeroizing::new(DATA_KEY))
         } else {
@@ -878,7 +1002,7 @@ mod tests {
         create_entry(
             category.to_string(),
             subject_id,
-            env.author_id.clone(),
+            env.app.state::<SessionState>(),
             title.to_string(),
             status.to_string(),
             payload_sample(),
@@ -1222,29 +1346,87 @@ mod tests {
         with_conn(&db, |conn| {
             conn.execute(
                 "INSERT INTO users (id, username, password_hash, role, created_at)
-                 VALUES ('author-2', 'sin.perfil', 'hash', 'medico', ?1)",
+                 VALUES ('author-2', 'sin.perfil', 'hash', 'profesional', ?1)",
                 params![chrono::Utc::now().to_rfc3339()],
+            )
+            .map_err(|e| e.to_string())?;
+
+            // Insert directo (sin create_entry): entries huérfanas de un perfil
+            // borrado o de un epoch anterior al gate de perfil completo.
+            let mut enc_map = HashMap::new();
+            for (k, v) in payload_sample() {
+                let enc = crypto::encrypt_text(&v, &DATA_KEY).expect("encrypt");
+                enc_map.insert(k, format!("{}:{}", enc.ciphertext, enc.nonce));
+            }
+            let payload_json = serde_json::to_vec(&enc_map).map_err(|e| e.to_string())?;
+            conn.execute(
+                "INSERT INTO entries (id, category, subject_id, author_id, title, status, timestamp, payload, signature, created_at)
+                 VALUES ('entry-orphan-1', 'SOAP_NOTE', ?1, 'author-2', 'Nota sin perfil', 'ACTIVE', ?2, ?3, 'ff', ?2)",
+                params![env.entity_id, chrono::Utc::now().to_rfc3339(), payload_json],
             )
             .map_err(|e| e.to_string())
         })
-        .expect("insert user");
+        .expect("insert orphan entry");
 
-        let id = create_entry(
+        let entry = get(&env, "entry-orphan-1").expect("get");
+        assert_eq!(entry.author_name, "Autor desconocido");
+        assert!(!entry.is_verified, "sin pública registrada no verifica");
+    }
+
+    #[test]
+    fn test_create_entry_requires_complete_profile() {
+        let env = setup();
+
+        let db = env.app.state::<DbState>();
+        with_conn(&db, |conn| {
+            conn.execute(
+                "INSERT INTO users (id, username, password_hash, role, created_at)
+                 VALUES ('author-incomplete', 'dra.nueva', 'hash', 'profesional', ?1)",
+                params![chrono::Utc::now().to_rfc3339()],
+            )
+            .map_err(|e| e.to_string())?;
+            // Nombre completo pero SIN profesión ni matrícula
+            let name_enc = crypto::encrypt_text("Dra. Nueva", &DATA_KEY).expect("enc");
+            conn.execute(
+                "INSERT INTO professional_profiles
+                    (user_id, full_name_ciphertext, full_name_nonce,
+                     specialty_ciphertext, specialty_nonce,
+                     public_key, updated_at)
+                 VALUES ('author-incomplete', ?1, ?2, '', '', 'pk-x', ?3)",
+                params![
+                    name_enc.ciphertext,
+                    name_enc.nonce,
+                    chrono::Utc::now().to_rfc3339()
+                ],
+            )
+            .map_err(|e| e.to_string())
+        })
+        .expect("setup perfil incompleto");
+
+        // La sesión simula a la usuaria con perfil incompleto
+        {
+            let ss = env.app.state::<SessionState>();
+            let mut guard = ss.0.lock().unwrap();
+            *guard = Some(SessionUser {
+                user_id: "author-incomplete".to_string(),
+                username: "dra.nueva".to_string(),
+                role: "profesional".to_string(),
+            });
+        }
+
+        let err = create_entry(
             "SOAP_NOTE".to_string(),
             env.entity_id,
-            "author-2".to_string(),
-            "Nota sin perfil".to_string(),
+            env.app.state::<SessionState>(),
+            "Nota".to_string(),
             "ACTIVE".to_string(),
             payload_sample(),
             env.app.state::<DbState>(),
             env.app.state::<DataKey>(),
             env.app.state::<SigningState>(),
         )
-        .expect("create");
-
-        let entry = get(&env, &id).expect("get");
-        assert_eq!(entry.author_name, "Autor desconocido");
-        assert!(!entry.is_verified, "sin pública registrada no verifica");
+        .expect_err("debe rechazar perfil incompleto");
+        assert!(err.contains("Perfil profesional"), "err: {}", err);
     }
 
     // --- listados y paginación ---
@@ -1377,7 +1559,7 @@ mod tests {
         let now = chrono::Utc::now().to_rfc3339();
         conn.execute(
             "INSERT INTO users (id, username, password_hash, role, created_at)
-             VALUES (?1, ?2, 'hash', 'medico', ?3)",
+             VALUES (?1, ?2, 'hash', 'profesional', ?3)",
             params![user_id, user_id, now],
         )
         .expect("insert user");

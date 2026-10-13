@@ -69,6 +69,7 @@ fn build_export_snapshot(
                 status: e.status,
                 timestamp: e.timestamp,
                 author_name: e.author_name,
+                author_profession: e.author_profession,
                 payload: e.payload,
                 signature: e.signature,
                 is_verified: e.is_verified,
@@ -178,7 +179,7 @@ mod tests {
 
         conn.execute(
             "INSERT INTO users (id, username, password_hash, role, created_at)
-             VALUES (?1, ?2, 'hash_test', 'medico', ?3)",
+             VALUES (?1, ?2, 'hash_test', 'profesional', ?3)",
             rusqlite::params![author_id, "dra.export", now],
         )
         .expect("insert user");
@@ -254,7 +255,7 @@ mod tests {
         app.manage(SessionState(Mutex::new(Some(SessionUser {
             user_id: author_id.clone(),
             username: "dra.export".to_string(),
-            role: "medico".to_string(),
+            role: "profesional".to_string(),
         }))));
         app.manage(from_embedded().expect("entity_schema.json embebido válido"));
 
@@ -316,6 +317,7 @@ mod tests {
             status: "ACTIVE".to_string(),
             timestamp: chrono::Utc::now().to_rfc3339(),
             author_name: "Dra. Export Test".to_string(),
+            author_profession: "Médica".to_string(),
             payload: {
                 let mut p = HashMap::new();
                 p.insert("subjetivo".to_string(), "Malestar general".to_string());

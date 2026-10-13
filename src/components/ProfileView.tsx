@@ -180,30 +180,62 @@ export function ProfileView() {
           {(
             [
               { label: "Nombre Completo", field: "full_name" },
-              { label: "Profesión", field: "profession", list: "profession-suggestions" },
+              { label: "Profesión", field: "profession" },
               { label: "Especialidad", field: "specialty" },
-            ] as { label: string; field: string; list?: string }[]
+            ] as { label: string; field: string }[]
           ).map((item) => (
             <div key={item.field}>
               <label className="block text-xs font-semibold text-zinc-500 mb-1.5 uppercase">
                 {item.label}
               </label>
               {isEditing ? (
-                <>
+                item.field === "profession" ? (
+                  <div className="space-y-2">
+                    <select
+                      value={
+                        PROFESSION_SUGGESTIONS.includes(profile.profession)
+                          ? profile.profession
+                          : "__otro"
+                      }
+                      onChange={(e) => {
+                        if (e.target.value !== "__otro") {
+                          handleChange("profession", e.target.value);
+                        } else if (
+                          PROFESSION_SUGGESTIONS.includes(profile.profession)
+                        ) {
+                          handleChange("profession", "");
+                        }
+                      }}
+                      className="w-full rounded-lg bg-zinc-950 border border-zinc-700 px-3 py-2.5 text-sm text-zinc-200 focus:border-blue-500 outline-none transition-colors"
+                    >
+                      <option value="" disabled>
+                        Seleccioná tu profesión…
+                      </option>
+                      {PROFESSION_SUGGESTIONS.map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                      <option value="__otro">Otro…</option>
+                    </select>
+                    {!PROFESSION_SUGGESTIONS.includes(profile.profession) && (
+                      <input
+                        value={profile.profession}
+                        placeholder="Escribí tu profesión"
+                        onChange={(e) =>
+                          handleChange("profession", e.target.value)
+                        }
+                        className="w-full rounded-lg bg-zinc-950 border border-zinc-700 px-3 py-2.5 text-sm text-zinc-200 focus:border-blue-500 outline-none transition-colors"
+                      />
+                    )}
+                  </div>
+                ) : (
                   <input
-                    list={item.list}
                     value={(profile as any)[item.field]}
                     onChange={(e) => handleChange(item.field, e.target.value)}
                     className="w-full rounded-lg bg-zinc-950 border border-zinc-700 px-3 py-2.5 text-sm text-zinc-200 focus:border-blue-500 outline-none transition-colors"
                   />
-                  {item.list && (
-                    <datalist id={item.list}>
-                      {PROFESSION_SUGGESTIONS.map((s) => (
-                        <option key={s} value={s} />
-                      ))}
-                    </datalist>
-                  )}
-                </>
+                )
               ) : (
                 <p className="text-sm text-zinc-300 font-medium py-2.5 border-b border-zinc-800/50">
                   {(profile as any)[item.field] || "—"}

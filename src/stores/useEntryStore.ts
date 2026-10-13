@@ -11,6 +11,7 @@ export interface Entry {
   subject_id: number;
   author_id: string;
   author_name: string;
+  author_profession: string;
   title: string;
   status: EntryStatus;
   timestamp: string;
@@ -168,7 +169,6 @@ export const useEntryStore = create<EntryState>((set, get) => ({
       const entryId = await invoke<string>("create_entry", {
         category,
         subjectId,
-        authorId: activeUser.user_id,
         title,
         status,
         payload,

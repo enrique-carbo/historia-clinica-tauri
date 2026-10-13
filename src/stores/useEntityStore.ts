@@ -82,7 +82,6 @@ export const useEntityStore = create<EntityState>((set, get) => ({
       const res = await invoke<Entity>("create_entity", {
         entityType: "patient",
         data,
-        userId: activeUser.user_id,
       });
 
       // Optimistic UI: Agregamos al inicio sin recargar todo

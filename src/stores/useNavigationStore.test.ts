@@ -6,7 +6,7 @@ import { useNavigationStore } from "./useNavigationStore";
 beforeEach(() => {
   useNavigationStore.setState({
     isDrawerOpen: false,
-    activeView: "medico",
+    activeView: "profesional",
     activeMedicoTab: "paciente",
     activeAdminTab: "usuarios",
   });

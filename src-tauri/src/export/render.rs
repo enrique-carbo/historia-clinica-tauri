@@ -28,6 +28,7 @@ pub struct ExportEntry {
     pub status: String,
     pub timestamp: String,
     pub author_name: String,
+    pub author_profession: String,
     pub payload: HashMap<String, String>,
     pub signature: String,
     pub is_verified: bool,
@@ -305,7 +306,14 @@ pub fn render_markdown(
             "- **Estado:** {}\n",
             label_of(STATUS_LABELS, &entry.status)
         ));
-        out.push_str(&format!("- **Autor:** {}\n", entry.author_name));
+        if entry.author_profession.trim().is_empty() {
+            out.push_str(&format!("- **Autor:** {}\n", entry.author_name));
+        } else {
+            out.push_str(&format!(
+                "- **Autor:** {} · {}\n",
+                entry.author_name, entry.author_profession
+            ));
+        }
         let verify = if entry.is_verified {
             "✓ verificada"
         } else {
@@ -477,6 +485,7 @@ mod tests {
                     status: "ACTIVE".to_string(),
                     timestamp: "2026-01-02T10:00:00+00:00".to_string(),
                     author_name: "Dra. Ana Test".to_string(),
+                    author_profession: "Médica".to_string(),
                     payload: sample_payload("SOAP_NOTE"),
                     signature: "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
                         .to_string(),
@@ -488,6 +497,7 @@ mod tests {
                     status: "ACTIVE".to_string(),
                     timestamp: "2026-01-01T09:00:00+00:00".to_string(),
                     author_name: "Dra. Ana Test".to_string(),
+                    author_profession: "Médica".to_string(),
                     payload: sample_payload("ALLERGY"),
                     signature: "1111222233334444111122223333444411112222333344441111222233334444"
                         .to_string(),

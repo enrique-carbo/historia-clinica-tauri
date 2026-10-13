@@ -51,13 +51,7 @@ pub fn record_audit(
     Ok(())
 }
 
-const VALID_ROLES: [&str; 5] = [
-    "administrador",
-    "asistente",
-    "medico",
-    "enfermeria",
-    "paciente",
-];
+const VALID_ROLES: [&str; 4] = ["administrador", "asistente", "profesional", "paciente"];
 
 #[derive(serde::Serialize)]
 pub struct UserAdminRow {

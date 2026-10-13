@@ -140,7 +140,7 @@ Todo comando de escritura debe insertar en `sync_queue` **dentro de su transacci
 
 Pull aplicado desde el servidor **no re-encola** (o se marca `origin_device` propio y se omite al empujar); los upserts idempotentes hacen inocuo el eco.
 
-**Atribución (requisito de M1, auditoría v1.1):** `create_entity`, `update_entity` y `create_entry` hoy reciben `user_id`/`author_id` del **frontend** — sin `require_session`. En entries el daño es parcial (el `author_id` entra en el material firmado, así que una entry forjada falla su verificación), pero en entities es forjable sin detección, y el sync **propagaría** filas venenosas. Todos estos commands deben derivar el autor de la sesión (`require_session`) antes de que el sync exista.
+**Atribución (requisito de M1, auditoría v1.1):** `create_entity`, `update_entity` y `create_entry` recibían `user_id`/`author_id` del **frontend** — sin `require_session`. En entries el daño es parcial (el `author_id` entra en el material firmado, así que una entry forjada falla su verificación), pero en entities es forjable sin detección, y el sync **propagaría** filas venenosas. **Resuelto (2026-10-11):** los tres commands derivan el autor de `require_session` (el parámetro desapareció de sus firmas) y `update_entity` dejó de pisar `created_by_user_id`.
 
 ---
 
@@ -409,7 +409,7 @@ Cobertura objetivo: las reglas de §4 y el orden de §6.4 tienen test de invaria
 ## 11. Checklist de entrega de la Fase 4
 
 - [ ] M1: v002 aplicada, outbox en todos los comandos, `external_id` siempre poblado
-- [ ] Ningún command confía `user_id`/`author_id` del frontend: `require_session` en entity_commands y `create_entry`; `update_entity` preserva `created_by_user_id`
+- [x] Ningún command confía `user_id`/`author_id` del frontend: `require_session` en entity_commands y `create_entry`; `update_entity` preserva `created_by_user_id` (2026-10-11)
 - [ ] `create_entry` pre-cifra `enc_meta`; el push de entries funciona con bóveda cerrada
 - [ ] Push con error → pull omitido en el mismo ciclo (test de pérdida silenciosa §4.1.4)
 - [ ] Compose perfil LAN y perfil VPS funcionando; PocketBase con colecciones y reglas por `installation_id`

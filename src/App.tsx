@@ -44,7 +44,7 @@ export default function App() {
         <AdminView />
       )}
 
-      {(activeUser.role === "medico" || activeUser.role === "enfermeria") && <MedicoView />}
+      {activeUser.role === "profesional" && <MedicoView />}
 
       {activeUser.role === "paciente" && <PacienteView />}
     </DashboardLayout>

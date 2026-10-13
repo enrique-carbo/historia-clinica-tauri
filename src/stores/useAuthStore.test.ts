@@ -3,7 +3,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { useAuthStore } from "./useAuthStore";
 
-const USER = { user_id: "u1", username: "dra.ana", role: "medico" };
+const USER = { user_id: "u1", username: "dra.ana", role: "profesional" };
 
 beforeEach(() => {
   useAuthStore.setState({ isVaultUnlocked: false, activeUser: null });

@@ -193,7 +193,7 @@ Sistema de recuperación que protege el master wrap de la DataKey:
 
 ## 👥 Roles y Autorización
 
-| | `administrador` | `asistente` (ex-`admin`) | `medico` / `enfermeria` | `paciente` |
+| | `administrador` | `asistente` (ex-`admin`) | `profesional` | `paciente` |
 |---|---|---|---|---|
 | Admisión de pacientes (Entity) | ✅ | ✅ | — | — |
 | Vista clínica (EHR, entries, export .md) | — | — | ✅ | — |
@@ -216,7 +216,7 @@ Sistema de recuperación que protege el master wrap de la DataKey:
 ### Tablas Principales
 | Tabla | Propósito | Relación |
 |---|---|---|
-| `users` | Autenticación y roles: `administrador` (gestión técnica), `asistente` (recepción), `medico`, `enfermeria`, `paciente` — con `is_active` (baja lógica) y `last_login_at` | PK `id TEXT` |
+| `users` | Autenticación y roles: `administrador` (gestión técnica), `asistente` (recepción), `profesional` (cualquier terapeuta que crea entries: médico, enfermero, psicólogo, kinesiólogo, odontólogo…), `paciente` — con `is_active` (baja lógica) y `last_login_at` | PK `id TEXT` |
 | `professional_profiles` | Perfil profesional + llave pública Ed25519 vigente | FK → `users(id)` |
 | `signing_keys` | **Histórico de llaves de firma** (`valid_from`/`valid_to`, `valid_to NULL` = vigente) — preserva la verificación de entries tras resets/rotaciones | FK → `users(id)` |
 | `audit_log` | Registro de acciones sensibles (altas, bajas, resets, rotación de seed) | FK → `users(id)` ×2 (actor, target) |

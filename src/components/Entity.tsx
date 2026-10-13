@@ -78,7 +78,6 @@ export function Entity() {
         await invoke("update_entity", {
           id: editingId,
           data,
-          userId: activeUser.user_id,
         });
         setResult(`✅ Actualizado: ID=${editingId}`);
         // Recargar selección global para reflejar cambios
@@ -87,7 +86,6 @@ export function Entity() {
         const res = await invoke<EntityCreated>("create_entity", {
           entityType: "patient",
           data,
-          userId: activeUser.user_id,
         });
         setResult(
           `✅ Creado: ID=${res.id}, BI=${res.blind_index_hex.slice(0, 12)}`,

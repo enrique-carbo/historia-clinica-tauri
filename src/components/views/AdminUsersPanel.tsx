@@ -18,16 +18,14 @@ interface UserRow {
 const ROLE_LABELS: Record<string, string> = {
   administrador: "Administrador",
   asistente: "Asistente",
-  medico: "Médico",
-  enfermeria: "Enfermería",
+  profesional: "Profesional",
   paciente: "Paciente",
 };
 
 const ROLE_BADGE: Record<string, string> = {
   administrador: "bg-purple-900/40 text-purple-300 border-purple-700/50",
   asistente: "bg-sky-900/40 text-sky-300 border-sky-700/50",
-  medico: "bg-blue-900/40 text-blue-300 border-blue-700/50",
-  enfermeria: "bg-cyan-900/40 text-cyan-300 border-cyan-700/50",
+  profesional: "bg-blue-900/40 text-blue-300 border-blue-700/50",
   paciente: "bg-zinc-800 text-zinc-300 border-zinc-700",
 };
 
@@ -41,7 +39,7 @@ export function AdminUsersPanel() {
   const [showCreate, setShowCreate] = useState(false);
   const [newUsername, setNewUsername] = useState("");
   const [newPassword, setNewPassword] = useState("");
-  const [newRole, setNewRole] = useState("medico");
+  const [newRole, setNewRole] = useState("profesional");
   const [creating, setCreating] = useState(false);
 
   const [resetTarget, setResetTarget] = useState<UserRow | null>(null);
@@ -77,7 +75,7 @@ export function AdminUsersPanel() {
       setNotice(`Usuario «${newUsername.trim()}» creado.`);
       setNewUsername("");
       setNewPassword("");
-      setNewRole("medico");
+      setNewRole("profesional");
       setShowCreate(false);
       await load();
     } catch (err) {
@@ -196,8 +194,9 @@ export function AdminUsersPanel() {
                 onChange={(e) => setNewRole(e.target.value)}
                 className="w-full bg-zinc-950 text-zinc-200 border border-zinc-800 rounded px-3 py-2.5 pr-8 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 appearance-none"
               >
-                <option value="medico">Médico (Consultorio / SOAP)</option>
-                <option value="enfermeria">Enfermería</option>
+                <option value="profesional">
+                  Profesional (médico, enfermero, kinesiólogo, etc. — SOAP)
+                </option>
                 <option value="asistente">Asistente (Recepción / Altas)</option>
                 <option value="administrador">Administrador (Gestión técnica)</option>
                 <option value="paciente">Paciente</option>

@@ -105,7 +105,7 @@ describe("createEntity", () => {
   it("crea, prepend en la lista y selecciona (optimistic UI)", async () => {
     useAuthStore.setState({
       isVaultUnlocked: true,
-      activeUser: { user_id: "u1", username: "dra", role: "medico" },
+      activeUser: { user_id: "u1", username: "dra", role: "profesional" },
     });
     useEntityStore.setState({ entities: [OLDER] });
     invokeMock.mockResolvedValueOnce(ENTITY);
@@ -118,7 +118,6 @@ describe("createEntity", () => {
     expect(invokeMock).toHaveBeenCalledWith("create_entity", {
       entityType: "patient",
       data: { nombre: "Ana" },
-      userId: "u1",
     });
     const s = useEntityStore.getState();
     expect(s.entities).toEqual([ENTITY, OLDER]);
@@ -129,7 +128,7 @@ describe("createEntity", () => {
   it("error del backend deja null y expone el mensaje", async () => {
     useAuthStore.setState({
       isVaultUnlocked: true,
-      activeUser: { user_id: "u1", username: "dra", role: "medico" },
+      activeUser: { user_id: "u1", username: "dra", role: "profesional" },
     });
     invokeMock.mockRejectedValueOnce("dni duplicado");
 

@@ -301,7 +301,7 @@ mod tests {
         SessionUser {
             user_id: user_id.to_string(),
             username: "dra.test".to_string(),
-            role: "medico".to_string(),
+            role: "profesional".to_string(),
         }
     }
 
@@ -313,7 +313,7 @@ mod tests {
         for uid in ["user-a", "user-b"] {
             conn.execute(
                 "INSERT INTO users (id, username, password_hash, role, created_at)
-                 VALUES (?1, ?2, 'hash_test', 'medico', ?3)",
+                 VALUES (?1, ?2, 'hash_test', 'profesional', ?3)",
                 params![uid, uid, now],
             )
             .expect("insert user");
