@@ -91,7 +91,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
           <div>
             <h1 className="text-lg sm:text-xl font-bold text-zinc-100 m-0">
-              🩺 Simplex Health
+              🩺 Fichio Care
             </h1>
             <p className="text-xs text-zinc-500 mt-0.5 hidden sm:block">
               Historia Clínica — Rol:{" "}
