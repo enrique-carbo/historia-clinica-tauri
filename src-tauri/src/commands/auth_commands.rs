@@ -129,6 +129,13 @@ pub fn login_user(
     })
 }
 
+/// Desbloquea la bóveda: inyecta master + llave de firma en RAM y, **solo
+/// para staff**, la DATA_KEY de la clínica.
+///
+/// Rol `paciente`: **ausencia estructural de DataKey** — no se llama a
+/// `resolve_data_key` (no necesita seed ni wrap) y `professional_profiles`
+/// no se toca (el paciente no es staff). Sin DataKey en RAM, todo command
+/// clínico falla por arquitectura, no por ACL (teleconsulta §4).
 #[tauri::command]
 pub fn unlock_vault(
     user_id: String,
@@ -145,83 +152,20 @@ pub fn unlock_vault(
         .app_local_data_dir()
         .map_err(|e| format!("Error al obtener ruta del sistema: {}", e))?;
 
-    // El vault devuelve: llave maestra, llave privada de firma y pública opcional
-    // (la pública solo viene en `Some` cuando el vault se crea en ESTA llamada).
-    let (master_key, private_signing_key, public_key_opt) =
-        vault::unlock_user_vault(app_dir.clone(), &user_id, &password)?;
-
-    // 1. Sincronizar la llave pública en DB ANTES de resolve_data_key.
-    //    Si el primer intento falla con SEED_REQUIRED, el vault ya quedó creado
-    //    y el reintento (con seed) no recibiría `Some(...)` → la pública quedaría
-    //    vacía y TODAS las firmas de ese usuario verificarían como false.
-    let public_key_hex = match public_key_opt {
-        Some(pk) => pk,
-        None => crate::security::crypto::public_key_from_private(&private_signing_key),
-    };
-    super::with_conn(&db_state, |conn| {
-        conn.execute(
-            "UPDATE professional_profiles SET public_key = ?1, updated_at = ?2 WHERE user_id = ?3;",
-            rusqlite::params![
-                &public_key_hex,
-                &chrono::Utc::now().to_rfc3339(),
-                &user_id
-            ],
-        )
-        .map_err(|e| format!("Error al guardar llave pública: {}", e))?;
-
-        // Histórico de claves de firma: si esta es una clave nueva (reset de
-        // contraseña, rotación), cerrar la vigente y abrir la nueva. Así las
-        // entries firmadas antes siguen verificándose contra su clave de época.
-        let current: Option<String> = conn
-            .query_row(
-                "SELECT public_key FROM signing_keys WHERE user_id = ?1 AND valid_to IS NULL",
-                rusqlite::params![&user_id],
-                |r| r.get(0),
+    let (master_key, private_signing_key, data_key_opt) = super::with_conn(
+        &db_state,
+        |conn| {
+            unlock_vault_core(
+                app_dir,
+                &user_id,
+                &password,
+                seed_phrase.as_deref().map(|s| s.as_str()),
+                conn,
             )
-            .ok();
-
-        let now = chrono::Utc::now().to_rfc3339();
-        match current {
-            None => {
-                conn.execute(
-                    "INSERT INTO signing_keys (user_id, public_key, valid_from) VALUES (?1, ?2, ?3);",
-                    rusqlite::params![&user_id, &public_key_hex, &now],
-                )
-                .map_err(|e| format!("Error registrando clave de firma: {}", e))?;
-            }
-            Some(pk) if pk != public_key_hex => {
-                conn.execute(
-                    "UPDATE signing_keys SET valid_to = ?1 WHERE user_id = ?2 AND valid_to IS NULL;",
-                    rusqlite::params![&now, &user_id],
-                )
-                .map_err(|e| format!("Error cerrando clave de firma: {}", e))?;
-                conn.execute(
-                    "INSERT INTO signing_keys (user_id, public_key, valid_from) VALUES (?1, ?2, ?3);",
-                    rusqlite::params![&user_id, &public_key_hex, &now],
-                )
-                .map_err(|e| format!("Error registrando clave de firma: {}", e))?;
-                println!("🔄 [Auth] Rotación de llave de firma registrada para: {}", user_id);
-            }
-            _ => {}
-        }
-
-        Ok(())
-    })?;
-    println!("🔑 [Core] Llave pública sincronizada en DB para: {}", user_id);
-
-    // 2. Resolver la data_key (cifrado de datos médicos) con master_key del usuario
-    //    - Fast path: wrap personal .data_key.{user_id}
-    //    - Bootstrap: seed + .data_key.master (nuevos usuarios / recovery)
-    //    - Legacy: migración de .data_key hex en claro
-    //    Puede fallar con SEED_REQUIRED → no inyectamos nada en RAM todavía.
-    let resolved_data_key = data_key::resolve_data_key(
-        &app_dir,
-        &user_id,
-        &master_key,
-        seed_phrase.as_deref().map(|s| s.as_str()),
+        },
     )?;
 
-    // 3. Inyectar llaves en RAM solo si TODO tuvo éxito
+    // Inyectar llaves en RAM solo si TODO tuvo éxito
     let mut key_guard = crypto_state.0.lock().unwrap();
     *key_guard = Some(master_key);
 
@@ -229,30 +173,135 @@ pub fn unlock_vault(
     *sign_guard = Some(private_signing_key);
 
     let mut dk_guard = data_key_state.0.lock().unwrap();
-    *dk_guard = Some(resolved_data_key);
+    *dk_guard = data_key_opt;
 
     println!("🔐 [Core] Bóveda desbloqueada. Llaves inyectadas en RAM.");
     Ok(true)
 }
 
-/// Cambia la contraseña del usuario.
+/// Lógica de desbloqueo sin estados de Tauri (testable con tempdir + conn).
+/// Devuelve `(master, llave de firma, data_key opcional)`.
+type UnlockedKeys = (
+    Zeroizing<[u8; 32]>,
+    Zeroizing<[u8; 32]>,
+    Option<Zeroizing<[u8; 32]>>,
+);
+
+fn unlock_vault_core(
+    app_dir: std::path::PathBuf,
+    user_id: &str,
+    password: &str,
+    seed_phrase: Option<&str>,
+    conn: &rusqlite::Connection,
+) -> Result<UnlockedKeys, String> {
+    // El vault devuelve: llave maestra, llave privada de firma y pública opcional
+    // (la pública solo viene en `Some` cuando el vault se crea en ESTA llamada).
+    let (master_key, private_signing_key, public_key_opt) =
+        vault::unlock_user_vault(app_dir.clone(), user_id, password)?;
+
+    let role: String = conn
+        .query_row(
+            "SELECT role FROM users WHERE id = ?1",
+            rusqlite::params![user_id],
+            |r| r.get(0),
+        )
+        .map_err(|e| format!("Usuario no encontrado: {}", e))?;
+
+    let public_key_hex = match public_key_opt {
+        Some(pk) => pk,
+        None => crate::security::crypto::public_key_from_private(&private_signing_key),
+    };
+
+    // 1. Sincronizar la llave pública en DB ANTES de resolve_data_key.
+    //    Si el primer intento falla con SEED_REQUIRED, el vault ya quedó creado
+    //    y el reintento (con seed) no recibiría `Some(...)` → la pública quedaría
+    //    vacía y TODAS las firmas de ese usuario verificarían como false.
+    //    `paciente`: sin fila de perfil — no es staff, no se toca.
+    if role != "paciente" {
+        conn.execute(
+            "UPDATE professional_profiles SET public_key = ?1, updated_at = ?2 WHERE user_id = ?3;",
+            rusqlite::params![&public_key_hex, &chrono::Utc::now().to_rfc3339(), user_id],
+        )
+        .map_err(|e| format!("Error al guardar llave pública: {}", e))?;
+    }
+
+    // Histórico de claves de firma: si esta es una clave nueva (reset de
+    // contraseña, rotación), cerrar la vigente y abrir la nueva. Así las
+    // entries firmadas antes siguen verificándose contra su clave de época.
+    // Aplica a todos los roles: la identidad de firma es de la cuenta.
+    let current: Option<String> = conn
+        .query_row(
+            "SELECT public_key FROM signing_keys WHERE user_id = ?1 AND valid_to IS NULL",
+            rusqlite::params![user_id],
+            |r| r.get(0),
+        )
+        .ok();
+
+    let now = chrono::Utc::now().to_rfc3339();
+    match current {
+        None => {
+            conn.execute(
+                "INSERT INTO signing_keys (user_id, public_key, valid_from) VALUES (?1, ?2, ?3);",
+                rusqlite::params![user_id, &public_key_hex, &now],
+            )
+            .map_err(|e| format!("Error registrando clave de firma: {}", e))?;
+        }
+        Some(pk) if pk != public_key_hex => {
+            conn.execute(
+                "UPDATE signing_keys SET valid_to = ?1 WHERE user_id = ?2 AND valid_to IS NULL;",
+                rusqlite::params![&now, user_id],
+            )
+            .map_err(|e| format!("Error cerrando clave de firma: {}", e))?;
+            conn.execute(
+                "INSERT INTO signing_keys (user_id, public_key, valid_from) VALUES (?1, ?2, ?3);",
+                rusqlite::params![user_id, &public_key_hex, &now],
+            )
+            .map_err(|e| format!("Error registrando clave de firma: {}", e))?;
+            println!("🔄 [Auth] Rotación de llave de firma registrada para: {}", user_id);
+        }
+        _ => {}
+    }
+    println!("🔑 [Core] Llave pública sincronizada en DB para: {}", user_id);
+
+    // 2. Data key de la clínica — solo staff:
+    //    - Fast path: wrap personal .data_key.{user_id}
+    //    - Bootstrap: seed + .data_key.master (nuevos usuarios / recovery)
+    //    - Legacy: migración de .data_key hex en claro
+    //    Puede fallar con SEED_REQUIRED → el caller no inyecta nada en RAM.
+    //    Paciente: no se llama — queda sin DataKey en RAM (por diseño).
+    let data_key_opt = if role == "paciente" {
+        None
+    } else {
+        Some(data_key::resolve_data_key(
+            &app_dir,
+            user_id,
+            &master_key,
+            seed_phrase,
+        )?)
+    };
+
+    Ok((master_key, private_signing_key, data_key_opt))
+}
+
+/// Cambia la contraseña del usuario. El `user_id` se deriva de la sesión
+/// (nunca del frontend).
 ///
 /// Orden de persistencia (falla más probable primero → fs antes que sqlite;
 /// verificación completa antes de la primera escritura):
-/// 1. Sesión desbloqueada (data_key en RAM) — sin esto, no se puede re-envolver.
-/// 2. Vault: verifica contraseña actual y re-cifra (vault.rs).
-/// 3. Re-envuelve `.data_key.{user_id}` con la nueva master (si falla, el wrap
-///    huérfano se recupera con seed — ver resolve_data_key).
-/// 4. Actualiza `users.password_hash` en DB.
-/// 5. Actualiza la master en RAM (la llave de firma no cambia: mismo keypair).
+/// 1. Vault: verifica contraseña actual y re-cifra (vault.rs).
+/// 2. Staff: re-envuelve `.data_key.{user_id}` con la nueva master (requiere
+///    data_key en RAM; si falla, el wrap huérfano se recupera con seed).
+///    Paciente: **no tiene DataKey ni wrap** — se saltea (ausencia estructural).
+/// 3. Actualiza `users.password_hash` en DB.
+/// 4. Actualiza la master en RAM (la llave de firma no cambia: mismo keypair).
 ///
 /// No toca `.data_key.master` (deriva de la seed, independiente de la contraseña).
 #[tauri::command]
 pub fn change_password(
-    user_id: String,
     current_password: Zeroizing<String>,
     new_password: Zeroizing<String>,
     app_handle: tauri::AppHandle,
+    session_state: State<'_, SessionState>,
     db_state: State<'_, DbState>,
     crypto_state: State<'_, CryptoState>,
     data_key_state: State<'_, DataKey>,
@@ -264,48 +313,87 @@ pub fn change_password(
         return Err("La nueva contraseña debe ser distinta a la actual".to_string());
     }
 
+    // Identidad desde la sesión: el user_id nunca se confía en el frontend.
+    let user_id = super::require_session(&session_state)?.user_id;
+
     let app_dir = app_handle
         .path()
         .app_local_data_dir()
         .map_err(|e| format!("Error al obtener ruta del sistema: {}", e))?;
 
-    // 1. Sesión desbloqueada ANTES de tocar disco: sin data_key en RAM no se
-    //    puede re-envolver el wrap personal.
-    let data_key = {
+    // Data_key de RAM sin exigirla: el rol decide si es obligatoria
+    // (staff) o se ignora (paciente — no existe por diseño).
+    let data_key_ram: Option<Zeroizing<[u8; 32]>> = {
         let guard = data_key_state.0.lock().map_err(|_| "Lock poisoned")?;
-        guard
-            .as_ref()
-            .cloned()
-            .ok_or("La bóveda está cerrada. Abrila antes de cambiar la contraseña.".to_string())?
+        guard.as_ref().map(|k| k.clone())
     };
 
-    // 2. Verifica contraseña actual + re-cifra vault → nueva master
-    let new_master = vault::change_vault_password(
-        app_dir.clone(),
-        &user_id,
-        &current_password,
-        &new_password,
-    )?;
-
-    // 3. Re-envolver data_key con la nueva master (cura el fast path)
-    data_key::save_user_wrap(&app_dir, &user_id, &data_key, &new_master)?;
-
-    // 4. Actualizar hash de login en DB
-    let hashed = auth::hash_password(&new_password)?;
-    super::with_conn(&db_state, |conn| {
-        conn.execute(
-            "UPDATE users SET password_hash = ?1 WHERE id = ?2;",
-            rusqlite::params![&hashed, &user_id],
+    let new_master = super::with_conn(&db_state, |conn| {
+        change_password_core(
+            app_dir,
+            &user_id,
+            &current_password,
+            &new_password,
+            data_key_ram,
+            conn,
         )
-        .map_err(|e| format!("Error actualizando contraseña en DB: {}", e))
     })?;
 
-    // 5. Actualizar master en RAM (sesión sigue abierta)
+    // Actualizar master en RAM (sesión sigue abierta)
     let mut key_guard = crypto_state.0.lock().map_err(|_| "Lock poisoned")?;
     *key_guard = Some(new_master);
 
     println!("🔑 [Auth] Contraseña cambiada para: {}", user_id);
     Ok(())
+}
+
+/// Lógica de cambio de contraseña sin estados de Tauri (testable con
+/// tempdir + conn). Devuelve la nueva master para que la inyección en RAM
+/// la haga el caller.
+fn change_password_core(
+    app_dir: std::path::PathBuf,
+    user_id: &str,
+    current_password: &str,
+    new_password: &str,
+    data_key_ram: Option<Zeroizing<[u8; 32]>>,
+    conn: &rusqlite::Connection,
+) -> Result<Zeroizing<[u8; 32]>, String> {
+    let role: String = conn
+        .query_row(
+            "SELECT role FROM users WHERE id = ?1",
+            rusqlite::params![user_id],
+            |r| r.get(0),
+        )
+        .map_err(|e| format!("Usuario no encontrado: {}", e))?;
+
+    // 1. Staff: data_key en RAM ANTES de tocar disco — sin ella no se puede
+    //    re-envolver el wrap personal. Paciente: no tiene wrap que re-envolver.
+    let data_key = if role == "paciente" {
+        None
+    } else {
+        Some(data_key_ram.ok_or(
+            "La bóveda está cerrada. Abrila antes de cambiar la contraseña.".to_string(),
+        )?)
+    };
+
+    // 2. Verifica contraseña actual + re-cifra vault → nueva master
+    let new_master =
+        vault::change_vault_password(app_dir.clone(), user_id, current_password, new_password)?;
+
+    // 3. Re-envolver data_key con la nueva master (cura el fast path)
+    if let Some(dk) = &data_key {
+        data_key::save_user_wrap(&app_dir, user_id, dk, &new_master)?;
+    }
+
+    // 4. Actualizar hash de login en DB
+    let hashed = auth::hash_password(new_password)?;
+    conn.execute(
+        "UPDATE users SET password_hash = ?1 WHERE id = ?2;",
+        rusqlite::params![&hashed, user_id],
+    )
+    .map_err(|e| format!("Error actualizando contraseña en DB: {}", e))?;
+
+    Ok(new_master)
 }
 
 #[tauri::command]
@@ -651,6 +739,180 @@ mod tests {
         data_key::save_user_wrap(dir.path(), &admin_id, &data_key_val, &old_master).unwrap();
 
         (dir, conn, data_key_val, admin_id)
+    }
+
+    /// Usuario de prueba con rol dado, en directorio/tempdir propio (sin
+    /// vault ni wraps — recién creado).
+    fn setup_role_user(role: &str) -> (TempDir, rusqlite::Connection, String) {
+        let dir = TempDir::new().unwrap();
+        let conn = crate::db::database::init_db(dir.path().to_path_buf()).unwrap();
+        let uid = format!("user-{}", role);
+        let now = chrono::Utc::now().to_rfc3339();
+        conn.execute(
+            "INSERT INTO users (id, username, password_hash, role, created_at)
+             VALUES (?1, ?2, 'hash_test', ?3, ?4)",
+            rusqlite::params![&uid, &uid, role, &now],
+        )
+        .unwrap();
+        (dir, conn, uid)
+    }
+
+    // ---- unlock_vault_core: ausencia estructural de DataKey en paciente ----
+
+    #[test]
+    fn test_unlock_vault_patient_skips_data_key() {
+        let (dir, conn, uid) = setup_role_user("paciente");
+        let (_master, _signing, dk_opt) =
+            unlock_vault_core(dir.path().to_path_buf(), &uid, "Pass-1234", None, &conn).unwrap();
+
+        // Sin DataKey: la defensa es la arquitectura, no un ACL.
+        assert!(dk_opt.is_none(), "el paciente no debe recibir data_key");
+
+        // La identidad de firma sí se registra (es de la cuenta).
+        let sk: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM signing_keys WHERE user_id = ?1",
+                rusqlite::params![&uid],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(sk, 1);
+
+        // No es staff: no toca professional_profiles.
+        let pp: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM professional_profiles WHERE user_id = ?1",
+                rusqlite::params![&uid],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(pp, 0);
+    }
+
+    #[test]
+    fn test_unlock_vault_staff_fresh_install_gets_data_key() {
+        let (dir, conn, uid) = setup_role_user("profesional");
+        let (_m, _s, dk_opt) =
+            unlock_vault_core(dir.path().to_path_buf(), &uid, "Pass-1234", None, &conn).unwrap();
+        // Primera instalación sin wraps → se genera data_key nueva (path staff).
+        assert!(dk_opt.is_some(), "staff debe recibir data_key");
+    }
+
+    #[test]
+    fn test_unlock_vault_staff_seed_required_without_seed() {
+        let (dir, conn, _dk, admin_id) = setup_installation();
+        // Sin wrap personal → cae al bootstrap con master wrap; sin frase → SEED_REQUIRED.
+        std::fs::remove_file(dir.path().join(format!(".data_key.{}", admin_id))).unwrap();
+        let err = expect_err(unlock_vault_core(
+            dir.path().to_path_buf(),
+            &admin_id,
+            OLD_PASSWORD,
+            None,
+            &conn,
+        ));
+        assert!(err.contains("SEED_REQUIRED"), "err: {}", err);
+    }
+
+    #[test]
+    fn test_unlock_vault_staff_with_seed_resolves_data_key() {
+        let (dir, conn, original_dk, admin_id) = setup_installation();
+        std::fs::remove_file(dir.path().join(format!(".data_key.{}", admin_id))).unwrap();
+        let (_m, _s, dk_opt) = unlock_vault_core(
+            dir.path().to_path_buf(),
+            &admin_id,
+            OLD_PASSWORD,
+            Some(PHRASE),
+            &conn,
+        )
+        .unwrap();
+        assert_eq!(*dk_opt.unwrap(), *original_dk);
+    }
+
+    // ---- change_password_core: paciente sin wrap, staff con data_key ----
+
+    #[test]
+    fn test_change_password_patient_without_data_key() {
+        let (dir, conn, uid) = setup_role_user("paciente");
+        // Vault creado como si hubiera hecho su primer login.
+        let _ = vault::unlock_user_vault(dir.path().to_path_buf(), &uid, OLD_PASSWORD).unwrap();
+
+        let new_master =
+            change_password_core(dir.path().to_path_buf(), &uid, OLD_PASSWORD, NEW_PASSWORD, None, &conn)
+                .unwrap();
+        assert_eq!(new_master.len(), 32);
+
+        // Hash actualizado: la contraseña nueva verifica.
+        let hash: String = conn
+            .query_row(
+                "SELECT password_hash FROM users WHERE id = ?1",
+                rusqlite::params![&uid],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert!(auth::verify_password(NEW_PASSWORD, &hash).unwrap());
+
+        // No existe wrap personal: no hay data_key que re-envolver.
+        assert!(!dir.path().join(format!(".data_key.{}", uid)).exists());
+    }
+
+    #[test]
+    fn test_change_password_staff_requires_data_key_in_ram() {
+        let (dir, conn, uid) = setup_role_user("profesional");
+        let _ = vault::unlock_user_vault(dir.path().to_path_buf(), &uid, OLD_PASSWORD).unwrap();
+        let old_hash: String = conn
+            .query_row(
+                "SELECT password_hash FROM users WHERE id = ?1",
+                rusqlite::params![&uid],
+                |r| r.get(0),
+            )
+            .unwrap();
+
+        // Sin data_key en RAM (bóveda cerrada) → error, sin efectos.
+        let err = expect_err(change_password_core(
+            dir.path().to_path_buf(),
+            &uid,
+            OLD_PASSWORD,
+            NEW_PASSWORD,
+            None,
+            &conn,
+        ));
+        assert!(err.contains("bóveda está cerrada"), "err: {}", err);
+        let hash_after: String = conn
+            .query_row(
+                "SELECT password_hash FROM users WHERE id = ?1",
+                rusqlite::params![&uid],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(old_hash, hash_after, "no debe cambiar la contraseña");
+    }
+
+    #[test]
+    fn test_change_password_staff_rewraps_data_key() {
+        let (dir, conn, uid) = setup_role_user("administrador");
+        let _ = vault::unlock_user_vault(dir.path().to_path_buf(), &uid, OLD_PASSWORD).unwrap();
+        let dk = Zeroizing::new([5u8; 32]);
+
+        change_password_core(
+            dir.path().to_path_buf(),
+            &uid,
+            OLD_PASSWORD,
+            NEW_PASSWORD,
+            Some(dk),
+            &conn,
+        )
+        .unwrap();
+
+        // Wrap personal re-envuelto con la nueva master y hash actualizado.
+        assert!(dir.path().join(format!(".data_key.{}", uid)).exists());
+        let hash: String = conn
+            .query_row(
+                "SELECT password_hash FROM users WHERE id = ?1",
+                rusqlite::params![&uid],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert!(auth::verify_password(NEW_PASSWORD, &hash).unwrap());
     }
 
     #[test]

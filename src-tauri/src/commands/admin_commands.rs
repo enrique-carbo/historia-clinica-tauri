@@ -28,6 +28,19 @@ pub fn require_session(session_state: &State<'_, SessionState>) -> Result<Sessio
         .ok_or_else(|| "Sesión no iniciada. Ingresá de nuevo.".to_string())
 }
 
+/// Exige rol administrador o asistente — operaciones de admisión
+/// (otorgar acceso de paciente) que no son clínicas ni requieren DataKey.
+pub fn require_admin_or_assistant(
+    session_state: &State<'_, SessionState>,
+) -> Result<SessionUser, String> {
+    let guard = session_state.0.lock().map_err(|_| "Lock poisoned")?;
+    let session = guard.as_ref().ok_or("Sesión no iniciada. Ingresá de nuevo.")?;
+    if session.role != "administrador" && session.role != "asistente" {
+        return Err("Esta acción requiere rol administrador o asistente.".to_string());
+    }
+    Ok(session.clone())
+}
+
 /// Registra una acción sensible en `audit_log`.
 pub fn record_audit(
     conn: &rusqlite::Connection,

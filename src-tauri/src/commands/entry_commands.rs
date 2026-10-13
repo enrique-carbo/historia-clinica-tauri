@@ -35,14 +35,17 @@ fn require_complete_profile(
         number: String,
     }
 
-    let row: Option<(
+    /// (ciphertext, nonce) × {nombre, profesión, matrículas}
+    type ProfileRowFields = (
         Option<String>,
         Option<String>,
         Option<String>,
         Option<String>,
         Option<String>,
         Option<String>,
-    )> = conn
+    );
+
+    let row: Option<ProfileRowFields> = conn
         .query_row(
             "SELECT full_name_ciphertext, full_name_nonce,
                     profession_ciphertext, profession_nonce,

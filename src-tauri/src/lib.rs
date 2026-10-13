@@ -66,6 +66,8 @@ pub fn run() {
             commands::find_entity_by_blind_index,
             commands::get_entity,
             commands::update_entity,
+            commands::grant_patient_access,
+            commands::get_entity_access,
             commands::list_entities,
             commands::search_entities,
             commands::is_vault_unlocked,
