@@ -160,8 +160,12 @@ es la arquitectura, no el ACL.
 
 - `unlock_vault` consciente del rol: para `role: 'paciente'`, inyectar solo
   master + keypair de firma y **saltear** `resolve_data_key` y el sync con
-  `professional_profiles` (no es staff). Hoy el flujo fallaría con
-  SEED_REQUIRED y el paciente no podría ni desbloquear.
+  `professional_profiles` (no es staff). **Resuelto (2026-10-11)**:
+  `unlock_vault_core` con `UnlockedKeys { data_key: Option<...> }` — el
+  paciente no puede siquiera pedir la DataKey. `change_password` idem
+  (sin rewrap para paciente; `user_id` desde la sesión) y
+  `admin_reset_password` no crea wrap para pacientes (ausencia también en
+  disco).
 - `require_staff()` para commands **sin** DataKey que no deben ser del
   paciente: `backup_*`, `list_audit_log`, `admin_*`, `list_users` — esos no
   fallan solos por falta de DataKey. **Ya cubierto (verificado 2026-10-11)**:
@@ -270,9 +274,11 @@ plugin no guarda una copia.
 - El plugin corre en el mismo proceso (trait `Plugin` de
   `PLUGIN_ARCHITECTURE.md`) y usa la misma `Connection` que el Core — por
   eso la outbox es atómica.
-- **Prerequisitos Core** (§4): `unlock_vault` role-aware. Resueltos:
-  `require_session` en los 3 commands de atribución (2026-10-11); gates
-  no-clínicos ya cubiertos por `require_admin`.
+- **Prerequisitos Core** (§4): **resueltos todos en P0 (2026-10-11)** —
+  `unlock_vault` role-aware, `change_password` sin rewrap,
+  `grant_patient_access` + `get_entity_access` (gate admin/asistente),
+  reset de contraseña sin wrap para paciente; más `require_session` en los
+  3 commands de atribución y gates no-clínicos (`require_admin`).
 - Comandos Core que el plugin necesita (ya existentes o casi):
   `create_entry` (SOAP), `get_entity`/`decrypt` (ficha del paciente),
   `require_session`, `admin_create_user` (ya valida `role: 'paciente'` en
@@ -289,12 +295,12 @@ plugin no guarda una copia.
 
 | # | Hito | Contenido | Tamaño |
 |---|---|---|---|
-| P0 | Prerequisitos Core | `unlock_vault` role-aware (paciente: sin resolve_data_key, sin professional_profiles), `change_password` sin rewrap de data_key, **`grant_patient_access`** (`users.entity_id`, alta lazy desde la ficha), vista paciente = username + contraseña (sin entries/EHR); `require_session` y gates no-clínicos ya resueltos | M |
+| P0 | Prerequisitos Core | **✅ resuelto (2026-10-11)**: `unlock_vault` role-aware (paciente: sin resolve_data_key, sin professional_profiles), `change_password` sin rewrap de data_key, **`grant_patient_access`** (`users.entity_id`, alta lazy desde la ficha), reset de contraseña sin wrap para paciente, vista paciente = username + contraseña (sin entries/EHR); `require_session` y gates no-clínicos ya resueltos | M |
 | P1 | Canal local | Tablas, thread keys, mensajes con Core IPC, sin sync (paciente simulado con su password) | M |
 | P2 | Pago | QR/alias configurable, `voucher_photo`, confirmación manual, mensaje system | S |
 | P3 | Cierre SOAP | Linkeo de entity, atajo al formulario del Core, `note_reference`, cierre de thread | S |
 | P4 | Sync | Colecciones vía API de fase4 (requiere fase4 M1–M3); bootstrap después de entities; ACL de relé por usuario | M |
-| P5 | Modo paciente | Vista acotada (canal + pago, sin resto del Core), activación de cuenta en primera sesión, pairing | M |
+| P5 | Modo paciente | Vista acotada (canal + pago, sin resto del Core), activación de cuenta en primera sesión, pairing. **Ojo**: `App.tsx` muestra `SeedPhraseSetup` a cualquier rol si la seed no está en localStorage del dispositivo — en el teléfono del paciente hay que saltearlo por rol (nunca ve la frase) | M |
 
 **Dependencia**: P0 es prerequisito de todo lo demás (se puede landear
 independientemente de fase4). P4 requiere fase4 M1–M3.

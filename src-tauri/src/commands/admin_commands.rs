@@ -333,80 +333,125 @@ pub fn admin_reset_password(
         .app_local_data_dir()
         .map_err(|e| format!("Error al obtener ruta del sistema: {}", e))?;
 
-    // DataKey en RAM: sin ella no se puede re-envolver el wrap del usuario.
-    let data_key = super::get_data_key(&data_key_state)?;
-
-    // 1. Regenerar vault (master nueva + keypair nuevo) — sin tocar la DB todavía.
-    let (new_master, _new_priv, new_pub) =
-        vault::reset_user_vault(app_dir.clone(), &target_user_id, &new_password)?;
-
-    // 2. Re-envolver la MISMA DataKey con la nueva master del usuario.
-    data_key::save_user_wrap(&app_dir, &target_user_id, &data_key, &new_master)?;
-
-    // 3. Hash de login + llave pública + rotación en signing_keys + auditoría.
-    let hashed = auth::hash_password(&new_password)?;
-    let now = chrono::Utc::now().to_rfc3339();
+    // DataKey en RAM: solo hace falta para re-envolver el wrap de staff.
+    // `None` si no está inicializada — el rol del target lo decide el core.
+    let data_key_ram = super::get_data_key(&data_key_state).ok();
 
     with_conn(&db_state, |conn| {
-        conn.execute(
-            "UPDATE users SET password_hash = ?1 WHERE id = ?2;",
-            rusqlite::params![&hashed, &target_user_id],
-        )
-        .map_err(|e| format!("Error actualizando contraseña en DB: {}", e))?;
-
-        conn.execute(
-            "UPDATE professional_profiles SET public_key = ?1, updated_at = ?2 WHERE user_id = ?3;",
-            rusqlite::params![&new_pub, &now, &target_user_id],
-        )
-        .map_err(|e| format!("Error actualizando llave pública: {}", e))?;
-
-        // Rotación en el histórico de claves: la vieja queda vigente hasta
-        // ahora, la nueva desde ahora → verificación histórica intacta.
-        let current: Option<String> = conn
-            .query_row(
-                "SELECT public_key FROM signing_keys WHERE user_id = ?1 AND valid_to IS NULL",
-                rusqlite::params![&target_user_id],
-                |r| r.get(0),
-            )
-            .ok();
-        match current {
-            None => {
-                conn.execute(
-                    "INSERT INTO signing_keys (user_id, public_key, valid_from) VALUES (?1, ?2, ?3);",
-                    rusqlite::params![&target_user_id, &new_pub, &now],
-                )
-                .map_err(|e| format!("Error registrando clave de firma: {}", e))?;
-            }
-            Some(pk) if pk != new_pub => {
-                conn.execute(
-                    "UPDATE signing_keys SET valid_to = ?1 WHERE user_id = ?2 AND valid_to IS NULL;",
-                    rusqlite::params![&now, &target_user_id],
-                )
-                .map_err(|e| format!("Error cerrando clave de firma: {}", e))?;
-                conn.execute(
-                    "INSERT INTO signing_keys (user_id, public_key, valid_from) VALUES (?1, ?2, ?3);",
-                    rusqlite::params![&target_user_id, &new_pub, &now],
-                )
-                .map_err(|e| format!("Error registrando clave de firma: {}", e))?;
-            }
-            _ => {}
-        }
-
-        record_audit(
-            conn,
+        reset_password_core(
+            app_dir,
             &actor.user_id,
-            "password_reset",
-            Some(&target_user_id),
-            "vault regenerado (keypair nuevo)",
-        )?;
-
-        Ok(())
+            &target_user_id,
+            new_password.as_str(),
+            data_key_ram.as_ref(),
+            conn,
+        )
     })?;
 
     println!(
         "🔑 [Admin] Contraseña reseteada para {} por {}",
         target_user_id, actor.username
     );
+    Ok(())
+}
+
+/// Backend puro de `admin_reset_password`, extraído para testear sin
+/// `AppHandle`. Regenera la vault del target, rota `password_hash`, la llave
+/// de firma y audita. La DataKey solo se re-envuelve para staff: el paciente
+/// no tiene wrap personal — acá no se busca ni se crea (ausencia estructural).
+fn reset_password_core(
+    app_dir: std::path::PathBuf,
+    actor_user_id: &str,
+    target_user_id: &str,
+    new_password: &str,
+    data_key_ram: Option<&Zeroizing<[u8; 32]>>,
+    conn: &rusqlite::Connection,
+) -> Result<(), String> {
+    let role: String = conn
+        .query_row(
+            "SELECT role FROM users WHERE id = ?1;",
+            rusqlite::params![target_user_id],
+            |r| r.get(0),
+        )
+        .map_err(|e| format!("Error consultando usuario destino: {}", e))?;
+
+    // DataKey en RAM: sin ella no se puede re-envolver el wrap del usuario.
+    // El paciente no tiene wrap → no se exige ni se guarda.
+    let data_key = if role == "paciente" {
+        None
+    } else {
+        Some(data_key_ram.ok_or_else(|| {
+            "Data key no inicializada. ¿Reiniciaste la aplicación?".to_string()
+        })?)
+    };
+
+    // 1. Regenerar vault (master nueva + keypair nuevo) — sin tocar la DB todavía.
+    let (new_master, _new_priv, new_pub) =
+        vault::reset_user_vault(app_dir.clone(), target_user_id, new_password)?;
+
+    // 2. Re-envolver la MISMA DataKey con la nueva master (solo staff).
+    if let Some(dk) = &data_key {
+        data_key::save_user_wrap(&app_dir, target_user_id, dk, &new_master)?;
+    }
+
+    // 3. Hash de login + llave pública + rotación en signing_keys + auditoría.
+    let hashed = auth::hash_password(new_password)?;
+    let now = chrono::Utc::now().to_rfc3339();
+
+    conn.execute(
+        "UPDATE users SET password_hash = ?1 WHERE id = ?2;",
+        rusqlite::params![&hashed, target_user_id],
+    )
+    .map_err(|e| format!("Error actualizando contraseña en DB: {}", e))?;
+
+    if role != "paciente" {
+        conn.execute(
+            "UPDATE professional_profiles SET public_key = ?1, updated_at = ?2 WHERE user_id = ?3;",
+            rusqlite::params![&new_pub, &now, target_user_id],
+        )
+        .map_err(|e| format!("Error actualizando llave pública: {}", e))?;
+    }
+
+    // Rotación en el histórico de claves: la vieja queda vigente hasta
+    // ahora, la nueva desde ahora → verificación histórica intacta.
+    let current: Option<String> = conn
+        .query_row(
+            "SELECT public_key FROM signing_keys WHERE user_id = ?1 AND valid_to IS NULL",
+            rusqlite::params![target_user_id],
+            |r| r.get(0),
+        )
+        .ok();
+    match current {
+        None => {
+            conn.execute(
+                "INSERT INTO signing_keys (user_id, public_key, valid_from) VALUES (?1, ?2, ?3);",
+                rusqlite::params![target_user_id, &new_pub, &now],
+            )
+            .map_err(|e| format!("Error registrando clave de firma: {}", e))?;
+        }
+        Some(pk) if pk != new_pub => {
+            conn.execute(
+                "UPDATE signing_keys SET valid_to = ?1 WHERE user_id = ?2 AND valid_to IS NULL;",
+                rusqlite::params![&now, target_user_id],
+            )
+            .map_err(|e| format!("Error cerrando clave de firma: {}", e))?;
+            conn.execute(
+                "INSERT INTO signing_keys (user_id, public_key, valid_from) VALUES (?1, ?2, ?3);",
+                rusqlite::params![target_user_id, &new_pub, &now],
+            )
+            .map_err(|e| format!("Error registrando clave de firma: {}", e))?;
+        }
+        _ => {}
+    }
+
+    record_audit(
+        conn,
+        actor_user_id,
+        "password_reset",
+        Some(target_user_id),
+        "vault regenerado (keypair nuevo)",
+    )?;
+
     Ok(())
 }
 
@@ -452,4 +497,170 @@ pub fn admin_rotate_seed(
 
     println!("🌱 [Admin] Frase semilla rotada por {}", actor.username);
     Ok(())
+}
+
+// =======================================================================
+// TESTS
+// =======================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::database::init_db;
+    use tempfile::TempDir;
+
+    const NEW_PASSWORD: &str = "Nueva-Clave-9000";
+
+    /// Tempdir + DB + usuario con el rol dado (sin vault ni wraps) + el
+    /// actor `admin-1` real (audit_log tiene FK a users).
+    fn setup_target(role: &str) -> (TempDir, rusqlite::Connection, String) {
+        let dir = TempDir::new().unwrap();
+        let conn = init_db(dir.path().to_path_buf()).unwrap();
+        let now = chrono::Utc::now().to_rfc3339();
+        conn.execute(
+            "INSERT INTO users (id, username, password_hash, role, created_at)
+             VALUES ('admin-1', 'admin.test', 'hash_admin', 'administrador', ?1)",
+            rusqlite::params![&now],
+        )
+        .unwrap();
+        let uid = format!("target-{}", role);
+        conn.execute(
+            "INSERT INTO users (id, username, password_hash, role, created_at)
+             VALUES (?1, ?2, 'hash_vieja', ?3, ?4)",
+            rusqlite::params![&uid, &uid, role, &now],
+        )
+        .unwrap();
+        (dir, conn, uid)
+    }
+
+    fn dk_ram() -> Zeroizing<[u8; 32]> {
+        let mut dk = Zeroizing::new([0u8; 32]);
+        rand::RngCore::fill_bytes(&mut rand::rngs::OsRng, &mut *dk);
+        dk
+    }
+
+    #[test]
+    fn test_reset_password_patient_no_wrap_created() {
+        let (dir, conn, uid) = setup_target("paciente");
+        // Sin DataKey en RAM: el reset del paciente no la necesita.
+        reset_password_core(
+            dir.path().to_path_buf(),
+            "admin-1",
+            &uid,
+            NEW_PASSWORD,
+            None,
+            &conn,
+        )
+        .expect("reset de paciente no requiere DataKey");
+
+        // Nunca se creó el wrap que contendría la DataKey de la clínica —
+        // el artifact en disco es tan ausente como el de unlock_vault.
+        assert!(
+            !dir.path().join(format!(".data_key.{}", uid)).exists(),
+            "el paciente no debe tener wrap personal"
+        );
+
+        // Sí rotó la contraseña de login.
+        let hash: String = conn
+            .query_row(
+                "SELECT password_hash FROM users WHERE id = ?1",
+                rusqlite::params![&uid],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_ne!(hash, "hash_vieja");
+        assert!(auth::verify_password(NEW_PASSWORD, &hash).unwrap());
+    }
+
+    #[test]
+    fn test_reset_password_staff_requires_data_key() {
+        let (dir, conn, uid) = setup_target("profesional");
+        let err = reset_password_core(
+            dir.path().to_path_buf(),
+            "admin-1",
+            &uid,
+            NEW_PASSWORD,
+            None,
+            &conn,
+        )
+        .expect_err("staff exige DataKey en RAM");
+        assert!(err.contains("Data key no inicializada"), "err: {}", err);
+
+        // Falló ANTES de tocar nada: ni vault ni hash rotados.
+        let hash: String = conn
+            .query_row(
+                "SELECT password_hash FROM users WHERE id = ?1",
+                rusqlite::params![&uid],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(hash, "hash_vieja");
+    }
+
+    #[test]
+    fn test_reset_password_staff_rewraps_data_key() {
+        let (dir, conn, uid) = setup_target("administrador");
+        let dk = dk_ram();
+        reset_password_core(
+            dir.path().to_path_buf(),
+            "admin-1",
+            &uid,
+            NEW_PASSWORD,
+            Some(&dk),
+            &conn,
+        )
+        .expect("reset staff con DataKey");
+
+        // El wrap del staff sí existe y se re-envuelve con la master nueva.
+        assert!(dir.path().join(format!(".data_key.{}", uid)).exists());
+        let hash: String = conn
+            .query_row(
+                "SELECT password_hash FROM users WHERE id = ?1",
+                rusqlite::params![&uid],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert!(auth::verify_password(NEW_PASSWORD, &hash).unwrap());
+    }
+
+    #[test]
+    fn test_reset_password_patient_ignores_data_key_even_if_provided() {
+        let (dir, conn, uid) = setup_target("paciente");
+        let dk = dk_ram();
+        reset_password_core(
+            dir.path().to_path_buf(),
+            "admin-1",
+            &uid,
+            NEW_PASSWORD,
+            Some(&dk),
+            &conn,
+        )
+        .expect("reset paciente");
+
+        // Aunque la DataKey estuviera en RAM, el paciente no recibe wrap.
+        assert!(!dir.path().join(format!(".data_key.{}", uid)).exists());
+    }
+
+    #[test]
+    fn test_reset_password_audits() {
+        let (dir, conn, uid) = setup_target("paciente");
+        reset_password_core(
+            dir.path().to_path_buf(),
+            "admin-1",
+            &uid,
+            NEW_PASSWORD,
+            None,
+            &conn,
+        )
+        .unwrap();
+        let n: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM audit_log
+                 WHERE action = 'password_reset' AND actor_user_id = 'admin-1'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(n, 1);
+    }
 }

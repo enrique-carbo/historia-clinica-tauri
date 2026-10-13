@@ -469,14 +469,15 @@ pub fn grant_patient_access(
 }
 
 /// Estado del acceso de paciente de una ficha, si existe (la última
-/// cuenta ligada, priorizando activas). No requiere DataKey.
+/// cuenta ligada, priorizando activas). No requiere DataKey. Misma puerta
+/// que `grant_patient_access`: un paciente no debe enumerar accesos.
 #[tauri::command]
 pub fn get_entity_access(
     entity_id: i64,
     session_state: State<'_, SessionState>,
     db_state: State<'_, DbState>,
 ) -> Result<Option<PatientAccess>, String> {
-    require_session(&session_state)?;
+    require_admin_or_assistant(&session_state)?;
 
     with_conn(&db_state, |conn| {
         let mut stmt = conn
@@ -677,6 +678,24 @@ mod tests {
         )
         .expect_err("username duplicado");
         assert!(err.contains("Ya existe"), "err: {}", err);
+    }
+
+    #[test]
+    fn test_get_entity_access_requires_admin_or_assistant() {
+        // Un paciente no debe poder sondear accesos de otras fichas
+        // (el resultado es un username → leak evitable).
+        let env = setup("paciente");
+        let err = get_entity_access(
+            env.entity_id,
+            env.app.state::<SessionState>(),
+            env.app.state::<DbState>(),
+        )
+        .expect_err("debe rechazar");
+        assert!(
+            err.contains("administrador o asistente"),
+            "err: {}",
+            err
+        );
     }
 
     #[test]
