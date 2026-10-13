@@ -9,7 +9,7 @@ El "porqué" del diseño vive en `README.md` y `docs/` — acá va lo operativo.
 
 ```bash
 cd src-tauri
-cargo test                    # baseline: 130 tests, 0 fallas
+cargo test                    # baseline: 135 tests, 0 fallas
 cargo clippy --all-targets    # baseline: 3 warnings, 0 errores
 cd .. && npx tsc --noEmit     # baseline: sin errores
 pnpm test                     # baseline: 35 tests, 0 fallas (vitest; Node >= 22.12)
@@ -89,8 +89,15 @@ pnpm test                     # baseline: 35 tests, 0 fallas (vitest; Node >= 22
   `hash_password_into`. La sección "Límites de zeroize" del README es la
   verdad oficial: no sobrevender limpieza de RAM.
 - **Firmas**: `signed_hash()` (en `entry_commands.rs`) es la única fuente
-  de verdad. `SignedMaterial` tiene orden de campos fijo y hay que
-  verificar cada campo de la fila (payload, created_at, id incluidos).
+  de verdad del material de las entries. `SignedMaterial` tiene orden de
+  campos fijo y hay que verificar cada campo de la fila (payload,
+  created_at, id incluidos). El **manifest de respaldos** se firma con
+  su propio material canónico (`ManifestSignable` en
+  `security/backup.rs` — no reusar `signed_hash`); la verificación
+  ancla la pública en el histórico local `signing_keys` vía
+  `public_key_at`, **nunca** en la clave embebida en el propio
+  manifest. Firma inválida = restore bloqueado; no verificable (legado
+  o firmante ajeno) = solo con confirmación explícita.
 - **Mapas serializados**: si un mapa se convierte en bytes que otro
   componente lee, compara o firma, usar BTreeMap. Ojo: hoy la firma no
   depende del orden de claves (el payload se firma como hex crudo) — el

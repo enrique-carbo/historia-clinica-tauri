@@ -169,6 +169,12 @@ pub fn verify_signature(
     }
 }
 
+/// Deriva la llave pública (hex) correspondiente a una llave privada.
+pub fn public_key_hex(private_key_bytes: &[u8; ED25519_SECRET_SIZE]) -> String {
+    let signing_key = SigningKey::from_bytes(private_key_bytes);
+    hex::encode(signing_key.verifying_key().to_bytes())
+}
+
 // =======================================================================
 // TESTS
 // =======================================================================

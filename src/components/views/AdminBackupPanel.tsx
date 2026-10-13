@@ -18,6 +18,14 @@ interface Manifest {
   schema_version: number;
   created_at: string;
   files: BackupFile[];
+  signer_user_id: string;
+  signature: string;
+}
+
+interface BackupValidation {
+  manifest: Manifest;
+  signature_status: "verified" | "unverifiable";
+  signature_warning: string | null;
 }
 
 interface BackupInfo {
@@ -44,7 +52,15 @@ export function AdminBackupPanel() {
   const [created, setCreated] = useState<BackupInfo | null>(null);
   const [creating, setCreating] = useState(false);
 
-  const [pending, setPending] = useState<{ path: string; manifest: Manifest } | null>(null);
+  const [pending, setPending] = useState<
+    | {
+        path: string;
+        manifest: Manifest;
+        signatureStatus: BackupValidation["signature_status"];
+        signatureWarning: string | null;
+      }
+    | null
+  >(null);
   const [restoring, setRestoring] = useState(false);
 
   const handleCreate = async () => {
@@ -75,8 +91,13 @@ export function AdminBackupPanel() {
         title: "Elegir la carpeta del respaldo (respaldo-…)",
       });
       if (typeof src !== "string") return;
-      const manifest = await invoke<Manifest>("validate_backup", { srcPath: src });
-      setPending({ path: src, manifest });
+      const validation = await invoke<BackupValidation>("validate_backup", { srcPath: src });
+      setPending({
+        path: src,
+        manifest: validation.manifest,
+        signatureStatus: validation.signature_status,
+        signatureWarning: validation.signature_warning,
+      });
     } catch (e) {
       setError(String(e));
     }
@@ -87,7 +108,12 @@ export function AdminBackupPanel() {
     setRestoring(true);
     setError(null);
     try {
-      await invoke("restore_backup", { srcPath: pending.path });
+      await invoke("restore_backup", {
+        request: {
+          srcPath: pending.path,
+          forceUnverified: pending.signatureStatus !== "verified",
+        },
+      });
       // El backend ya cerró sesión, llaves y conexión: volver al login
       lockVault();
     } catch (e) {
@@ -213,16 +239,31 @@ export function AdminBackupPanel() {
                 <span className="text-zinc-500">Contenido</span>
                 <span className="text-zinc-200">
                   {pending.manifest.files.length} archivos · {formatBytes(pendingTotal)} ·
-                  integridad ✓
+                  integridad ✓ ·{" "}
+                  {pending.signatureStatus === "verified"
+                    ? `firma ✓ (${pending.manifest.signer_user_id})`
+                    : "firma ⚠"}
                 </span>
               </div>
             </div>
+            {pending.signatureStatus !== "verified" && (
+              <Alert variant="info" className="my-0">
+                ⚠ Firma no verificable por esta instalación:{" "}
+                {pending.signatureWarning ?? "motivo desconocido"}. Restaurar solo si confía en
+                el origen de este respaldo (p. ej. un respaldo legítmo creado antes de esta
+                versión o en otra instalación).
+              </Alert>
+            )}
             <div className="flex justify-end gap-2">
               <Button variant="secondary" onClick={() => setPending(null)} disabled={restoring}>
                 Cancelar
               </Button>
               <Button onClick={handleConfirmRestore} disabled={restoring}>
-                {restoring ? "Restaurando…" : "Restaurar y cerrar sesión"}
+                {restoring
+                  ? "Restaurando…"
+                  : pending.signatureStatus === "verified"
+                    ? "Restaurar y cerrar sesión"
+                    : "Restaurar de todos modos y cerrar sesión"}
               </Button>
             </div>
           </div>

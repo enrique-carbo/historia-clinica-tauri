@@ -818,8 +818,9 @@ fn signed_hash(
 /// Llave pública del autor vigente en `entry_timestamp`, según el histórico
 /// `signing_keys`. Permite verificar entries firmadas antes de un reset de
 /// contraseña o una rotación de llave. Fallback a `professional_profiles`
-/// para registros previos al histórico.
-fn public_key_at(
+/// para registros previos al histórico. `pub` porque la reusa la
+/// verificación del manifest de respaldos (`security::backup`).
+pub fn public_key_at(
     conn: &rusqlite::Connection,
     author_id: &str,
     entry_timestamp: &str,

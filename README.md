@@ -17,7 +17,7 @@ La arquitectura está dividida de forma estricta en dos capas de alto rendimient
 - **SHA-256**: Hashing determinista para Índices Ciegos, huellas digitales de documentos y derivación de Seed Phrase.
 - **Argon2id**: Hashing de contraseñas y derivación de claves (KDF) — incluye el envoltorio de la DataKey.
 - **Seed Phrase**: Frase mnemotécnica de 6 palabras en papel para bootstrap y recovery de la DataKey — y para el **break-glass** de recuperación de la contraseña del administrador (auditado). No se persiste en disco.
-- **Respaldos locales**: carpeta `respaldo-{timestamp}/` con `manifest.json` (SHA-256 por archivo); todo el contenido ya va cifrado en reposo.
+- **Respaldos locales**: carpeta `respaldo-{timestamp}/` con `manifest.json` firmado (SHA-256 por archivo + firma Ed25519 del admin); todo el contenido ya va cifrado en reposo.
 
 ### Frontend (UI)
 - **React 19 + TypeScript (Strict)**: Interfaz declarativa con tipado extremo a extremo (los structs de Rust se espejan en TS).
@@ -90,7 +90,7 @@ src/
  │   │   ├── AdminUsersPanel.tsx  # Listado, alta, baja lógica y reset de contraseñas.
  │   │   ├── AdminAuditPanel.tsx  # Registro de acciones sensibles (audit_log).
  │   │   ├── AdminSeedPanel.tsx   # Rotación de frase: generar → anotar → re-escribir → persistir.
- │   │   ├── AdminBackupPanel.tsx # Generar respaldo (diálogo de carpeta) y restaurar (valida manifest → confirma → cierra sesión).
+ │   │   ├── AdminBackupPanel.tsx # Generar respaldo (diálogo de carpeta) y restaurar (valida manifest + firma → confirma → cierra sesión).
  │   │   ├── MedicoView.tsx  # Tabs: Perfil, Paciente, EHR, Entries (+ export .md).
  │   │   └── PacienteView.tsx
  │   │
@@ -303,14 +303,14 @@ El único command registrado es `export_history` (en `lib.rs`), la lógica vive 
 
 ## 🧪 Tests Automatizados
 
-El Core (Rust) cuenta con 130 tests unitarios que cubren:
+El Core (Rust) cuenta con 135 tests unitarios que cubren:
 | Módulo | Tests | Cobertura |
 |---|---|---|
 | `security/crypto.rs` | 14 | AES-GCM roundtrip, nonces únicos, clave incorrecta, manipulación, Blind Index (**HMAC con clave derivada de la DataKey**: determinismo, normalización, dependencia de la clave — sin ella no se enumera), Firma Ed25519, derivación de pública desde privada |
 | `security/vault.rs` | 12 | Creación, desbloqueo, contraseña incorrecta, sal única por usuario, `change_password` (vault re-cifrado, invariante data_key resolvable, wrap huérfano recupera con seed), `reset_user_vault` (keypair nuevo, contraseña vieja muerta, data_key preservada) |
 | `security/seed.rs` | 12 | Generación mnemonic, unicidad, derivación SHA-256, verificación, edge cases, word list sin duplicados ni tildes |
 | `security/data_key.rs` | 10 | Wrap/unwrap AES-GCM, prioridades de resolución, `SEED_REQUIRED`, migración legacy |
-| `security/backup.rs` | 6 | Creación de respaldo (manifest + copias idénticas), hash alterado rechazado, archivo faltante rechazado, schema más nuevo rechazado, path traversal rechazado, roundtrip restauración → DB con datos |
+| `security/backup.rs` | 11 | Creación de respaldo (manifest + copias idénticas), hash alterado rechazado, archivo faltante rechazado, schema más nuevo rechazado, path traversal rechazado, roundtrip restauración → DB con datos, **firma del manifest** (verificada con llave vigente, archivo alterado + hashes recalculados la delata, firma ilegible rechazada, firmante desconocido y manifest legítmo sin firma = no verificable, verificación tras rotación de llave) |
 | `db/migrations.rs` | 5 | DB nueva migra al latest, re-ejecución no-op con datos preservados, DB legacy sin versión migra idempotente, downgrade rechazado, migración fallida con rollback |
 | `db/config_schema.rs` | 4 | Parseo del schema embebido (claves de labels sin duplicados), aplanado de groups con prefijo `{group}_{campo}`, required condicional de grupo ("nada o todo"), required top-level |
 | `commands/auth_commands.rs` | 13 | **Break-glass `seed_recovery`** (happy path, frase incorrecta sin side-effects, contraseña corta, sin admin activo, sin master wrap), `lock_vault` limpia todas las claves de RAM, **`unlock_vault` role-aware** (paciente sin DataKey / staff fresh install / `SEED_REQUIRED` / retry con frase), **`change_password`** (staff re-envuelve, paciente no, `user_id` derivado de la sesión) |
@@ -322,7 +322,7 @@ El Core (Rust) cuenta con 130 tests unitarios que cubren:
 | `export/render.rs` | 6 | Header con paciente/perfil, orden cronológico, orden/labels canónicos de campos, footer SHA-256 + aviso, filename sanitizado y fallback sin nombre |
 
 ```bash
-cargo test --lib  # 130 passed; 0 failed
+cargo test --lib  # 135 passed; 0 failed
 ```
 
 > Los tests de `entry_commands` usan `tauri::test` (feature habilitada solo en `[dev-dependencies]`; el binario de producción no la incluye).
@@ -464,6 +464,6 @@ npx tsc --noEmit        # Verifica TypeScript sin generar archivos
 pnpm test               # Ejecuta los 35 tests unitarios del frontend (vitest)
 pnpm test:watch         # Vitest en modo watch
 cargo check             # Verifica compilación Rust
-cargo test --lib        # Ejecuta los 130 tests unitarios del Core
+cargo test --lib        # Ejecuta los 135 tests unitarios del Core
 cargo add <crate>       # Añade dependencias al backend (desde src-tauri)
 ```

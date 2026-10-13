@@ -156,14 +156,15 @@ El mecanismo de respaldo no introduce claves nuevas: copia los archivos que **ya
 | `.data_key.master` | Recuperación con la **frase semilla** |
 | `.data_key.{user}` | Recuperación con la **contraseña** del usuario (fast path; roles staff — el paciente no tiene wrap) |
 | `vault_*.{bin,salt}` | Llaves de firma por usuario (si faltan, se regeneran al hacer login sin perder verificabilidad histórica) |
-| `manifest.json` | `schema_version` + **SHA-256 por archivo** (integridad al restaurar) |
+| `manifest.json` | `schema_version` + **SHA-256 por archivo** + **firma Ed25519** del admin que lo creó (integridad y autenticidad al restaurar) |
 
 ### Reglas
 
-1. **Nada en claro**: el manifest solo contiene nombres, tamaños y hashes; todo lo demás es ciphertext envuelto. Un respaldo robado es tan inútil como la base sin contraseña ni frase.
+1. **Nada en claro**: el manifest solo contiene nombres, tamaños, hashes y los campos de firma; todo lo demás es ciphertext envuelto. Un respaldo robado es tan inútil como la base sin contraseña ni frase.
 2. **Validación antes de tocar nada**: `validate_backup` verifica cada SHA-256, rechaza `schema_version` más nuevo que la app y nombres con separadores de ruta (path traversal).
-3. **Orden destructivo del restore**: validar → auditar (`backup_restored`) → cerrar llaves, sesión y conexión SQLite → copiar archivos → reabrir con `run_migrations`. Si la copia falla, se reintenta abrir la base previa.
-4. **Matriz de recuperación tras restaurar**:
+3. **Firma del manifest**: `create_backup` lo firma con la llave Ed25519 del admin (la de su bóveda, en RAM) sobre su material canónico (`ManifestSignable`: versión, `created_at`, hashes). La verificación **ancla la pública en el histórico local `signing_keys`** (`public_key_at` por `created_at` — un respaldo viejo verifica tras rotaciones); la clave embebida en el propio manifest es solo informativa, porque quien escribe el archivo también puede reemplazarla. Estados: *verificada* → restore normal; *no verificable* (manifest legítmo sin firma o firmante ajeno a esta instalación) → el admin debe confirmar el restore de todos modos; *inválida* (el firmante es conocido y la firma no coincide) → restore bloqueado. Cualquiera con acceso de escritura al respaldo puede alterarlo, recalcular hashes y **reescribir el manifest** — sin llave privada no puede re-firmarlo, y sin llave registrada localmente su manifest no passa como verificado.
+4. **Orden destructivo del restore**: validar → auditar (`backup_restored`, con nota de si la firma se verificó) → cerrar llaves, sesión y conexión SQLite → copiar archivos → reabrir con `run_migrations`. Si la copia falla, se reintenta abrir la base previa.
+5. **Matriz de recuperación tras restaurar**:
    * Contraseña conocida → login normal → wrap personal (o semilla si no hay wrap) → todo. Para el paciente su contraseña es solo la de login: no hay wrap que recuperar.
    * Sin contraseñas → break-glass con frase semilla (§4.5).
    * Sin frase ni ninguna contraseña → los datos son irrecuperables por diseño (*crypto-shredding*): por eso el respaldo y la frase se guardan juntos y separados del equipo.

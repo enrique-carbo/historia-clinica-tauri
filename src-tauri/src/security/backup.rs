@@ -1,4 +1,6 @@
+use crate::commands::public_key_at;
 use crate::db::migrations::MIGRATIONS;
+use crate::security::crypto;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fs;
@@ -19,12 +21,64 @@ pub struct FileEntry {
 /// Índice del respaldo: versión de app/esquema + huellas de cada archivo.
 /// Todo el contenido listado ya está cifrado en reposo (la DB y los wraps
 /// son incomprensibles sin contraseña o frase semilla).
+///
+/// El manifest se firma con la llave de firma del admin que lo crea
+/// (Ed25519 sobre el material canónico de abajo). `signer_*`/`signature`
+/// quedan vacíos en manifest legítmos anteriores a esta versión
+/// (`serde(default)`), que se tratan como "sin firma".
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Manifest {
     pub app_version: String,
     pub schema_version: u32,
     pub created_at: String,
     pub files: Vec<FileEntry>,
+    #[serde(default)]
+    pub signer_user_id: String,
+    /// Informativa: no se usa para verificar. La pública con la que se
+    /// verifica viene del histórico local `signing_keys` (única fuente
+    /// confiable — una clave embebida en el propio manifest es forjable).
+    #[serde(default)]
+    pub signer_public_key: String,
+    #[serde(default)]
+    pub signature: String,
+}
+
+/// Material canónico firmado: mismo orden de campos que `Manifest`
+/// (menos los campos de firma). No reutiliza `signed_hash` de
+/// `entry_commands`: ese es el convenio de las entries, no este.
+#[derive(Serialize)]
+struct ManifestSignable<'a> {
+    app_version: &'a str,
+    schema_version: u32,
+    created_at: &'a str,
+    files: &'a [FileEntry],
+}
+
+impl Manifest {
+    fn signing_material(&self) -> Vec<u8> {
+        serde_json::to_vec(&ManifestSignable {
+            app_version: &self.app_version,
+            schema_version: self.schema_version,
+            created_at: &self.created_at,
+            files: &self.files,
+        })
+        .expect("serializar Manifest nunca falla")
+    }
+}
+
+/// Resultado de verificar la firma del manifest contra las llaves locales.
+#[derive(Debug, PartialEq)]
+pub enum SignatureStatus {
+    /// La firma coincide con la pública vigente del firmante en esta
+    /// instalación (`signing_keys`, resuelta por fecha del manifest).
+    Verified,
+    /// No hay forma de verificar con las llaves locales: manifest sin
+    /// firma (legado) o firmante desconocido aquí (p. ej. restauración
+    /// desde otra instalación). El restore requiere confirmación explícita.
+    Unverifiable(String),
+    /// El firmante es conocido localmente y la firma NO coincide:
+    /// manifest alterado o firmado por otra llave. Restore bloqueado.
+    Forged(String),
 }
 
 fn sha256_hex(bytes: &[u8]) -> String {
@@ -66,11 +120,14 @@ pub fn checkpoint(conn: &rusqlite::Connection) -> Result<(), String> {
 // =======================================================================
 
 /// Crea un respaldo completo en `dest_parent/respaldo-{timestamp}/` y
-/// devuelve (ruta, manifest).
+/// devuelve (ruta, manifest). El manifest se firma con la llave privada
+/// del admin (`signing_key_bytes`) y ancla su identidad en `signer_user_id`.
 pub fn create_backup(
     conn: &rusqlite::Connection,
     app_dir: &Path,
     dest_parent: &Path,
+    signer_user_id: &str,
+    signing_key_bytes: &[u8; 32],
 ) -> Result<(PathBuf, Manifest), String> {
     checkpoint(conn)?;
 
@@ -125,12 +182,19 @@ pub fn create_backup(
         files.push(entry);
     }
 
-    let manifest = Manifest {
+    // created_at en UTC (mismo formato que `signing_keys.valid_from`) para
+    // que la resolución histórica de la llave pública compare consistente.
+    let mut manifest = Manifest {
         app_version: env!("CARGO_PKG_VERSION").to_string(),
         schema_version: MIGRATIONS.len() as u32,
-        created_at: chrono::Local::now().to_rfc3339(),
+        created_at: chrono::Utc::now().to_rfc3339(),
         files,
+        signer_user_id: signer_user_id.to_string(),
+        signer_public_key: crypto::public_key_hex(signing_key_bytes),
+        signature: String::new(),
     };
+    let material_hash: [u8; 32] = Sha256::digest(manifest.signing_material()).into();
+    manifest.signature = crypto::sign_hash(&material_hash, signing_key_bytes)?;
 
     fs::write(
         dest.join(MANIFEST_FILENAME),
@@ -221,6 +285,52 @@ pub fn validate_backup(src: &Path) -> Result<Manifest, String> {
 }
 
 // =======================================================================
+// FIRMA DEL MANIFEST
+// =======================================================================
+
+/// Verifica la firma del manifest contra la llave pública del firmante
+/// vigente en `signing_keys` al momento de `created_at` (histórico: un
+/// respaldo viejo sigue verificándose después de una rotación).
+///
+/// La pública NUNCA se toma del propio manifest: una clave embebida ahí
+/// la puede forjar quienquiera con acceso de escritura al respaldo. El
+/// ancla es el histórico local de esta instalación.
+pub fn verify_manifest_signature(
+    manifest: &Manifest,
+    conn: &rusqlite::Connection,
+) -> SignatureStatus {
+    if manifest.signature.is_empty() {
+        return SignatureStatus::Unverifiable(
+            "el manifest no tiene firma (creado por una versión anterior de la app)".to_string(),
+        );
+    }
+
+    let author = manifest.signer_user_id.trim();
+    if author.is_empty() {
+        return SignatureStatus::Unverifiable("el manifest no identifica a quién lo firmó".to_string());
+    }
+
+    let public_key = match public_key_at(conn, author, &manifest.created_at) {
+        Ok(pk) => pk,
+        Err(_) => {
+            return SignatureStatus::Unverifiable(format!(
+                "el firmante '{}' no es conocido en esta instalación",
+                author
+            ));
+        }
+    };
+
+    let material_hash: [u8; 32] = Sha256::digest(manifest.signing_material()).into();
+    match crypto::verify_signature(&material_hash, &manifest.signature, &public_key) {
+        Ok(_) => SignatureStatus::Verified,
+        Err(e) => SignatureStatus::Forged(format!(
+            "la firma del manifest no coincide con la llave de '{}' ({})",
+            author, e
+        )),
+    }
+}
+
+// =======================================================================
 // RESTAURAR
 // =======================================================================
 
@@ -258,6 +368,9 @@ mod tests {
     use super::*;
     use tempfile::TempDir;
 
+    /// Llave de firma de prueba para el admin `u1` de `make_installation`.
+    const TEST_SK: [u8; 32] = [7u8; 32];
+
     /// Directorio de datos de una "instalación" real: DB con una fila + wraps de prueba.
     fn make_installation() -> (TempDir, rusqlite::Connection) {
         let dir = TempDir::new().unwrap();
@@ -266,6 +379,13 @@ mod tests {
             "INSERT INTO users (id, username, password_hash, role, created_at)
              VALUES ('u1', 'admin', 'hash', 'administrador', '2026-01-01')",
             [],
+        )
+        .unwrap();
+        // Llave de firma vigente de u1 (lo que firma create_backup en tests)
+        conn.execute(
+            "INSERT INTO signing_keys (user_id, public_key, valid_from)
+             VALUES ('u1', ?1, '2000-01-01T00:00:00+00:00')",
+            rusqlite::params![crypto::public_key_hex(&TEST_SK)],
         )
         .unwrap();
         fs::write(dir.path().join(".data_key.master"), b"wrap-master-bytes").unwrap();
@@ -283,7 +403,7 @@ mod tests {
         let dest_parent = TempDir::new().unwrap();
 
         let (path, manifest) =
-            create_backup(&conn, app.path(), dest_parent.path()).unwrap();
+            create_backup(&conn, app.path(), dest_parent.path(), "u1", &TEST_SK).unwrap();
 
         assert!(path.starts_with(dest_parent.path()));
         assert!(path
@@ -293,6 +413,15 @@ mod tests {
             .starts_with(BACKUP_PREFIX));
         assert_eq!(manifest.schema_version, MIGRATIONS.len() as u32);
         assert!(!manifest.app_version.is_empty());
+
+        // Manifest firmado por el admin con su llave vigente
+        assert_eq!(manifest.signer_user_id, "u1");
+        assert_eq!(manifest.signer_public_key, crypto::public_key_hex(&TEST_SK));
+        assert!(!manifest.signature.is_empty());
+        assert_eq!(
+            verify_manifest_signature(&manifest, &conn),
+            SignatureStatus::Verified
+        );
 
         // Todos los archivos candidatos, y solo ellos
         let names: Vec<&str> = manifest.files.iter().map(|f| f.name.as_str()).collect();
@@ -319,7 +448,7 @@ mod tests {
     fn test_validate_detects_tampered_file() {
         let (app, conn) = make_installation();
         let dest_parent = TempDir::new().unwrap();
-        let (path, _) = create_backup(&conn, app.path(), dest_parent.path()).unwrap();
+        let (path, _) = create_backup(&conn, app.path(), dest_parent.path(), "u1", &TEST_SK).unwrap();
 
         // Alterar un byte del .db copiado (mismo tamaño → falla solo el hash)
         let db_path = path.join(DB_FILENAME);
@@ -335,7 +464,7 @@ mod tests {
     fn test_validate_rejects_missing_file() {
         let (app, conn) = make_installation();
         let dest_parent = TempDir::new().unwrap();
-        let (path, _) = create_backup(&conn, app.path(), dest_parent.path()).unwrap();
+        let (path, _) = create_backup(&conn, app.path(), dest_parent.path(), "u1", &TEST_SK).unwrap();
 
         fs::remove_file(path.join(".data_key.master")).unwrap();
 
@@ -347,7 +476,7 @@ mod tests {
     fn test_validate_rejects_newer_schema() {
         let (app, conn) = make_installation();
         let dest_parent = TempDir::new().unwrap();
-        let (path, _) = create_backup(&conn, app.path(), dest_parent.path()).unwrap();
+        let (path, _) = create_backup(&conn, app.path(), dest_parent.path(), "u1", &TEST_SK).unwrap();
 
         let mut manifest = read_manifest(&path).unwrap();
         manifest.schema_version = MIGRATIONS.len() as u32 + 5;
@@ -365,7 +494,7 @@ mod tests {
     fn test_validate_rejects_path_traversal() {
         let (app, conn) = make_installation();
         let dest_parent = TempDir::new().unwrap();
-        let (path, _) = create_backup(&conn, app.path(), dest_parent.path()).unwrap();
+        let (path, _) = create_backup(&conn, app.path(), dest_parent.path(), "u1", &TEST_SK).unwrap();
 
         let mut manifest = read_manifest(&path).unwrap();
         manifest.files.push(FileEntry {
@@ -387,7 +516,7 @@ mod tests {
     fn test_restore_roundtrip_recovers_installation() {
         let (app, conn) = make_installation();
         let dest_parent = TempDir::new().unwrap();
-        let (path, _) = create_backup(&conn, app.path(), dest_parent.path()).unwrap();
+        let (path, _) = create_backup(&conn, app.path(), dest_parent.path(), "u1", &TEST_SK).unwrap();
         drop(conn);
 
         // Nueva instalación vacía (otra carpeta)
@@ -415,5 +544,136 @@ mod tests {
 
         // El archivo que no estaba en el respaldo no aparece
         assert!(!fresh.path().join("preferencias.tmp").exists());
+    }
+
+    #[test]
+    fn test_signature_detects_tampered_manifest() {
+        let (app, conn) = make_installation();
+        let dest_parent = TempDir::new().unwrap();
+        let (path, _) = create_backup(&conn, app.path(), dest_parent.path(), "u1", &TEST_SK).unwrap();
+
+        // Atacante sofisticado: altera un archivo, recalcula su hash y
+        // reescribe el manifest (los hashes pasan) sin poder firmar.
+        let db_path = path.join(DB_FILENAME);
+        let mut bytes = fs::read(&db_path).unwrap();
+        bytes[10] ^= 0xFF;
+        fs::write(&db_path, &bytes).unwrap();
+
+        let mut manifest = read_manifest(&path).unwrap();
+        manifest
+            .files
+            .iter_mut()
+            .find(|f| f.name == DB_FILENAME)
+            .unwrap()
+            .sha256 = sha256_hex(&bytes);
+        fs::write(
+            path.join(MANIFEST_FILENAME),
+            serde_json::to_vec_pretty(&manifest).unwrap(),
+        )
+        .unwrap();
+
+        // La validación de hashes sola pasa…
+        let checked = validate_backup(&path).unwrap();
+        // …pero la firma la delata: llave de u1 conocida, firma no coincide.
+        assert!(matches!(
+            verify_manifest_signature(&checked, &conn),
+            SignatureStatus::Forged(_)
+        ));
+    }
+
+    #[test]
+    fn test_signature_rejects_garbage_signature() {
+        let (app, conn) = make_installation();
+        let dest_parent = TempDir::new().unwrap();
+        let (path, _) = create_backup(&conn, app.path(), dest_parent.path(), "u1", &TEST_SK).unwrap();
+
+        let mut manifest = read_manifest(&path).unwrap();
+        manifest.signature = "zz-no-hex".to_string();
+        fs::write(
+            path.join(MANIFEST_FILENAME),
+            serde_json::to_vec_pretty(&manifest).unwrap(),
+        )
+        .unwrap();
+
+        let manifest = validate_backup(&path).unwrap();
+        assert!(matches!(
+            verify_manifest_signature(&manifest, &conn),
+            SignatureStatus::Forged(_)
+        ));
+    }
+
+    #[test]
+    fn test_signature_unknown_signer_is_unverifiable() {
+        let (app, conn) = make_installation();
+        let dest_parent = TempDir::new().unwrap();
+        let (path, _) = create_backup(&conn, app.path(), dest_parent.path(), "u1", &TEST_SK).unwrap();
+
+        let mut manifest = read_manifest(&path).unwrap();
+        manifest.signer_user_id = "admin-de-otra-instalacion".to_string();
+        fs::write(
+            path.join(MANIFEST_FILENAME),
+            serde_json::to_vec_pretty(&manifest).unwrap(),
+        )
+        .unwrap();
+
+        let manifest = validate_backup(&path).unwrap();
+        match verify_manifest_signature(&manifest, &conn) {
+            SignatureStatus::Unverifiable(w) => assert!(w.contains("no es conocido"), "{}", w),
+            other => panic!("esperaba Unverifiable, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_signature_legacy_manifest_without_signature_is_unverifiable() {
+        let (app, conn) = make_installation();
+        let dest_parent = TempDir::new().unwrap();
+        let (path, _) = create_backup(&conn, app.path(), dest_parent.path(), "u1", &TEST_SK).unwrap();
+
+        // Manifest legítmo (pre-firma): los campos de firma quedan vacíos
+        let mut manifest = read_manifest(&path).unwrap();
+        manifest.signer_user_id = String::new();
+        manifest.signer_public_key = String::new();
+        manifest.signature = String::new();
+        fs::write(
+            path.join(MANIFEST_FILENAME),
+            serde_json::to_vec_pretty(&manifest).unwrap(),
+        )
+        .unwrap();
+
+        let manifest = validate_backup(&path).unwrap();
+        match verify_manifest_signature(&manifest, &conn) {
+            SignatureStatus::Unverifiable(w) => assert!(w.contains("no tiene firma"), "{}", w),
+            other => panic!("esperaba Unverifiable, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_signature_verifies_after_key_rotation() {
+        let (app, conn) = make_installation();
+        let dest_parent = TempDir::new().unwrap();
+        // Respaldo creado con la llave vigente de u1
+        let (path, _) = create_backup(&conn, app.path(), dest_parent.path(), "u1", &TEST_SK).unwrap();
+
+        // Rotación posterior: la vieja queda cerrada, entra una nueva
+        let new_sk = [9u8; 32];
+        conn.execute(
+            "UPDATE signing_keys SET valid_to = '2099-12-31T23:59:59+00:00'
+             WHERE user_id = 'u1' AND valid_to IS NULL",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO signing_keys (user_id, public_key, valid_from)
+             VALUES ('u1', ?1, '2099-12-31T23:59:59+00:00')",
+            rusqlite::params![crypto::public_key_hex(&new_sk)],
+        )
+        .unwrap();
+
+        // El respaldo se verifica contra la llave vigente a su created_at
+        let manifest = validate_backup(&path).unwrap();
+        assert_eq!(
+            verify_manifest_signature(&manifest, &conn),
+            SignatureStatus::Verified
+        );
     }
 }
