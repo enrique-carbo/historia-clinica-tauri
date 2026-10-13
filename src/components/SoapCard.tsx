@@ -55,7 +55,7 @@ export function SoapCard({ entry, onClick }: SoapCardProps) {
               </span>
               <div className="min-w-0">
                 <span className="text-zinc-500 font-medium">{label}: </span>
-                <span className="text-zinc-400 break-words whitespace-pre-wrap">{value}</span>
+                <span className="text-zinc-400 wrap-break-words whitespace-pre-wrap">{value}</span>
               </div>
             </div>
           );
