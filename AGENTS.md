@@ -58,6 +58,11 @@ pnpm test                     # baseline: 35 tests, 0 fallas (vitest; Node >= 22
 
 ## Reglas del proyecto
 
+- **Core mínimo**: funcional pero mínimo — nada de features "por si acaso"
+  ni placeholders en el Core. Lo no-esencial (teleconsulta, métricas, FHIR,
+  terminología, OS, IA) va a **plugins** cuando haga falta. Ver
+  `docs/PLUGIN_ARCHITECTURE.md` (Principio Rector) para la lista
+  Core/no-Core.
 - **Sesión**: el `user_id` nunca se confía en lo que manda el frontend.
   Derivar con `require_session()` / `require_admin()` (definidos en
   `src-tauri/src/commands/admin_commands.rs`).

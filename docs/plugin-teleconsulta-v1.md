@@ -51,6 +51,11 @@ directamente: sus commandos (trait `Plugin`, mismo proceso) escriben la tabla
 del plugin y su evento de outbox **en la misma transacción**, igual que todo
 command del Core.
 
+El Core **no lleva placeholders** de features de plugin: la vista y la
+entrada de menú de teleconsulta las aporta el plugin (2026-10-11 se
+eliminaron las que vivían en `PacienteView`/`Drawer`; el Core del paciente
+es ahora perfil + contraseña, funcional y mínimo).
+
 ---
 
 ## 3. Modelo de datos (DB del Core)
@@ -154,13 +159,15 @@ es la arquitectura, no el ACL.
   master + keypair de firma y **saltear** `resolve_data_key` y el sync con
   `professional_profiles` (no es staff). Hoy el flujo fallaría con
   SEED_REQUIRED y el paciente no podría ni desbloquear.
-- `require_staff()` (o equivalente) para commands **sin** DataKey que no
-  deben ser del paciente: `backup_*`, `list_audit_log`, `admin_*`,
-  `list_users` — esos no fallan solos por falta de DataKey.
-- Deuda M1 de fase4 sube de prioridad: `create_entity` / `update_entity` /
-  `create_entry` deben salir del `user_id` del frontend a
-  `require_session` — con pacientes adentro de `users`, un command con
-  sola sesión es un vector real.
+- `require_staff()` para commands **sin** DataKey que no deben ser del
+  paciente: `backup_*`, `list_audit_log`, `admin_*`, `list_users` — esos no
+  fallan solos por falta de DataKey. **Ya cubierto (verificado 2026-10-11)**:
+  todos esos commands ya exigen `require_admin` (estricto ≥ staff).
+- `require_session` en `create_entity` / `update_entity` / `create_entry`:
+  **resuelto (2026-10-11)** — autor/creador desde la sesión, nunca del
+  frontend (fase4 checklist §9 marcado). Esto subió la prioridad de la
+  deuda M1: con pacientes adentro de `users`, un command con sola sesión
+  era un vector real — ya cerrado.
 
 Rotación:
 
@@ -247,7 +254,7 @@ plugin no guarda una copia.
 | DataKey ausente para pacientes | Estructural: sin wrap personal y sin seed (§4). Commands clínicos fallan solos |
 | El plugin nunca ve claves | Todo descifrado/cifrado vía Core IPC con la bóveda abierta (contrato del microkernel) |
 | El servidor es tubo ciego | Ciphertexts + UUIDs + timestamps; status/asunto/contenido/pago van cifrados |
-| `require_staff` en lo no-clínico | `backup_*`, `admin_*`, `list_audit_log`, `list_users` no son para pacientes — gate explícito |
+| `require_admin` en lo no-clínico | `backup_*`, `admin_*`, `list_audit_log`, `list_users` ya exigen `require_admin` (verificado 2026-10-11) |
 | `tc_*` participante-scoped | `require_session` + "¿este user_id es `patient_user_id` del thread o el staff asignado/activo del consultorio?" |
 | Atribución | Ambos lados: `sender_user_id` desde `require_session`; hecho clínico firmado = entry SOAP del profesional |
 | Reset por admin | Trust model: el admin puede derivar la master nueva y leer el canal; queda en `audit_log` |
@@ -260,8 +267,9 @@ plugin no guarda una copia.
 - El plugin corre en el mismo proceso (trait `Plugin` de
   `PLUGIN_ARCHITECTURE.md`) y usa la misma `Connection` que el Core — por
   eso la outbox es atómica.
-- **Prerequisitos Core** (§4): `unlock_vault` role-aware, `require_staff`,
-  deuda `require_session` de fase4 M1.
+- **Prerequisitos Core** (§4): `unlock_vault` role-aware. Resueltos:
+  `require_session` en los 3 commands de atribución (2026-10-11); gates
+  no-clínicos ya cubiertos por `require_admin`.
 - Comandos Core que el plugin necesita (ya existentes o casi):
   `create_entry` (SOAP), `get_entity`/`decrypt` (ficha del paciente),
   `require_session`, `admin_create_user` (ya valida `role: 'paciente'` en
@@ -278,7 +286,7 @@ plugin no guarda una copia.
 
 | # | Hito | Contenido | Tamaño |
 |---|---|---|---|
-| P0 | Prerequisitos Core | `unlock_vault` role-aware (paciente: sin resolve_data_key, sin professional_profiles), `require_staff`, deuda `require_session` de M1 | S |
+| P0 | Prerequisitos Core | `unlock_vault` role-aware (paciente: sin resolve_data_key, sin professional_profiles) — lo único pendiente; `require_session` y gates no-clínicos ya resueltos | S |
 | P1 | Canal local | Tablas, thread keys, mensajes con Core IPC, sin sync (paciente simulado con su password) | M |
 | P2 | Pago | QR/alias configurable, `voucher_photo`, confirmación manual, mensaje system | S |
 | P3 | Cierre SOAP | Linkeo de entity, atajo al formulario del Core, `note_reference`, cierre de thread | S |

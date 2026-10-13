@@ -18,6 +18,31 @@ El sistema separa radicalmente dos responsabilidades:
 
 ---
 
+## 🎯 Principio Rector: Core Mínimo
+
+El Core debe ser **lo más minimalista posible: funcional, pero mínimo**.
+Toda funcionalidad nueva se cuestiona primero: *¿es indispensable para la
+identidad, la bóveda o el registro clínico básico?* Si no, **va en un
+plugin cuando sea necesario** — nunca en el Core "por si acaso", ni como
+placeholder.
+
+**Es Core** (identidad + soberanía de datos + clínica mínima):
+
+- Sesión, usuarios, roles, auditoría; login / vault / seed / cambio de contraseña
+- Criptografía, bóvedas, DATA_KEY, respaldo y restore local
+- Pacientes (filiación), entries clínicas (SOAP), perfil profesional
+- Export `.md` (salida de datos en crudo — el Core nunca encadena datos)
+
+**No es Core** (plugins, cuando haga falta): teleconsulta y mensajería,
+métricas / PGHD, export FHIR y estándares, terminología (LOINC/SNOMED),
+integración con obras sociales, IA / OCR, reportes avanzados.
+
+Precedente (2026-10-11): se eliminaron del Core los placeholders de
+teleconsulta (`PacienteView`, ícono del menú paciente) — el plugin aporta
+su vista y su entrada de menú.
+
+---
+
 ## 🏗️ Arquitectura del Sistema
 
 ```text

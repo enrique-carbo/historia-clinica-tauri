@@ -446,7 +446,7 @@ pnpm test:watch  # modo watch
 
 ### 🟥 Fase 5: Teleconsulta Asíncrona (plugin)
 - [x] Diseño v4: `docs/plugin-teleconsulta-v1.md` — canal único async + pago QR/transferencia (confirmación manual) + cierre SOAP como `entry` del Core; paciente = usuario `role: 'paciente'` (previsto en v001) con DataKey ausente estructuralmente; datos del plugin en tablas namespaced de la DB del Core
-- [ ] P0 Core: `unlock_vault` role-aware + `require_staff` (prerequisito del plugin; incluye deuda `require_session` de fase 4 M1)
+- [ ] P0 Core: `unlock_vault` role-aware (prerequisito del plugin; la deuda `require_session` de fase 4 M1 quedó resuelta)
 - [ ] Hitos P1–P5 del diseño (P4 — sync — depende de fase 4, M1–M3)
 
 ### ⬜ Fase 6: Interoperabilidad (Futuro)
