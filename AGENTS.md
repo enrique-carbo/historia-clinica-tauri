@@ -64,7 +64,8 @@ pnpm test                     # baseline: 35 tests, 0 fallas (vitest; Node >= 22
   `docs/PLUGIN_ARCHITECTURE.md` (Principio Rector) para la lista
   Core/no-Core.
 - **Sesión**: el `user_id` nunca se confía en lo que manda el frontend.
-  Derivar con `require_session()` / `require_admin()` (definidos en
+  Derivar con `require_session()` / `require_admin()` /
+  `require_admin_or_assistant()` (definidos en
   `src-tauri/src/commands/admin_commands.rs`).
 - **Auditoría**: `record_audit()` guarda solo nombres de campos y
   metadatos, **nunca valores** — los datos van cifrados en reposo y

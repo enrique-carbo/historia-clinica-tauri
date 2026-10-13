@@ -90,13 +90,13 @@ Una única **DataKey** (32 bytes, generada una sola vez) cifra todo lo clínico:
 | `.data_key.{user_id}` | master key derivada de la contraseña del usuario | **Fast path**: login normal sin tipear la semilla |
 | `.data_key.master` | `SHA-256(frase semilla)` | **Bootstrap / recovery**: primer login y wrap huérfano |
 
-**Orden de resolución** (`resolve_data_key`): wrap personal → semilla → generación (`SEED_REQUIRED` pide la frase al frontend, nunca falla perdiendo datos). Los tests de invariante garantizan que un cambio de contraseña o un reset **nunca alteran la DataKey** — solo se re-envuelve el wrap personal con la nueva master key.
+**Orden de resolución** (`resolve_data_key`): wrap personal → semilla → generación (`SEED_REQUIRED` pide la frase al frontend, nunca falla perdiendo datos). Los tests de invariante garantizan que un cambio de contraseña o un reset **nunca alteran la DataKey** — solo se re-envuelve el wrap personal con la nueva master key, y **solo para roles staff**: el paciente no tiene wrap (ausencia estructural) y sus cambios de contraseña son solo del hash de login.
 
 ### 4.3 Aislamiento multi-usuario (qué protege y qué no)
 
-> ⚠️ **Corrección importante:** los vaults (y por tanto las llaves de firma) son **por usuario**, pero la DataKey es **compartida por instalación**. Por eso el aislamiento entre consultas **no es criptográfico entre usuarios**: cualquier usuario con sesión abierta —médico, enfermería, asistente o administrador— descifra los mismos datos clínicos. La distinción entre roles es de **autorización y UI** (ver §4.6), no de cifrado.
+> ⚠️ **Corrección importante:** los vaults (y por tanto las llaves de firma) son **por usuario**, pero la DataKey es **compartida por instalación**. Por eso el aislamiento entre consultas **no es criptográfico entre usuarios**: cualquier usuario **staff** con sesión abierta —médico, enfermería, asistente o administrador— descifra los mismos datos clínicos. La distinción entre roles es de **autorización y UI** (ver §4.6), no de cifrado. La excepción es el rol `paciente`: inicia sesión pero **no tiene DataKey** (ausencia estructural — no hay wrap personal para él), así que todos los commands clínicos le fallan por diseño.
 
-Lo que el modelo Zero-Knowledge protege de verdad es el **disco**: sin la contraseña o la frase semilla, la base local es un bloque incomprensible — incluso para alguien con acceso físico o para el propio administrador, que en su cuenta solo tiene un wrap personal idéntico al de cualquier otro usuario y no custodia claves de datos ajenas.
+Lo que el modelo Zero-Knowledge protege de verdad es el **disco**: sin la contraseña o la frase semilla, la base local es un bloque incomprensible — incluso para alguien con acceso físico o para el propio administrador, que en su cuenta solo tiene un wrap personal idéntico al de cualquier otro usuario **staff** y no custodia claves de datos ajenas. (El paciente no tiene wrap alguno: no hay ningún `.data_key.{user_id}` suyo en disco.)
 
 ### 4.4 Firmas y el histórico `signing_keys`
 
@@ -104,7 +104,7 @@ Lo que el modelo Zero-Knowledge protege de verdad es el **disco**: sin la contra
 * `professional_profiles.public_key` guarda la clave **vigente** (se sincroniza en cada `unlock_vault`).
 * `signing_keys` guarda el **histórico**: rangos `valid_from`/`valid_to` por clave. La verificación contrasta cada entry contra la clave vigente en **el timestamp de la entry** (`public_key_at`), con fallback al perfil para registros previos al histórico.
 * **Cambio de contraseña propio:** mismo keypair → nada cambia en las firmas.
-* **Reset por el administrador** (`admin_reset_password`, sin contraseña previa): regenera el vault con keypair **nuevo**, re-envuelve el wrap personal, actualiza la pública vigente y cierra el rango anterior en `signing_keys` — las entries viejas siguen verificando con la clave que les corresponde por fecha.
+* **Reset por el administrador** (`admin_reset_password`, sin contraseña previa): regenera el vault con keypair **nuevo**, re-envuelve el wrap personal (**solo staff** — para un paciente no hay wrap que crear), actualiza la pública vigente y cierra el rango anterior en `signing_keys` — las entries viejas siguen verificando con la clave que les corresponde por fecha.
 
 ### 4.5 Frase semilla (recovery, continuidad y break-glass)
 
@@ -122,7 +122,9 @@ Lo que el modelo Zero-Knowledge protege de verdad es el **disco**: sin la contra
 * rotación de la frase semilla,
 * lectura del registro de auditoría (`audit_log`, con actor y objetivo).
 
-El administrador **no gana lectura nueva de datos clínicos** (misma DataKey, mismo wrap que todos): su poder es sobre *cuentas y credenciales*, y cada uso queda auditado.
+Y el acceso de paciente usa el gate intermedio `require_admin_or_assistant()` (operación de admisión, no de custodia): `grant_patient_access` y `get_entity_access`.
+
+El administrador **no gana lectura nueva de datos clínicos** (misma DataKey, mismo wrap que todos): su poder es sobre *cuentas y credenciales*, y cada uso queda auditado. El paciente, con sesión abierta, no gana lectura alguna: sin DataKey, ningún command clínico le responde.
 
 ---
 
@@ -150,7 +152,7 @@ El mecanismo de respaldo no introduce claves nuevas: copia los archivos que **ya
 | :--- | :--- |
 | `historia_clinica.db` (con `wal_checkpoint(TRUNCATE)` previo) | Todos los datos (cifrados por campo/payload) |
 | `.data_key.master` | Recuperación con la **frase semilla** |
-| `.data_key.{user}` | Recuperación con la **contraseña** del usuario (fast path) |
+| `.data_key.{user}` | Recuperación con la **contraseña** del usuario (fast path; roles staff — el paciente no tiene wrap) |
 | `vault_*.{bin,salt}` | Llaves de firma por usuario (si faltan, se regeneran al hacer login sin perder verificabilidad histórica) |
 | `.installation_salt` | Sin ella los `blind_index` restaurados no coincidirían con los nuevos |
 | `manifest.json` | `schema_version` + **SHA-256 por archivo** (integridad al restaurar) |
@@ -161,6 +163,6 @@ El mecanismo de respaldo no introduce claves nuevas: copia los archivos que **ya
 2. **Validación antes de tocar nada**: `validate_backup` verifica cada SHA-256, rechaza `schema_version` más nuevo que la app y nombres con separadores de ruta (path traversal).
 3. **Orden destructivo del restore**: validar → auditar (`backup_restored`) → cerrar llaves, sesión y conexión SQLite → copiar archivos → reabrir con `run_migrations` → recargar la sal de blind index. Si la copia falla, se reintenta abrir la base previa.
 4. **Matriz de recuperación tras restaurar**:
-   * Contraseña conocida → login normal → wrap personal (o semilla si no hay wrap) → todo.
+   * Contraseña conocida → login normal → wrap personal (o semilla si no hay wrap) → todo. Para el paciente su contraseña es solo la de login: no hay wrap que recuperar.
    * Sin contraseñas → break-glass con frase semilla (§4.5).
    * Sin frase ni ninguna contraseña → los datos son irrecuperables por diseño (*crypto-shredding*): por eso el respaldo y la frase se guardan juntos y separados del equipo.

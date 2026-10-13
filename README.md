@@ -198,16 +198,17 @@ Sistema de recuperación que protege el master wrap de la DataKey:
 | Admisión de pacientes (Entity) | ✅ | ✅ | — | — |
 | Vista clínica (EHR, entries, export .md) | — | — | ✅ | — |
 | Alta de cuentas de usuario | ✅ | ❌ | ❌ | ❌ |
+| Otorgar acceso de paciente (desde su ficha) | ✅ | ✅ | ❌ | ❌ |
 | Baja lógica (`is_active`) / reactivación | ✅ | ❌ | ❌ | ❌ |
 | Reset de contraseña de otros | ✅ (vault regenerado + auditoría) | ❌ | ❌ | ❌ |
 | Rotar la frase semilla | ✅ (con verificación + auditoría) | ❌ | ❌ | ❌ |
 | Ver auditoría | ✅ | ❌ | ❌ | ❌ |
 | Cambiar la propia contraseña | ✅ (con la previa — sin tocar firma) | ✅ | ✅ | ✅ |
 
-- **Alta de cuentas**: solo el administrador, desde su panel (`admin_create_user`). El registro público solo existe cuando la instalación **no tiene usuarios** y siempre crea un `administrador` (bootstrap) — después queda cerrado.
+- **Alta de cuentas**: el administrador desde su panel (`admin_create_user`); y admin + asistente otorgan la **cuenta de paciente** desde la ficha (`grant_patient_access` — alta lazy, un solo acceso activo por ficha, ligada con `users.entity_id`). El registro público solo existe cuando la instalación **no tiene usuarios** y siempre crea un `administrador` (bootstrap) — después queda cerrado.
 - **Baja lógica**: `is_active = 0` bloquea el próximo login; la fila y el historial permanecen. No se puede desactivar a uno mismo ni dejar la instalación sin administradores activos.
-- **Tres caminos para cambiar una contraseña**: (1) el usuario con su contraseña previa (`change_password` — conserva la llave de firma), (2) el administrador sin la previa (`admin_reset_password` — regenera el vault con keypair nuevo; el histórico `signing_keys` mantiene verificadas las entries anteriores), (3) el **break-glass con frase semilla** (`seed_recovery` desde el login — verifica la posesión de la frase contra `.data_key.master`, restablece la contraseña del administrador activo más antiguo y queda en `audit_log`; la DataKey no cambia).
-- **Reparto deliberado de confidencialidad**: la DataKey es única por instalación, así que cualquier usuario logueado ya accede a los mismos datos cifrados (el filtrado es de UI por rol). El rol `administrador` añade poder sobre **cuentas y credenciales**, no sobre los datos clínicos — y cada uso de ese poder queda en `audit_log`.
+- **Tres caminos para cambiar una contraseña**: (1) el usuario con su contraseña previa (`change_password` — conserva la llave de firma), (2) el administrador sin la previa (`admin_reset_password` — regenera el vault con keypair nuevo; el histórico `signing_keys` mantiene verificadas las entries anteriores; si el target es paciente **no hay wrap que re-envolver**), (3) el **break-glass con frase semilla** (`seed_recovery` desde el login — verifica la posesión de la frase contra `.data_key.master`, restablece la contraseña del administrador activo más antiguo y queda en `audit_log`; la DataKey no cambia).
+- **Reparto deliberado de confidencialidad**: la DataKey es única por instalación, así que cualquier usuario logueado **de staff** ya accede a los mismos datos cifrados (el filtrado es de UI por rol). El rol `paciente` es la excepción por diseño: inicia sesión con username/contraseña pero **no tiene DataKey** (ausencia estructural) — todos los commands clínicos le fallan. El rol `administrador` añade poder sobre **cuentas y credenciales**, no sobre los datos clínicos — y cada uso de ese poder queda en `audit_log`.
 
 ## 🗄️ Estructura de la Base de Datos
 
@@ -216,7 +217,7 @@ Sistema de recuperación que protege el master wrap de la DataKey:
 ### Tablas Principales
 | Tabla | Propósito | Relación |
 |---|---|---|
-| `users` | Autenticación y roles: `administrador` (gestión técnica), `asistente` (recepción), `profesional` (cualquier terapeuta que crea entries: médico, enfermero, psicólogo, kinesiólogo, odontólogo…), `paciente` — con `is_active` (baja lógica) y `last_login_at` | PK `id TEXT` |
+| `users` | Autenticación y roles: `administrador` (gestión técnica), `asistente` (recepción), `profesional` (cualquier terapeuta que crea entries: médico, enfermero, psicólogo, kinesiólogo, odontólogo…), `paciente` — con `entity_id` (vínculo a la ficha cuando es paciente), `is_active` (baja lógica) y `last_login_at` | PK `id TEXT` |
 | `professional_profiles` | Perfil profesional + llave pública Ed25519 vigente | FK → `users(id)` |
 | `signing_keys` | **Histórico de llaves de firma** (`valid_from`/`valid_to`, `valid_to NULL` = vigente) — preserva la verificación de entries tras resets/rotaciones | FK → `users(id)` |
 | `audit_log` | Registro de acciones sensibles (altas, bajas, resets, rotación de seed) | FK → `users(id)` ×2 (actor, target) |
@@ -302,7 +303,7 @@ El único command registrado es `export_history` (en `lib.rs`), la lógica vive 
 
 ## 🧪 Tests Automatizados
 
-El Core (Rust) cuenta con 107 tests unitarios que cubren:
+El Core (Rust) cuenta con 128 tests unitarios que cubren:
 | Módulo | Tests | Cobertura |
 |---|---|---|
 | `security/crypto.rs` | 13 | AES-GCM roundtrip, nonces únicos, clave incorrecta, manipulación, Blind Index, Firma Ed25519, derivación de pública desde privada |
@@ -312,14 +313,16 @@ El Core (Rust) cuenta con 107 tests unitarios que cubren:
 | `security/backup.rs` | 6 | Creación de respaldo (manifest + copias idénticas), hash alterado rechazado, archivo faltante rechazado, schema más nuevo rechazado, path traversal rechazado, roundtrip restauración → DB con datos |
 | `db/migrations.rs` | 5 | DB nueva migra al latest, re-ejecución no-op con datos preservados, DB legacy sin versión migra idempotente, downgrade rechazado, migración fallida con rollback |
 | `db/config_schema.rs` | 4 | Parseo del schema embebido (claves de labels sin duplicados), aplanado de groups con prefijo `{group}_{campo}`, required condicional de grupo ("nada o todo"), required top-level |
-| `commands/auth_commands.rs` | 6 | **Break-glass `seed_recovery`**: happy path (vault nuevo, hash nuevo, firma rotada, auditoría, data_key intacta), frase incorrecta sin side-effects, contraseña corta, sin admin activo, sin master wrap; `lock_vault` limpia todas las claves de RAM |
-| `commands/entry_commands.rs` | 23 | CRUD completo end-to-end con DB real (roundtrip cifrado→descifrado, payload sin texto plano en DB, validaciones de categoría/status, states obligatorios, firma rota por manipulación, wrong data key, autor sin perfil, paginación e isolación por paciente, filtro por categoría, búsqueda case-insensitive, `decrypt_payload`, **histórico `public_key_at`** — clave vigente por timestamp, fallback sin histórico, usuario inexistente, **firma de todos los campos de la fila**: payload/created_at/id alterados rompen la firma, delimitadores sin ambigüedad) |
+| `commands/auth_commands.rs` | 13 | **Break-glass `seed_recovery`** (happy path, frase incorrecta sin side-effects, contraseña corta, sin admin activo, sin master wrap), `lock_vault` limpia todas las claves de RAM, **`unlock_vault` role-aware** (paciente sin DataKey / staff fresh install / `SEED_REQUIRED` / retry con frase), **`change_password`** (staff re-envuelve, paciente no, `user_id` derivado de la sesión) |
+| `commands/admin_commands.rs` | 5 | **`admin_reset_password` role-aware**: paciente sin wrap personal (incluso con DataKey en RAM), staff exige DataKey antes de tocar nada, staff re-envuelve, auditoría |
+| `commands/entity_commands.rs` | 8 | **`grant_patient_access`** (admin/asistente, gate de rol, acceso activo único, username UNIQUE, tipo de entidad, auditoría sin valores) y **`get_entity_access`** (estados activo/inactivo, gate admin/asistente — un paciente no puede sondear otros accesos) |
+| `commands/entry_commands.rs` | 24 | CRUD completo end-to-end con DB real (roundtrip cifrado→descifrado, payload sin texto plano en DB, validaciones de categoría/status, states obligatorios, firma rota por manipulación, wrong data key, autor sin perfil, paginación e isolación por paciente, filtro por categoría, búsqueda case-insensitive, `decrypt_payload`, **histórico `public_key_at`** — clave vigente por timestamp, fallback sin histórico, usuario inexistente, **firma de todos los campos de la fila**: payload/created_at/id alterados rompen la firma, delimitadores sin ambigüedad) |
 | `commands/export_commands.rs` | 6 | Snapshot descifrado (paciente + perfil), bóveda cerrada, escritura del `.md` (heading, filename, footer), rechazo con 0 entries y 2 tests e2e del command único `export_history` (bóveda cerrada / 0 entries) |
 | `commands/professional_profile_commands.rs` | 4 | Roundtrip update→get con matrículas múltiples (orden preservado, número vacío descartado, auditoría registra campos y **nunca** valores), user_id ajeno rechazado, commands exigen sesión activa, perfil sin editar vacío con `public_key` intacta |
 | `export/render.rs` | 6 | Header con paciente/perfil, orden cronológico, orden/labels canónicos de campos, footer SHA-256 + aviso, filename sanitizado y fallback sin nombre |
 
 ```bash
-cargo test --lib  # 107 passed; 0 failed
+cargo test --lib  # 128 passed; 0 failed
 ```
 
 > Los tests de `entry_commands` usan `tauri::test` (feature habilitada solo en `[dev-dependencies]`; el binario de producción no la incluye).
@@ -461,6 +464,6 @@ npx tsc --noEmit        # Verifica TypeScript sin generar archivos
 pnpm test               # Ejecuta los 35 tests unitarios del frontend (vitest)
 pnpm test:watch         # Vitest en modo watch
 cargo check             # Verifica compilación Rust
-cargo test --lib        # Ejecuta los 107 tests unitarios del Core
+cargo test --lib        # Ejecuta los 128 tests unitarios del Core
 cargo add <crate>       # Añade dependencias al backend (desde src-tauri)
 ```
