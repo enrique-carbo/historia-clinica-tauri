@@ -36,6 +36,7 @@ base64 = "0.22"
 # Zeroize en drop para llaves/passwords en RAM. `serde` habilita
 # Zeroizing<String> como argumento de comandos Tauri (mismo JSON en el IPC).
 zeroize = { version = "1", features = ["serde"] }
+hmac = "0.13.0"
 
 [dev-dependencies]
 tempfile = "3.10"

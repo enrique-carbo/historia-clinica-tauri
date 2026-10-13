@@ -174,7 +174,7 @@ La DataKey (llave que cifra todos los datos médicos) **nunca se persiste en cla
 | DataKey | `.data_key.{user_id}` / `.data_key.master` | Password / Seed | Envoltorio de la DataKey (ver §3.1) |
 
 ### 4. Blind Index — Búsqueda Sin Descifrado
-Hash determinista SHA-256 (DNI normalizado + sal de instalación) para búsqueda exacta sin exponer el dato real. La sal es global a la instalación (`/.installation_salt`) para permitir búsqueda compartida entre médicos de la misma máquina.
+HMAC-SHA256 con clave derivada de la DataKey (label `fichio/blind-index/v1`) sobre el DNI normalizado — búsqueda exacta sin exponer el dato real. Mismos índices en todos los equipos de la instalación (los garantiza la DataKey, no un archivo); no hay sal que respaldar ni sincronizar, y sin la DataKey el servidor no puede enumerar DNIs a partir del índice.
 
 ### 5. Firma Digital y No-Repudio
 Cada entry se firma con Ed25519 usando la llave privada del médico en RAM. El material de firma es un **JSON canónico** con todos los campos de la fila — `category`, `subject_id`, `title`, `status`, `timestamp`, `author_id`, `id`, `created_at` y `hex(payload_cifrado)` — serializado en orden de declaración (consistente entre creación y verificación, centralizado en `signed_hash`). Se firman los bytes **tal cual se persisten**: alterar cualquier atributo de la fila —el contenido clínico aunque se re-cifre correctamente con la DataKey, la identidad de la fila o su fecha de creación— rompe la firma. La llave pública vive en dos lugares:
@@ -303,10 +303,10 @@ El único command registrado es `export_history` (en `lib.rs`), la lógica vive 
 
 ## 🧪 Tests Automatizados
 
-El Core (Rust) cuenta con 128 tests unitarios que cubren:
+El Core (Rust) cuenta con 130 tests unitarios que cubren:
 | Módulo | Tests | Cobertura |
 |---|---|---|
-| `security/crypto.rs` | 13 | AES-GCM roundtrip, nonces únicos, clave incorrecta, manipulación, Blind Index, Firma Ed25519, derivación de pública desde privada |
+| `security/crypto.rs` | 14 | AES-GCM roundtrip, nonces únicos, clave incorrecta, manipulación, Blind Index (**HMAC con clave derivada de la DataKey**: determinismo, normalización, dependencia de la clave — sin ella no se enumera), Firma Ed25519, derivación de pública desde privada |
 | `security/vault.rs` | 12 | Creación, desbloqueo, contraseña incorrecta, sal única por usuario, `change_password` (vault re-cifrado, invariante data_key resolvable, wrap huérfano recupera con seed), `reset_user_vault` (keypair nuevo, contraseña vieja muerta, data_key preservada) |
 | `security/seed.rs` | 12 | Generación mnemonic, unicidad, derivación SHA-256, verificación, edge cases, word list sin duplicados ni tildes |
 | `security/data_key.rs` | 10 | Wrap/unwrap AES-GCM, prioridades de resolución, `SEED_REQUIRED`, migración legacy |
@@ -315,14 +315,14 @@ El Core (Rust) cuenta con 128 tests unitarios que cubren:
 | `db/config_schema.rs` | 4 | Parseo del schema embebido (claves de labels sin duplicados), aplanado de groups con prefijo `{group}_{campo}`, required condicional de grupo ("nada o todo"), required top-level |
 | `commands/auth_commands.rs` | 13 | **Break-glass `seed_recovery`** (happy path, frase incorrecta sin side-effects, contraseña corta, sin admin activo, sin master wrap), `lock_vault` limpia todas las claves de RAM, **`unlock_vault` role-aware** (paciente sin DataKey / staff fresh install / `SEED_REQUIRED` / retry con frase), **`change_password`** (staff re-envuelve, paciente no, `user_id` derivado de la sesión) |
 | `commands/admin_commands.rs` | 5 | **`admin_reset_password` role-aware**: paciente sin wrap personal (incluso con DataKey en RAM), staff exige DataKey antes de tocar nada, staff re-envuelve, auditoría |
-| `commands/entity_commands.rs` | 8 | **`grant_patient_access`** (admin/asistente, gate de rol, acceso activo único, username UNIQUE, tipo de entidad, auditoría sin valores) y **`get_entity_access`** (estados activo/inactivo, gate admin/asistente — un paciente no puede sondear otros accesos) |
+| `commands/entity_commands.rs` | 9 | **`grant_patient_access`** (admin/asistente, gate de rol, acceso activo único, username UNIQUE, tipo de entidad, auditoría sin valores), **`get_entity_access`** (estados activo/inactivo, gate admin/asistente — un paciente no puede sondear otros accesos) y **lookup por DNI** (bóveda cerrada rechazada, normalización, clave incorrecta no encuentra) |
 | `commands/entry_commands.rs` | 24 | CRUD completo end-to-end con DB real (roundtrip cifrado→descifrado, payload sin texto plano en DB, validaciones de categoría/status, states obligatorios, firma rota por manipulación, wrong data key, autor sin perfil, paginación e isolación por paciente, filtro por categoría, búsqueda case-insensitive, `decrypt_payload`, **histórico `public_key_at`** — clave vigente por timestamp, fallback sin histórico, usuario inexistente, **firma de todos los campos de la fila**: payload/created_at/id alterados rompen la firma, delimitadores sin ambigüedad) |
 | `commands/export_commands.rs` | 6 | Snapshot descifrado (paciente + perfil), bóveda cerrada, escritura del `.md` (heading, filename, footer), rechazo con 0 entries y 2 tests e2e del command único `export_history` (bóveda cerrada / 0 entries) |
 | `commands/professional_profile_commands.rs` | 4 | Roundtrip update→get con matrículas múltiples (orden preservado, número vacío descartado, auditoría registra campos y **nunca** valores), user_id ajeno rechazado, commands exigen sesión activa, perfil sin editar vacío con `public_key` intacta |
 | `export/render.rs` | 6 | Header con paciente/perfil, orden cronológico, orden/labels canónicos de campos, footer SHA-256 + aviso, filename sanitizado y fallback sin nombre |
 
 ```bash
-cargo test --lib  # 128 passed; 0 failed
+cargo test --lib  # 130 passed; 0 failed
 ```
 
 > Los tests de `entry_commands` usan `tauri::test` (feature habilitada solo en `[dev-dependencies]`; el binario de producción no la incluye).
@@ -430,19 +430,19 @@ pnpm test:watch  # modo watch
 
 ### 🟩 Fase 3.11: Respaldo, Recuperación y Migraciones (✅ Completado)
 - [x] **Migraciones de esquema** (`db/migrations/`): `PRAGMA user_version` + catálogo append-only; v001 = baseline (schema actual), transacción por migración con rollback, guard de downgrade (DB de una app más nueva no abre); `init_db` delega en `run_migrations`
-- [x] **`security/backup.rs`**: `create_backup` (checkpoint WAL → copia DB + `.data_key.*` + `vault_*` + `.installation_salt` → `manifest.json` con SHA-256 por archivo), `validate_backup` (integridad + `schema_version` + defensa contra path traversal), `restore_backup`
-- [x] **`backup_commands.rs`**: `create_backup` / `validate_backup` / `restore_backup` — solo administrador, auditados (`backup_created`, `backup_restored`); el restore cierra sesión y llaves, reemplaza archivos, reabre la DB (migraciones) y recarga la sal de blind index
+- [x] **`security/backup.rs`**: `create_backup` (checkpoint WAL → copia DB + `.data_key.*` + `vault_*` → `manifest.json` con SHA-256 por archivo), `validate_backup` (integridad + `schema_version` + defensa contra path traversal), `restore_backup`
+- [x] **`backup_commands.rs`**: `create_backup` / `validate_backup` / `restore_backup` — solo administrador, auditados (`backup_created`, `backup_restored`); el restore cierra sesión y llaves, reemplaza archivos, reabre la DB (migraciones)
 - [x] **`AdminBackupPanel`** (tab "Respaldos"): generar con diálogo de carpeta + "Revelar en carpeta"; restaurar con resumen del manifest + confirmación → vuelve al login
 - [x] **Break-glass `seed_recovery`**: enlace "¿Olvidaste la contraseña?" en `AuthBox`; verifica la frase contra `.data_key.master` → resetea la contraseña del administrador activo más antiguo (vault con keypair nuevo, rotación de `signing_keys`, re-envuelve el wrap personal) → sesión abierta directa + `audit_log`
-- [x] **Sal de blind index re-settable** (`OnceLock` → `Mutex<Option<..>>`): un restore desde otra instalación puede cambiarla en caliente
+- [x] **Sal de blind index re-settable** (`OnceLock` → `Mutex<Option<..>>`): un restore desde otra instalación puede cambiarla en caliente → **removido (2026-10-11)**: el blind index se deriva de la DataKey, ya no existe sal
 - [x] **Plugin `tauri-plugin-dialog`** (+ capability `dialog:default`) para elegir carpetas de respaldo
 - [x] 91 tests pasando
 
 ### 🟧 Fase 4: Infraestructura y Sincronización Híbrida (Próximo paso)
 - [ ] Despliegue de VPS con Dokploy y PocketBase
 - [ ] Sync Engine (`tokio`): background worker polling `sync_queue`
-- [ ] Sincronización de `.data_key.master` y `.installation_salt` entre dispositivos
-- [ ] Implementar Blind Index en servidor
+- [ ] Sincronización de `.data_key.master` entre dispositivos
+- [ ] Búsqueda server-side por `blind_index` (HMAC con clave derivada de la DataKey: el servidor solo compara, no invierte)
 - [x] Cifrar `.data_key` en disco con llave derivada (Fase 3.7)
 - [ ] `enroll_data_key`: admin envuelve DataKey al registrar médico (sin tipear seed)
 - [x] `change_password`: verifica actual, re-cifra vault, re-envuelve `.data_key.{user_id}`, actualiza `password_hash` (no toca master wrap) + UI en Perfil & 6 tests
@@ -464,6 +464,6 @@ npx tsc --noEmit        # Verifica TypeScript sin generar archivos
 pnpm test               # Ejecuta los 35 tests unitarios del frontend (vitest)
 pnpm test:watch         # Vitest en modo watch
 cargo check             # Verifica compilación Rust
-cargo test --lib        # Ejecuta los 128 tests unitarios del Core
+cargo test --lib        # Ejecuta los 130 tests unitarios del Core
 cargo add <crate>       # Añade dependencias al backend (desde src-tauri)
 ```

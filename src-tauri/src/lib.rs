@@ -1,4 +1,3 @@
-use rand::RngCore;
 use std::sync::Mutex;
 use tauri::Manager;
 
@@ -25,11 +24,6 @@ pub fn run() {
                 .path()
                 .app_local_data_dir()
                 .map_err(|_| "No se pudo determinar la ruta de almacenamiento".to_string())?;
-
-            // Inicializar sal de instalación para blind index
-            let installation_salt = get_or_create_installation_salt(&app_data_dir)?;
-            security::crypto::init_blind_index_salt(installation_salt)
-                .map_err(|e| format!("Error inicializando blind index salt: {}", e))?;
 
             // NOTA: La data_key YA NO se carga aquí en claro.
             // Se resuelve en unlock_vault() con la master_key del usuario
@@ -91,20 +85,4 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
-}
-
-/// Genera o lee la sal de instalación para blind index.
-fn get_or_create_installation_salt(app_dir: &std::path::Path) -> Result<Vec<u8>, String> {
-    let salt_path = app_dir.join(".installation_salt");
-
-    if salt_path.exists() {
-        std::fs::read(&salt_path).map_err(|e| format!("Error leyendo sal de instalación: {}", e))
-    } else {
-        let mut salt = vec![0u8; 32];
-        rand::rngs::OsRng.fill_bytes(&mut salt);
-        std::fs::write(&salt_path, &salt)
-            .map_err(|e| format!("Error guardando sal de instalación: {}", e))?;
-        println!("🔧 [Crypto] Nueva sal de instalación generada para blind index");
-        Ok(salt)
-    }
 }

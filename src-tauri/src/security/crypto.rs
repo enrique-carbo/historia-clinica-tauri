@@ -4,18 +4,14 @@ use aes_gcm::{
 };
 use rand::rngs::OsRng;
 use rand::RngCore;
+use hmac::{Hmac, KeyInit as HmacKeyInit, Mac};
 use sha2::{Digest, Sha256};
-use std::sync::Mutex;
+use zeroize::Zeroizing;
 
 pub const AES_KEY_SIZE: usize = 32;
 pub const AES_NONCE_SIZE: usize = 12;
 pub const ED25519_SECRET_SIZE: usize = 32;
 pub const ED25519_SIGNATURE_SIZE: usize = 64;
-
-/// Sal de instalación para blind index (compartida entre todos los usuarios de la misma instancia).
-/// `Mutex<Option<..>>` (y no `OnceLock`) porque un restore de respaldo puede
-/// traer la sal de OTRA instalación: `init_blind_index_salt` debe poder sobreescribirla.
-static INSTALLATION_SALT: Mutex<Option<Vec<u8>>> = Mutex::new(None);
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct EncryptedData {
@@ -65,18 +61,26 @@ pub fn decrypt_text(
         .map_err(|_| "Datos descifrados no son UTF-8 válido".to_string())
 }
 
-/// Inicializa la sal de instalación para blind index.
-/// Se llama al iniciar la aplicación y tras un restore de respaldo (puede sobreescribir).
-pub fn init_blind_index_salt(salt: Vec<u8>) -> Result<(), String> {
-    *INSTALLATION_SALT
-        .lock()
-        .map_err(|_| "Lock de blind index salt envenenado".to_string())? = Some(salt);
-    Ok(())
+type HmacSha256 = Hmac<Sha256>;
+
+/// Clave de dominio del blind index: se deriva de la DataKey con un label
+/// fijo, separando este uso del HMAC del uso de la misma clave como clave
+/// AES-GCM. Se calcula al vuelo — no hay sal ni artefacto que persistir o
+/// sincronizar.
+fn blind_index_key(data_key: &[u8; AES_KEY_SIZE]) -> Zeroizing<[u8; AES_KEY_SIZE]> {
+    let mut mac = <HmacSha256 as HmacKeyInit>::new_from_slice(b"fichio/blind-index/v1")
+        .expect("HMAC acepta claves de cualquier longitud");
+    mac.update(data_key);
+    Zeroizing::new(mac.finalize().into_bytes().into())
 }
 
-/// Genera hash determinista para búsqueda sin revelar dato real.
-/// Usa la sal de instalación compartida (todos los usuarios de la misma instancia ven los mismos índices).
-pub fn generate_blind_index(identity_doc: &str) -> String {
+/// Genera el índice determinista de búsqueda sin revelar el dato:
+/// HMAC-SHA256 con clave derivada de la DataKey. Mismos índices en toda la
+/// instalación (misma DataKey en todos los dispositivos), pero **invertible
+/// solo con la DataKey**: un servidor que ve los índices no puede enumerar
+/// candidatos por fuerza bruta — con la sal vieja (`SHA-256(salt‖DNI)`) y el
+/// DNI teniendo ~8 dígitos, sí podía en milisegundos.
+pub fn generate_blind_index(identity_doc: &str, data_key: &[u8; AES_KEY_SIZE]) -> String {
     let normalized = identity_doc
         .trim()
         .replace("-", "")
@@ -84,18 +88,11 @@ pub fn generate_blind_index(identity_doc: &str) -> String {
         .replace(" ", "")
         .to_lowercase();
 
-    let guard = INSTALLATION_SALT
-        .lock()
-        .unwrap_or_else(|e| e.into_inner());
-    let salt = guard
-        .as_ref()
-        .expect("Blind index salt no inicializado. ¿Se llamó init_blind_index_salt?");
-
-    let mut hasher = Sha256::new();
-    hasher.update(salt);
-    hasher.update(normalized.as_bytes());
-
-    hex::encode(hasher.finalize())
+    let key = blind_index_key(data_key);
+    let mut mac = <HmacSha256 as HmacKeyInit>::new_from_slice(&*key)
+        .expect("HMAC acepta claves de cualquier longitud");
+    mac.update(normalized.as_bytes());
+    hex::encode(mac.finalize().into_bytes())
 }
 
 // =======================================================================
@@ -180,10 +177,6 @@ pub fn verify_signature(
 mod tests {
     use super::*;
 
-    fn init_test_salt() {
-        *INSTALLATION_SALT.lock().unwrap() = Some(vec![0u8; 32]);
-    }
-
     fn random_key() -> [u8; AES_KEY_SIZE] {
         let mut key = [0u8; AES_KEY_SIZE];
         OsRng.fill_bytes(&mut key);
@@ -239,29 +232,44 @@ mod tests {
 
     #[test]
     fn test_blind_index_deterministic() {
-        init_test_salt();
+        let key = random_key();
         let dni = "12345678";
-        let hash1 = generate_blind_index(dni);
-        let hash2 = generate_blind_index(dni);
+        let hash1 = generate_blind_index(dni, &key);
+        let hash2 = generate_blind_index(dni, &key);
         assert_eq!(hash1, hash2);
     }
 
     #[test]
     fn test_blind_index_normalization() {
-        init_test_salt();
-        let hash1 = generate_blind_index("12345678");
-        let hash2 = generate_blind_index("  12.345.678  ");
-        let hash3 = generate_blind_index("12-345-678");
+        let key = random_key();
+        let hash1 = generate_blind_index("12345678", &key);
+        let hash2 = generate_blind_index("  12.345.678  ", &key);
+        let hash3 = generate_blind_index("12-345-678", &key);
         assert_eq!(hash1, hash2);
         assert_eq!(hash1, hash3);
     }
 
     #[test]
     fn test_blind_index_different_inputs() {
-        init_test_salt();
-        let hash1 = generate_blind_index("12345678");
-        let hash2 = generate_blind_index("87654321");
+        let key = random_key();
+        let hash1 = generate_blind_index("12345678", &key);
+        let hash2 = generate_blind_index("87654321", &key);
         assert_ne!(hash1, hash2);
+    }
+
+    #[test]
+    fn test_blind_index_key_dependent() {
+        // Sin la DataKey no se puede enumerar: con otra clave el mismo DNI
+        // produce otro índice (lo que un servidor, sin clave, no calcula).
+        let dni = "12345678";
+        let idx1 = generate_blind_index(dni, &[1u8; 32]);
+        let idx2 = generate_blind_index(dni, &[2u8; 32]);
+        assert_ne!(idx1, idx2);
+
+        // Tampoco es el hash plano que cualquiera podría reproducir sin clave.
+        let mut hasher = Sha256::new();
+        hasher.update(dni.as_bytes());
+        assert_ne!(idx1, hex::encode(hasher.finalize()));
     }
 
     #[test]

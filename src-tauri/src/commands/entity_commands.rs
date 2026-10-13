@@ -55,7 +55,7 @@ pub fn create_entity(
         .collect::<String>()
         .to_uppercase();
 
-    let blind_index = crypto::generate_blind_index(&dni);
+    let blind_index = crypto::generate_blind_index(&dni, &data_key);
     let blind_index_hex = blind_index.clone();
 
     // Cifrar campos con DataKey (compartida)
@@ -152,7 +152,12 @@ pub fn find_entity_by_blind_index(
     entity_type: String,
     dni: String,
     db_state: State<'_, DbState>,
+    data_key_state: State<'_, DataKey>,
 ) -> Result<Option<i64>, String> {
+    // El índice es HMAC con clave derivada de la DataKey: sin bóveda
+    // abierta no hay clave con que calcularlo (mismo requisito que
+    // `search_entities` y `create_entity`).
+    let data_key = get_data_key(&data_key_state)?;
     // Normalización en Rust: quita todo lo que no sea alfanumérico y pone en mayúsculas
     // Esto compatibiliza con formatos internacionales: "12.345.678", "12345678", "12345678A"
     let dni_normalized: String = dni
@@ -160,7 +165,7 @@ pub fn find_entity_by_blind_index(
         .filter(|c| c.is_alphanumeric())
         .collect::<String>()
         .to_uppercase();
-    let blind_index = crypto::generate_blind_index(&dni_normalized);
+    let blind_index = crypto::generate_blind_index(&dni_normalized, &data_key);
 
     let found_id = with_conn(&db_state, |conn| {
         let mut stmt = conn
@@ -696,6 +701,57 @@ mod tests {
             "err: {}",
             err
         );
+    }
+
+    #[test]
+    fn test_find_entity_by_blind_index_requires_open_vault() {
+        let env = setup("administrador");
+        let key = [7u8; 32];
+
+        // Fila con el índice que produce la misma clave que se inyectará.
+        let idx = crate::security::crypto::generate_blind_index("12345678", &key);
+        q(&env, |conn| {
+            conn.execute(
+                "UPDATE entities SET blind_index = ?1 WHERE id = ?2",
+                params![idx, env.entity_id],
+            )
+            .unwrap();
+        });
+
+        // Bóveda cerrada → sin DataKey no hay clave con que calcular el índice.
+        env.app.manage(DataKey(Mutex::new(None)));
+        let err = find_entity_by_blind_index(
+            "patient".into(),
+            "12.345.678".into(),
+            env.app.state::<DbState>(),
+            env.app.state::<DataKey>(),
+        )
+        .expect_err("debe exigir bóveda abierta");
+        assert!(err.contains("Data key"), "err: {}", err);
+
+        // Bóveda abierta con la clave correcta → lo encuentra
+        // (la normalización "12.345.678" → "12345678" se mantiene).
+        *env.app.state::<DataKey>().0.lock().unwrap() = Some(Zeroizing::new(key));
+        let found = find_entity_by_blind_index(
+            "patient".into(),
+            "12.345.678".into(),
+            env.app.state::<DbState>(),
+            env.app.state::<DataKey>(),
+        )
+        .unwrap();
+        assert_eq!(found, Some(env.entity_id));
+
+        // Otra clave → índices distintos: ni otro equipo ni el servidor
+        // (sin la DataKey) aciertan la búsqueda.
+        *env.app.state::<DataKey>().0.lock().unwrap() = Some(Zeroizing::new([9u8; 32]));
+        let wrong_key = find_entity_by_blind_index(
+            "patient".into(),
+            "12.345.678".into(),
+            env.app.state::<DbState>(),
+            env.app.state::<DataKey>(),
+        )
+        .unwrap();
+        assert!(wrong_key.is_none());
     }
 
     #[test]

@@ -66,7 +66,6 @@ Principios heredados que se mantienen:
 | `professional_profiles` | ✅ | cola + pull | LWW |
 | `signing_keys` | ✅ | cola + pull | Merge por dedupe + reglas de vigencia (§4.4) |
 | `vault_*.{bin,salt}`, `.data_key.{user}` | ✅ (D2) | blobs de archivo | LWW por blob |
-| `.installation_salt` | ✅ (imprescindible) | blob de archivo | LWW; **primero en el orden de pull** (§6.4) |
 | `.data_key.master` + frase semilla | ❌ | — | Break-glass local por dispositivo (los wraps master *nuevos* sí se propagan vía rotación, §5.5) |
 | `audit_log` | ❌ v1 (local) | — | Cada equipo audita sus propias acciones sensibles |
 | `sync_queue`, `sync_state`, `sync_cursors` | ❌ (estado local) | — | — |
@@ -200,15 +199,14 @@ Este es el test invariante #1 de la fase.
 
 ### 5.1 Qué ve el servidor (y qué no)
 
-**Ve:** ciphertexts (payloads, blobs de entities/users/profiles, vaults y wraps), `blind_index` (hash con sal), claves **públicas** de firma, UUIDs, timestamps, metadatos de dispositivos. **No ve:** ningún dato clínico ni identificante en claro, passwords, la DataKey, la frase semilla, roles (van dentro del envelope cifrado de `users`).
+**Ve:** ciphertexts (payloads, blobs de entities/users/profiles, vaults y wraps), `blind_index` (HMAC-SHA256 con clave derivada de la DataKey), claves **públicas** de firma, UUIDs, timestamps, metadatos de dispositivos. **No ve:** ningún dato clínico ni identificante en claro, passwords, la DataKey, la frase semilla, roles (van dentro del envelope cifrado de `users`).
 
-Residual aceptado: por volumen/timing y por los `blind_index` (propósito de búsqueda server-side) el servidor correlaciona registros del mismo paciente — ya declarado en `docs/estrategia_encriptacion.md` §3.
+Residual aceptado: por volumen/timing y por la igualdad de los `blind_index` (propósito de búsqueda server-side) el servidor correlaciona registros del mismo paciente — pero **no puede invertirlos ni enumerar DNIs**: son HMAC con clave derivada de la DataKey y la sal de instalación fue eliminada del protocolo (ver `docs/estrategia_encriptacion.md` §3).
 
 ### 5.2 Cadenas de desbloqueo por archivo
 
 | Blob sincronizado | Se abre con | Función |
 |---|---|---|
-| `.installation_salt` | es una sal, no se "abre" | Consistencia de blind index entre equipos (debe llegar **antes** de usar búsqueda) |
 | `vault_{user}.bin/.salt` | Argon2id(password usuario) | Par Ed25519 del usuario (misma llave en todos los equipos) |
 | `.data_key.{user}` | master del usuario (Argon2id + sal) | Fast path → DataKey sin semilla |
 | envelope de `users` | master del usuario | **Rompe la circularidad del bootstrap** (§6.4): permite verificar password y reconstruir la fila local sin DataKey previa |
@@ -290,12 +288,11 @@ Nada cambia en la UX de trabajo: los comandos encolan como siempre, el indicador
 
 El orden no es cosmético:
 
-1. `.installation_salt` (si no, los `blind_index` calculados no coinciden con los remotos)
-2. vaults + wraps de `users` (habilitan el login por password)
-3. envelope de `users` (credenciales locales)
-4. `professional_profiles` + `signing_keys`
-5. `entities`
-6. `entries` (último: requiere entities para el FK y firmas para verificar)
+1. vaults + wraps de `users` (habilitan el login por password)
+2. envelope de `users` (credenciales locales)
+3. `professional_profiles` + `signing_keys`
+4. `entities`
+5. `entries` (último: requiere entities para el FK y firmas para verificar)
 
 Un pull parcial interrumpido es seguro: cada colección se aplica idempotentemente y el cursor avanza solo al confirmar.
 

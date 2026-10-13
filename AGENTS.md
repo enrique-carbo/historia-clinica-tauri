@@ -9,7 +9,7 @@ El "porqué" del diseño vive en `README.md` y `docs/` — acá va lo operativo.
 
 ```bash
 cd src-tauri
-cargo test                    # baseline: 128 tests, 0 fallas
+cargo test                    # baseline: 130 tests, 0 fallas
 cargo clippy --all-targets    # baseline: 3 warnings, 0 errores
 cd .. && npx tsc --noEmit     # baseline: sin errores
 pnpm test                     # baseline: 35 tests, 0 fallas (vitest; Node >= 22.12)
@@ -76,6 +76,11 @@ pnpm test                     # baseline: 35 tests, 0 fallas (vitest; Node >= 22
   respetan; los tests de `auth_commands`/`admin_commands` la clavan).
   `save_user_wrap` no conoce roles: **cualquier command nuevo que escriba
   wraps debe verificar el rol antes**.
+- **Blind index**: `generate_blind_index(dni, &data_key)` es HMAC-SHA256
+  con clave derivada de la DataKey (label `fichio/blind-index/v1`).
+  **No existe `.installation_salt`** — no crearla, no sincronizarla, no
+  respaldarla: un índice solo es verificable (no invertible) con la
+  DataKey.
 - **Migraciones**: append-only. Nunca editar una versión ya aplicada.
   Excepción en dev: podés editar `v001_baseline` solo si borrás la base
   después (una DB nueva arranca en `user_version = 0`).

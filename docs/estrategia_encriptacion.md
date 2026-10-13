@@ -51,14 +51,16 @@ El sistema clínico vive en la tabla `entries` (paradigma Entity-Entry): un regi
 
 En un ecosistema web tradicional, el servidor evita pacientes duplicados aplicando un índice `UNIQUE` a la columna de identidad (DNI o Pasaporte). En este desarrollo el DNI nunca llega a un servidor remoto ni se guarda en texto plano en el disco local.
 
-Para resolver esto sin romper el modelo Zero-Knowledge, el Core implementa un **Índice Ciego Determinista**:
+Para resolver esto sin romper el modelo Zero-Knowledge, el Core implementa un **Índice Ciego Determinista con HMAC**:
 
 1. El usuario ingresa el documento de identidad en la interfaz.
 2. El Core de Rust normaliza el texto (remueve espacios, guiones y lo transforma a minúsculas).
-3. Se concatena con una clave secreta del sistema (`BLIND_INDEX_SALT`).
-4. Se procesa a través de **SHA-256** y se convierte a Hexadecimal.
+3. Se deriva una clave de dominio de la DataKey: `HK = HMAC-SHA256(DataKey, "fichio/blind-index/v1")` (se calcula al vuelo; la DataKey no cambia con contraseñas ni rotaciones, así que los índices son estables).
+4. Se calcula `HMAC-SHA256(HK, DNI normalizado)` en hexadecimal.
 
-$$\text{Blind Index} = \text{SHA-256}(\text{DNI Normalizado} + \text{BLIND\_INDEX\_SALT})$$
+$$\text{Blind Index} = \text{HMAC-SHA256}(\text{HK}, \text{DNI Normalizado})$$
+
+No hay sal persistida: `.installation_salt` fue **eliminado** (del disco, del respaldo y del protocolo de sincronización). Un HMAC solo puede verificarse —no invertirse— con la clave: un servidor que ve los índices **no puede enumerar el espacio de DNIs** (~10⁸ candidatos) sin la DataKey, y la consistencia entre dispositivos de la instalación la aporta la DataKey compartida, no un archivo sincronizado.
 
 ```sql
 -- El hash resultante se guarda en la columna 'blind_index' de `entities`
@@ -137,7 +139,7 @@ Cuando se implemente el puente de sincronización, el servidor remoto actuará c
     * UUIDs relacionales generados aleatoriamente.
     * Bloques de texto cifrado incomprensibles (Hexadecimal).
     * Nonces públicos.
-    * El `blind_index` para indexación y búsquedas opacas.
+    * El `blind_index` para indexación y búsquedas opacas (HMAC-SHA256 con clave derivada de la DataKey: el servidor compara igualdad, no invierte).
 3. **Filosofía Zero-Knowledge:** El proveedor de la nube (o cualquier atacante que acceda al servidor central) solo verá metadatos correlativos, haciendo imposible la reconstrucción de la historia clínica de un paciente o su identificación legal.
 
 ---
@@ -154,14 +156,13 @@ El mecanismo de respaldo no introduce claves nuevas: copia los archivos que **ya
 | `.data_key.master` | Recuperación con la **frase semilla** |
 | `.data_key.{user}` | Recuperación con la **contraseña** del usuario (fast path; roles staff — el paciente no tiene wrap) |
 | `vault_*.{bin,salt}` | Llaves de firma por usuario (si faltan, se regeneran al hacer login sin perder verificabilidad histórica) |
-| `.installation_salt` | Sin ella los `blind_index` restaurados no coincidirían con los nuevos |
 | `manifest.json` | `schema_version` + **SHA-256 por archivo** (integridad al restaurar) |
 
 ### Reglas
 
 1. **Nada en claro**: el manifest solo contiene nombres, tamaños y hashes; todo lo demás es ciphertext envuelto. Un respaldo robado es tan inútil como la base sin contraseña ni frase.
 2. **Validación antes de tocar nada**: `validate_backup` verifica cada SHA-256, rechaza `schema_version` más nuevo que la app y nombres con separadores de ruta (path traversal).
-3. **Orden destructivo del restore**: validar → auditar (`backup_restored`) → cerrar llaves, sesión y conexión SQLite → copiar archivos → reabrir con `run_migrations` → recargar la sal de blind index. Si la copia falla, se reintenta abrir la base previa.
+3. **Orden destructivo del restore**: validar → auditar (`backup_restored`) → cerrar llaves, sesión y conexión SQLite → copiar archivos → reabrir con `run_migrations`. Si la copia falla, se reintenta abrir la base previa.
 4. **Matriz de recuperación tras restaurar**:
    * Contraseña conocida → login normal → wrap personal (o semilla si no hay wrap) → todo. Para el paciente su contraseña es solo la de login: no hay wrap que recuperar.
    * Sin contraseñas → break-glass con frase semilla (§4.5).

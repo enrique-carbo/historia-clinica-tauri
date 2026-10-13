@@ -33,11 +33,10 @@ fn sha256_hex(bytes: &[u8]) -> String {
     hex::encode(hasher.finalize())
 }
 
-/// Archivos que integran un respaldo: base, wraps, vaults y la sal de
-/// instalación (sin ella los blind indexes del restore no coincidirían).
+/// Archivos que integran un respaldo: base, wraps y vaults. El blind index
+/// ya no tiene sal: su clave se deriva de la DataKey (que viaja en los wraps).
 fn is_backup_candidate(name: &str) -> bool {
     name == DB_FILENAME
-        || name == ".installation_salt"
         || name.starts_with(".data_key.")
         || (name.starts_with("vault_") && (name.ends_with(".bin") || name.ends_with(".salt")))
 }
@@ -269,7 +268,6 @@ mod tests {
             [],
         )
         .unwrap();
-        fs::write(dir.path().join(".installation_salt"), b"sal-instalacion-32b").unwrap();
         fs::write(dir.path().join(".data_key.master"), b"wrap-master-bytes").unwrap();
         fs::write(dir.path().join(".data_key.u1"), b"wrap-user-bytes").unwrap();
         fs::write(dir.path().join("vault_u1.bin"), b"vault-bytes").unwrap();
@@ -299,7 +297,8 @@ mod tests {
         // Todos los archivos candidatos, y solo ellos
         let names: Vec<&str> = manifest.files.iter().map(|f| f.name.as_str()).collect();
         assert!(names.contains(&DB_FILENAME));
-        assert!(names.contains(&".installation_salt"));
+        // El blind index ya no tiene sal que respaldar.
+        assert!(!names.contains(&".installation_salt"));
         assert!(names.contains(&".data_key.master"));
         assert!(names.contains(&".data_key.u1"));
         assert!(names.contains(&"vault_u1.bin"));
@@ -406,15 +405,12 @@ mod tests {
         assert_eq!(n, 1);
         assert_eq!(username, "admin");
 
-        // Wraps y sal tal cual
+        // Wraps tal cual; la sal de blind index ya no existe ni se respalda.
         assert_eq!(
             fs::read(fresh.path().join(".data_key.master")).unwrap(),
             b"wrap-master-bytes"
         );
-        assert_eq!(
-            fs::read(fresh.path().join(".installation_salt")).unwrap(),
-            b"sal-instalacion-32b"
-        );
+        assert!(!fresh.path().join(".installation_salt").exists());
         assert!(fresh.path().join("vault_u1.bin").exists());
 
         // El archivo que no estaba en el respaldo no aparece

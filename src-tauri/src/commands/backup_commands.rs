@@ -4,7 +4,7 @@ use tauri::{AppHandle, Manager, State};
 
 use super::{record_audit, require_admin};
 use crate::db;
-use crate::security::{backup, crypto};
+use crate::security::backup;
 use crate::types::{CryptoState, DataKey, DbState, SessionState, SigningState};
 
 /// Resumen devuelto al frontend tras generar un respaldo.
@@ -169,15 +169,6 @@ pub fn restore_backup(
         Ok(_) => {
             let conn = reopened
                 .map_err(|e| format!("Respaldo restaurado, pero no se pudo reabrir la base: {}", e))?;
-
-            // La sal de blind index puede haber cambiado (restauración
-            // desde otra instalación): recargarla desde el archivo restaurado.
-            let salt_path = app_dir.join(".installation_salt");
-            if salt_path.exists() {
-                let salt = std::fs::read(&salt_path)
-                    .map_err(|e| format!("No se pudo leer la sal de instalación: {}", e))?;
-                crypto::init_blind_index_salt(salt)?;
-            }
 
             *db_state
                 .0
