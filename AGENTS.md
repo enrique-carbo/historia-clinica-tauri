@@ -69,6 +69,12 @@ pnpm test                     # baseline: 35 tests, 0 fallas (vitest; Node >= 22
 - **Auditoría**: `record_audit()` guarda solo nombres de campos y
   metadatos, **nunca valores** — los datos van cifrados en reposo y
   `audit_log` es texto plano.
+- **Wrap de paciente**: `save_user_wrap()` **nunca** para un `user_id` con
+  `role: 'paciente'` — el paciente no tiene wrap personal (ausencia
+  estructural de la DataKey: unlock, change_password y admin_reset la
+  respetan; los tests de `auth_commands`/`admin_commands` la clavan).
+  `save_user_wrap` no conoce roles: **cualquier command nuevo que escriba
+  wraps debe verificar el rol antes**.
 - **Migraciones**: append-only. Nunca editar una versión ya aplicada.
   Excepción en dev: podés editar `v001_baseline` solo si borrás la base
   después (una DB nueva arranca en `user_version = 0`).

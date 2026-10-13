@@ -83,6 +83,10 @@ pub fn unwrap_key(blob: &[u8], wrapping_key: &[u8; 32]) -> Result<Zeroizing<[u8;
 // =======================================================================
 
 /// Guarda el wrap personal del usuario (fast path con password).
+///
+/// **Nunca para `role: 'paciente'`**: el paciente no tiene wrap personal
+/// (ausencia estructural de la DataKey — ver AGENTS.md, regla "Wrap de
+/// paciente"). Esta función no conoce roles: el caller debe verificar.
 pub fn save_user_wrap(
     app_dir: &Path,
     user_id: &str,
