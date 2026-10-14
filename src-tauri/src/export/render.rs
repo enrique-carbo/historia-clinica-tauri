@@ -47,10 +47,7 @@ const FIELD_ORDER: &[(&str, &[&str])] = &[
         "SOAP_NOTE",
         &["subjetivo", "objetivo", "evaluacion", "plan"],
     ),
-    (
-        "ALLERGY",
-        &["sustancia", "tipo_reaccion", "descripcion"],
-    ),
+    ("ALLERGY", &["sustancia", "tipo_reaccion", "descripcion"]),
     (
         "MEDICATION",
         &[
@@ -58,7 +55,7 @@ const FIELD_ORDER: &[(&str, &[&str])] = &[
             "dosis",
             "frecuencia",
             "via_administracion",
-            "indicacion",
+            "observaciones",
         ],
     ),
     (
@@ -79,7 +76,7 @@ const FIELD_LABELS: &[(&str, &str)] = &[
     ("dosis", "Dosis"),
     ("frecuencia", "Frecuencia"),
     ("via_administracion", "Vía de Administración"),
-    ("indicacion", "Indicación"),
+    ("observaciones", "Observaciones"),
     ("diagnostico", "Diagnóstico"),
     ("codigo_cie10", "Código CIE-10"),
     ("estado", "Estado"),
@@ -111,9 +108,7 @@ fn humanize(key: &str) -> String {
         .map(|word| {
             let mut chars = word.chars();
             match chars.next() {
-                Some(first) => {
-                    first.to_uppercase().collect::<String>() + chars.as_str()
-                }
+                Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
                 None => String::new(),
             }
         })
@@ -178,17 +173,24 @@ fn escape_cell(value: &str) -> String {
 }
 
 fn full_patient_name(snapshot: &ExportSnapshot) -> String {
-    let nombre = snapshot.patient.data.get("nombre").map(String::as_str).unwrap_or("");
-    let apellido = snapshot.patient.data.get("apellido").map(String::as_str).unwrap_or("");
+    let nombre = snapshot
+        .patient
+        .data
+        .get("nombre")
+        .map(String::as_str)
+        .unwrap_or("");
+    let apellido = snapshot
+        .patient
+        .data
+        .get("apellido")
+        .map(String::as_str)
+        .unwrap_or("");
     format!("{} {}", nombre.trim(), apellido.trim())
         .trim()
         .to_string()
 }
 
-pub fn render_markdown(
-    snapshot: &ExportSnapshot,
-    schema: &SchemaConfig,
-) -> Result<String, String> {
+pub fn render_markdown(snapshot: &ExportSnapshot, schema: &SchemaConfig) -> Result<String, String> {
     let mut out = String::new();
 
     let patient_name = full_patient_name(snapshot);
@@ -200,7 +202,7 @@ pub fn render_markdown(
 
     out.push_str(&format!("# Historia Clínica — {}\n\n", heading));
     out.push_str(&format!(
-        "> Documento generado el {} · Simplex Health Core\n",
+        "> Documento generado el {} · Fichio Care\n",
         snapshot.generated_at
     ));
     out.push_str(&format!(
@@ -333,7 +335,11 @@ pub fn render_markdown(
             }
             has_content = true;
             let label = label_of(FIELD_LABELS, &key);
-            let heading_label = if label == key { humanize(&key) } else { label.to_string() };
+            let heading_label = if label == key {
+                humanize(&key)
+            } else {
+                label.to_string()
+            };
             out.push_str(&format!("#### {}\n\n{}\n\n", heading_label, value));
         }
         if !has_content {
@@ -349,7 +355,7 @@ pub fn render_markdown(
     ));
     out.push_str("> Este hash permite verificar la integridad del contenido exportado.\n\n");
     out.push_str(
-        "*Documento confidencial que contiene información clínica protegida. Generado por Simplex Health Core.*\n",
+        "*Documento confidencial que contiene información clínica protegida. Generado por Fichio Care.*\n",
     );
 
     Ok(out)
@@ -382,11 +388,7 @@ pub fn export_filename(snapshot: &ExportSnapshot) -> String {
         .unwrap_or_default();
 
     let mut parts: Vec<String> = vec!["HistoriaClinica".to_string()];
-    parts.extend(
-        [apellido, nombre]
-            .into_iter()
-            .filter(|p| !p.is_empty()),
-    );
+    parts.extend([apellido, nombre].into_iter().filter(|p| !p.is_empty()));
     let base = parts.join("_");
 
     format!(
@@ -458,9 +460,7 @@ mod tests {
         data.insert("ciudad".to_string(), "Córdoba".to_string());
 
         ExportSnapshot {
-            patient: ExportPatient {
-                data,
-            },
+            patient: ExportPatient { data },
             professional: ExportProfessional {
                 full_name: "Dra. Ana Test".to_string(),
                 profession: "Médica".to_string(),
@@ -529,7 +529,10 @@ mod tests {
         let md = render_markdown(&sample_snapshot(), &test_schema()).expect("render");
         let allergy_pos = md.find("### 1.").expect("primera entry");
         let soap_pos = md.find("### 2.").expect("segunda entry");
-        assert!(allergy_pos < soap_pos, "la entry más antigua debe ir primero");
+        assert!(
+            allergy_pos < soap_pos,
+            "la entry más antigua debe ir primero"
+        );
         let slice = &md[allergy_pos..soap_pos];
         assert!(slice.contains("Alergia registrada"));
         assert!(slice.contains("✗ sin verificar"));
