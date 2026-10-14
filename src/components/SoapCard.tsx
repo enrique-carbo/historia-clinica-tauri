@@ -63,9 +63,9 @@ export function SoapCard({ entry, onClick }: SoapCardProps) {
       </div>
 
       {/* Autor y firma */}
-      <div className="flex items-center justify-between text-xs mb-2 px-2 py-1.5 bg-zinc-950/50 rounded">
+      <div className="flex flex-wrap gap-2 items-center justify-between text-xs mb-2 px-2 py-1.5 bg-zinc-950/50 rounded">
         <div className="flex items-center gap-1.5 min-w-0">
-          <span className="text-zinc-500 shrink-0">Firmado por:</span>
+          <span className="text-zinc-500 shrink-0">Firmado:</span>
           <span className="text-zinc-300 font-medium truncate">{entry.author_name}</span>
         </div>
         <div className="flex items-center gap-1 shrink-0">

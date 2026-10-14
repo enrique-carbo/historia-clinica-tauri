@@ -32,7 +32,7 @@
       "placeholder": "Notas adicionales sobre la condición..."
     }
   ],
-  "signature_payload_order": ["diagnostico", "estado"],
+  "signature_payload_order": ["diagnostico", "codigo_cie10" ,"estado", "observaciones"],
   "immutable": true,
   "requires_signature": true
 }

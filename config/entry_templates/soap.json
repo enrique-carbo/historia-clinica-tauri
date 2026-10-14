@@ -8,21 +8,21 @@
       "label": "Subjetivo",
       "type": "textarea",
       "required": true,
-      "placeholder": "Síntomas y preocupaciones del paciente en sus propias palabras..."
+      "placeholder": "Motivo de consulta, anamnesis, antecedentes..."
     },
     {
       "name": "objetivo",
       "label": "Objetivo",
       "type": "textarea",
       "required": true,
-      "placeholder": "Signos vitales, hallazgos del examen físico, datos clínicos observables..."
+      "placeholder": "Examen físico, signos vitales, estudios complementarios..."
     },
     {
       "name": "evaluacion",
-      "label": "Evaluación",
+      "label": "Análisis / Evaluación",
       "type": "textarea",
       "required": true,
-      "placeholder": "Diagnóstico diferencial, impresión clínica, análisis..."
+      "placeholder": "Lista de problemas, diagnósticos diferenciales, evolución..."
     },
     {
       "name": "plan",

@@ -73,11 +73,11 @@ export function MedicoView() {
       {activeMedicoTab === "ehr" && <PatientEhrView />}
 
       {activeMedicoTab === "paciente" && (
-        <div className="flex flex-col gap-8 mx-auto w-full p-6">
+        <div className="flex flex-col mx-auto w-full p-2">
           <div>
             <h2 className="text-lg font-semibold mb-4 text-zinc-300 flex items-center gap-2">
               <span className="p-1.5 rounded bg-blue-900/20 text-blue-400">👤</span>
-              Admitir / Editar Paciente
+              Gestión Pacientes
             </h2>
             <Entity/>
           </div>
@@ -85,9 +85,8 @@ export function MedicoView() {
       )}
 
       {activeMedicoTab === "perfil" && (
-        <div className="flex flex-col gap-8 max-w-3xl mx-auto w-full p-6">
+        <div className="flex flex-col max-w-3xl mx-auto w-full p-2">
           <div>
-            <h2 className="text-lg font-semibold mb-4 text-zinc-300">Perfil Profesional</h2>
             <ProfileView />
           </div>
         </div>

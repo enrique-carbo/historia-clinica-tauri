@@ -113,12 +113,12 @@ export function EntryCard({ entry, onClick }: EntryCardProps) {
       <h3 className="text-sm font-semibold text-zinc-200 mb-2">{entry.title}</h3>
 
       {/* Autor y firma (siempre visibles) */}
-      <div className="flex items-center justify-between text-xs px-2 py-1.5 bg-zinc-950/50 rounded">
+      <div className="flex flex-wrap gap-2 items-center justify-between text-xs px-2 py-1.5 bg-zinc-950/50 rounded">
         <div className="flex items-center gap-1.5 min-w-0">
-          <span className="text-zinc-500 shrink-0">Firmado por:</span>
+          <span className="text-zinc-500 shrink-0">Firmado:</span>
           <span className="text-zinc-300 font-medium truncate">{entry.author_name}</span>
           {entry.author_profession && (
-            <span className="text-zinc-500 shrink-0">· {entry.author_profession}</span>
+            <span className="text-zinc-500 shrink-0 hidden sm:inline">· {entry.author_profession}</span>
           )}
         </div>
         <div className="flex items-center gap-1 shrink-0">

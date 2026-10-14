@@ -32,14 +32,14 @@
       "options": ["Oral", "Intravenosa", "Intramuscular", "Subcutánea", "Tópica", "Inhalatoria"]
     },
     {
-      "name": "indicacion",
-      "label": "Indicación",
+      "name": "observaciones",
+      "label": "Observaciones",
       "type": "textarea",
       "required": false,
-      "placeholder": "Motivo de la prescripción..."
+      "placeholder": "Observaciones adicionales..."
     }
   ],
-  "signature_payload_order": ["medicamento", "dosis", "frecuencia", "via_administracion"],
+  "signature_payload_order": ["medicamento", "dosis", "frecuencia", "via_administracion", "observaciones"],
   "immutable": true,
   "requires_signature": true
 }
