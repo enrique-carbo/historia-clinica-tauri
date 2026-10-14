@@ -43,6 +43,38 @@ su vista y su entrada de menú.
 
 ---
 
+## 🧬 Perfiles de producto: Medicina vs Veterinaria
+
+**Decisión: un repo, un core, dos builds por perfil.** El Core es
+agnóstico de especie — no sabe ni necesita saber si el paciente es un
+humano o un animal. Las dos verticales comparten el mismo código fuente
+y se diferencian solo en build time:
+
+| Cambia por perfil | No cambia (idéntico byte a byte) |
+| :--- | :--- |
+| `identifier` de Tauri (define `app_local_data_dir` → **DBs separadas**, coexisten en la misma máquina) | Criptografía, vaults, DataKey, blind index, firmas |
+| Nombre / ícono de la app | Entries SOAP, respaldos, auditoría, roles |
+| `config/entity_schema.json` (filiación: humano vs animal + dueño/especie) | Commands Tauri, migraciones, export `.md` |
+
+Son **2 builds = 2 productos** (Fichio Care, Fichio Vet). El conteo **no
+crece con clientes** (ver regla abajo). Mecanismo previsto cuando exista
+el caso veterinario real: directorios `profiles/med/` y `profiles/vet/`
+con schema + branding, `pnpm build:med` / `build:vet` (fragmento de
+config de Tauri), `VITE_FICHIO_PROFILE` para branding del frontend. El
+lado Rust no lleva `#[cfg]` por perfil en `security/` ni en el resto del
+Core.
+
+**Regla del cliente**: un pedido específico de un cliente se resuelve con
+**config** (`entity_schema.json`, `entry_templates/`) o un **plugin**
+— nunca con un perfil de build adicional ni con `if client == "…"` en el
+Core. Si un pedido exige tocar el Core, es una feature del producto, no
+un pedido de cliente.
+
+Estado: decisión de diseño (2026-10-13). No implementado — el producto
+aún no se lanza; aparece cuando haya caso veterinario real.
+
+---
+
 ## 🏗️ Arquitectura del Sistema
 
 ```text

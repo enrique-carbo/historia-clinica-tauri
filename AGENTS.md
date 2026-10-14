@@ -63,6 +63,11 @@ pnpm test                     # baseline: 35 tests, 0 fallas (vitest; Node >= 22
   terminología, OS, IA) va a **plugins** cuando haga falta. Ver
   `docs/PLUGIN_ARCHITECTURE.md` (Principio Rector) para la lista
   Core/no-Core.
+- **Productos Med/Vet**: un core, dos perfiles de build mínimos
+  (identifier + branding + `entity_schema.json`); el Core es agnóstico
+  de especie. Pedidos de clientes específicos → config o plugin, nunca
+  forks ni `#ifdefs` en Core (ver `docs/PLUGIN_ARCHITECTURE.md`,
+  "Perfiles de producto").
 - **Sesión**: el `user_id` nunca se confía en lo que manda el frontend.
   Derivar con `require_session()` / `require_admin()` /
   `require_admin_or_assistant()` (definidos en
