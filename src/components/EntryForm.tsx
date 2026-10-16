@@ -4,6 +4,7 @@ import { useEntryStore, EntryCategory, EntryStatus } from "../stores/useEntrySto
 import { usePatientStore } from "../stores/usePatientStore";
 import { useNavigationStore } from "../stores/useNavigationStore";
 import { Button } from "./ui/Button";
+import { Alert } from "./ui/Alert";
 
 interface EntryFormProps {
   onSuccess?: () => void;
@@ -189,12 +190,10 @@ export function EntryForm({ onSuccess }: EntryFormProps) {
   return (
     <div className="bg-surface border border-border rounded-xl p-6">
       {MISSING_TEMPLATES.length > 0 && (
-        <div className="mb-4 p-3 bg-red-950/30 border border-red-800/50 rounded-lg">
-          <p className="text-xs text-red-400">
-            Faltan templates de entry: {MISSING_TEMPLATES.join(", ")}. Revisá
-            config/entry_templates/.
-          </p>
-        </div>
+        <Alert variant="error" className="mb-4">
+          Faltan templates de entry: {MISSING_TEMPLATES.join(", ")}. Revisá
+          config/entry_templates/.
+        </Alert>
       )}
       <h3 className="text-lg font-semibold text-text-primary mb-4 flex items-center gap-2">
         <span className="text-2xl" aria-hidden="true">➕</span>
@@ -319,11 +318,7 @@ export function EntryForm({ onSuccess }: EntryFormProps) {
           ))}
 
           {/* Error */}
-          {error && (
-            <div className="p-3 bg-red-950/30 border border-red-800/50 rounded-lg">
-              <p className="text-xs text-red-400">{error}</p>
-            </div>
-          )}
+          {error && <Alert variant="error">{error}</Alert>}
 
           {/* Submit */}
           <Button type="submit" disabled={isLoading} className="w-full">

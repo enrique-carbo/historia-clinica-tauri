@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useEntryStore, EntryCategory } from "../stores/useEntryStore";
 import { EntryCard } from "./EntryCard";
 import { Button } from "./ui/Button";
+import { Alert } from "./ui/Alert";
+import { EmptyState } from "./ui/EmptyState";
 
 interface EntryTimelineProps {
   subjectId: number;
@@ -124,37 +126,24 @@ export function EntryTimeline({ subjectId }: EntryTimelineProps) {
 
       {/* Contenido */}
       {error ? (
-        <div className="p-4 rounded-lg bg-red-950/30 border border-red-800/50 text-red-400 text-sm">
+        <Alert variant="error" className="text-sm">
           {error}
-        </div>
+        </Alert>
       ) : entries.length === 0 && !isLoading ? (
-        <div className="flex flex-col items-center justify-center py-12 text-text-muted">
-          <svg
-            className="w-12 h-12 mb-3 text-text-muted"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={1.5}
-              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-            />
-          </svg>
-          <p className="text-sm">
-            {debouncedQuery
+        <EmptyState
+          title={
+            debouncedQuery
               ? `No se encontraron entries para "${debouncedQuery}"`
               : filter === "ALL"
                 ? "No hay entries registradas"
-                : `No hay entries de tipo ${CATEGORIES.find((c) => c.value === filter)?.label}`}
-          </p>
-          <p className="text-xs text-text-muted mt-1">
-            {debouncedQuery
+                : `No hay entries de tipo ${CATEGORIES.find((c) => c.value === filter)?.label}`
+          }
+          hint={
+            debouncedQuery
               ? "Probá con otro término de búsqueda"
-              : "Las entries son inmutables y se crean al registrar datos clínicos"}
-          </p>
-        </div>
+              : "Las entries son inmutables y se crean al registrar datos clínicos"
+          }
+        />
       ) : (
         <>
           {/* Contador */}

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { Alert } from "./ui/Alert";
 
 interface SeedPhraseSetupProps {
   onComplete: (seedVerified: boolean) => void;
@@ -144,9 +145,9 @@ export function SeedPhraseSetup({ onComplete }: SeedPhraseSetupProps) {
             />
 
             {error && (
-              <div className="p-3 bg-red-950/30 border border-red-800/50 rounded-lg mb-4">
-                <p className="text-xs text-red-400">{error}</p>
-              </div>
+              <Alert variant="error" className="mb-4">
+                {error}
+              </Alert>
             )}
 
             <button

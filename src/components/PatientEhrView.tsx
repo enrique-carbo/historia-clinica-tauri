@@ -5,6 +5,8 @@ import { usePatientStore } from "../stores/usePatientStore";
 import { useEntryStore } from "../stores/useEntryStore";
 import { SoapCard } from "./SoapCard";
 import { AllergyCard } from "./AllergyCard";
+import { Alert } from "./ui/Alert";
+import { EmptyState } from "./ui/EmptyState";
 import { calculateAge } from "../utils/dateUtils";
 import { FLAT_PATIENT_FIELDS } from "../utils/schema";
 
@@ -83,9 +85,10 @@ export function PatientEhrView() {
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
           </div>
         ) : entities.length === 0 ? (
-          <div className="text-center py-12 text-text-muted text-sm">
-            {searchQuery ? "No se encontraron coincidencias" : "Comienza escribiendo para buscar"}
-          </div>
+          <EmptyState
+            icon={null}
+            title={searchQuery ? "No se encontraron coincidencias" : "Comienza escribiendo para buscar"}
+          />
         ) : (
           entities.map((entity) => (
             <button
@@ -209,30 +212,14 @@ export function PatientEhrView() {
                   <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
                 </div>
               ) : entriesError ? (
-                <div className="p-4 rounded-lg bg-red-950/30 border border-red-800/50 text-red-400 text-sm">
+                <Alert variant="error" className="text-sm">
                   {entriesError}
-                </div>
+                </Alert>
               ) : soapEntries.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-10 text-text-muted">
-                  <svg
-                    aria-hidden="true"
-                    className="w-10 h-10 mb-3 text-text-muted"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={1.5}
-                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                    />
-                  </svg>
-                  <p className="text-sm">Sin notas SOAP registradas</p>
-                  <p className="text-xs text-text-muted mt-1">
-                    Se crean desde la pestaña Entries
-                  </p>
-                </div>
+                <EmptyState
+                  title="Sin notas SOAP registradas"
+                  hint="Se crean desde la pestaña Entries"
+                />
               ) : (
                 <div className="space-y-4">
                   {soapEntries.map((entry) => (

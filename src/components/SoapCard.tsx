@@ -1,5 +1,11 @@
 import { Entry } from "../stores/useEntryStore";
-import { formatDateTime } from "../utils/dateUtils";
+import {
+  CategoryBadge,
+  EntryFooter,
+  SignatureStatus,
+  SignedBy,
+  StatusBadge,
+} from "./EntryMeta";
 
 interface SoapCardProps {
   entry: Entry;
@@ -13,15 +19,7 @@ const SOAP_SECTIONS: { key: string; label: string; letter: string; color: string
   { key: "plan", label: "Plan", letter: "P", color: "text-purple-400 bg-purple-900/30 border-purple-800/50" },
 ];
 
-const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
-  ACTIVE: { label: "Activo", color: "bg-yellow-900/30 text-yellow-400" },
-  RESOLVED: { label: "Resuelto", color: "bg-green-900/30 text-green-400" },
-  COMPLETED: { label: "Completado", color: "bg-border-strong text-text-primary" },
-};
-
 export function SoapCard({ entry, onClick }: SoapCardProps) {
-  const statusConfig = STATUS_CONFIG[entry.status] || STATUS_CONFIG.ACTIVE;
-
   return (
     <div
       role="button"
@@ -37,12 +35,8 @@ export function SoapCard({ entry, onClick }: SoapCardProps) {
     >
       {/* Header: badge SOAP + estado */}
       <div className="flex items-center justify-between gap-3 mb-2">
-        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium border bg-blue-900/30 text-blue-400 border-blue-800/50">
-          <span aria-hidden="true">📋</span> Nota SOAP
-        </span>
-        <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium ${statusConfig.color}`}>
-          {statusConfig.label}
-        </span>
+        <CategoryBadge category={entry.category} />
+        <StatusBadge status={entry.status} />
       </div>
 
       {/* Título */}
@@ -72,34 +66,14 @@ export function SoapCard({ entry, onClick }: SoapCardProps) {
 
       {/* Autor y firma */}
       <div className="flex flex-wrap gap-2 items-center justify-between text-xs mb-2 px-2 py-1.5 bg-canvas/50 rounded">
-        <div className="flex items-center gap-1.5 min-w-0">
-          <span className="text-text-muted shrink-0">Firmado:</span>
-          <span className="text-text-primary font-medium truncate">{entry.author_name}</span>
-        </div>
+        <SignedBy name={entry.author_name} />
         <div className="flex items-center gap-1 shrink-0">
-          {entry.is_verified ? (
-            <span className="flex items-center gap-1 text-green-400" title={`Firma verificada: ${entry.signature.slice(0, 16)}...`}>
-              <svg aria-hidden="true" className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-              </svg>
-              Verificada
-            </span>
-          ) : (
-            <span className="flex items-center gap-1 text-yellow-500" title="Firma no verificada">
-              <svg aria-hidden="true" className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-              </svg>
-              Sin verificar
-            </span>
-          )}
+          <SignatureStatus isVerified={entry.is_verified} signature={entry.signature} />
         </div>
       </div>
 
       {/* Footer */}
-      <div className="flex items-center justify-between text-[10px] text-text-muted">
-        <span>{formatDateTime(entry.timestamp)}</span>
-        <span>ID: {entry.id.slice(0, 8)}...</span>
-      </div>
+      <EntryFooter timestamp={entry.timestamp} id={entry.id} />
     </div>
   );
 }

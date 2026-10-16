@@ -68,14 +68,12 @@ export function AdminSeedPanel() {
         </p>
       </div>
 
-      <div className="bg-red-950/30 border border-red-800/50 rounded-lg p-4">
-        <p className="text-xs text-red-400">
-          <strong className="text-red-300">⚠️ Rotar la frase invalida la anterior.</strong>{" "}
-          Si no anotás la nueva en papel, la frase vieja deja de servir y no habrá
-          forma de recuperar los datos si se pierden todas las contraseñas. La
-          rotación recién se aplica cuando confirmás re-escribiéndola.
-        </p>
-      </div>
+      <Alert variant="error">
+        <strong className="text-red-300">⚠️ Rotar la frase invalida la anterior.</strong>{" "}
+        Si no anotás la nueva en papel, la frase vieja deja de servir y no habrá
+        forma de recuperar los datos si se pierden todas las contraseñas. La
+        rotación recién se aplica cuando confirmás re-escribiéndola.
+      </Alert>
 
       {error && (
         <Alert variant="error" className="my-0">

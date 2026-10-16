@@ -1,40 +1,17 @@
 import { useState } from "react";
-import { Entry, EntryCategory } from "../stores/useEntryStore";
-import { formatDateTime } from "../utils/dateUtils";
+import { Entry } from "../stores/useEntryStore";
+import {
+  CategoryBadge,
+  EntryFooter,
+  SignatureStatus,
+  SignedBy,
+  StatusBadge,
+} from "./EntryMeta";
 
 interface EntryCardProps {
   entry: Entry;
   onClick?: () => void;
 }
-
-const CATEGORY_CONFIG: Record<EntryCategory, { label: string; icon: string; color: string }> = {
-  SOAP_NOTE: {
-    label: "Nota SOAP",
-    icon: "📋",
-    color: "bg-blue-900/30 text-blue-400 border-blue-800/50",
-  },
-  MEDICATION: {
-    label: "Medicación",
-    icon: "💊",
-    color: "bg-green-900/30 text-green-400 border-green-800/50",
-  },
-  ALLERGY: {
-    label: "Alergia",
-    icon: "⚠️",
-    color: "bg-red-900/30 text-red-400 border-red-800/50",
-  },
-  CONDITION: {
-    label: "Condición",
-    icon: "🏥",
-    color: "bg-purple-900/30 text-purple-400 border-purple-800/50",
-  },
-};
-
-const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
-  ACTIVE: { label: "Activo", color: "bg-yellow-900/30 text-yellow-400" },
-  RESOLVED: { label: "Resuelto", color: "bg-green-900/30 text-green-400" },
-  COMPLETED: { label: "Completado", color: "bg-border-strong text-text-primary" },
-};
 
 // Orden canónico de campos según template (el payload llega como HashMap → orden aleatorio)
 const FIELD_ORDER: Record<string, string[]> = {
@@ -73,8 +50,6 @@ function sortPayload(category: string, payload: Record<string, string>): [string
 
 export function EntryCard({ entry, onClick }: EntryCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const categoryConfig = CATEGORY_CONFIG[entry.category] || CATEGORY_CONFIG.SOAP_NOTE;
-  const statusConfig = STATUS_CONFIG[entry.status] || STATUS_CONFIG.ACTIVE;
 
   const handleToggle = () => {
     setIsExpanded((prev) => !prev);
@@ -100,12 +75,8 @@ export function EntryCard({ entry, onClick }: EntryCardProps) {
       {/* Header: categoría + estado */}
       <div className="flex items-start justify-between gap-3 mb-2">
         <div className="flex items-center gap-2">
-          <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium border ${categoryConfig.color}`}>
-            <span aria-hidden="true">{categoryConfig.icon}</span> {categoryConfig.label}
-          </span>
-          <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium ${statusConfig.color}`}>
-            {statusConfig.label}
-          </span>
+          <CategoryBadge category={entry.category} />
+          <StatusBadge status={entry.status} />
         </div>
         {/* Chevron indicador de expansión */}
         <svg
@@ -124,29 +95,9 @@ export function EntryCard({ entry, onClick }: EntryCardProps) {
 
       {/* Autor y firma (siempre visibles) */}
       <div className="flex flex-wrap gap-2 items-center justify-between text-xs px-2 py-1.5 bg-canvas/50 rounded">
-        <div className="flex items-center gap-1.5 min-w-0">
-          <span className="text-text-muted shrink-0">Firmado:</span>
-          <span className="text-text-primary font-medium truncate">{entry.author_name}</span>
-          {entry.author_profession && (
-            <span className="text-text-muted shrink-0 hidden sm:inline">· {entry.author_profession}</span>
-          )}
-        </div>
+        <SignedBy name={entry.author_name} profession={entry.author_profession} />
         <div className="flex items-center gap-1 shrink-0">
-          {entry.is_verified ? (
-            <span className="flex items-center gap-1 text-green-400" title={`Firma verificada: ${entry.signature.slice(0, 16)}...`}>
-              <svg aria-hidden="true" className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-              </svg>
-              Verificada
-            </span>
-          ) : (
-            <span className="flex items-center gap-1 text-yellow-500" title="Firma no verificada">
-              <svg aria-hidden="true" className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-              </svg>
-              Sin verificar
-            </span>
-          )}
+          <SignatureStatus isVerified={entry.is_verified} signature={entry.signature} />
         </div>
       </div>
 
@@ -175,10 +126,7 @@ export function EntryCard({ entry, onClick }: EntryCardProps) {
       )}
 
       {/* Footer */}
-      <div className="flex items-center justify-between text-[10px] text-text-muted mt-2">
-        <span>{formatDateTime(entry.timestamp)}</span>
-        <span>ID: {entry.id.slice(0, 8)}...</span>
-      </div>
+      <EntryFooter timestamp={entry.timestamp} id={entry.id} className="mt-2" />
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { Navbar, Tab } from "../../components/ui/Navbar";
 import { Button } from "../../components/ui/Button";
+import { Alert } from "../../components/ui/Alert";
 import { PatientEhrView } from "../../components/PatientEhrView";
 import { Entity } from "../Entity";
 import { ProfileView } from "../../components/ProfileView";
@@ -121,36 +122,42 @@ export function MedicoView() {
           </div>
 
           {exportResult && (
-            <div className="p-3 rounded-lg bg-emerald-950/40 border border-emerald-800 text-emerald-300 text-sm flex flex-wrap items-center justify-between gap-3">
-              <span className="break-all">
-                Exportado: {exportResult.filename} ({exportResult.entries_count} entries)
-              </span>
-              <div className="flex items-center gap-2 shrink-0">
-                <Button variant="success" onClick={handleReveal}>
-                  Revelar en carpeta
-                </Button>
-                <button
-                  onClick={() => setExportResult(null)}
-                  aria-label="Cerrar"
-                  className="px-2 py-1.5 text-emerald-400 hover:text-emerald-200 transition-colors"
-                >
-                  ✕
-                </button>
+            <Alert variant="success" className="text-sm">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <span className="break-all">
+                  Exportado: {exportResult.filename} ({exportResult.entries_count} entries)
+                </span>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button variant="success" onClick={handleReveal}>
+                    Revelar en carpeta
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => setExportResult(null)}
+                    aria-label="Cerrar"
+                  >
+                    ✕
+                  </Button>
+                </div>
               </div>
-            </div>
+            </Alert>
           )}
 
           {exportError && (
-            <div className="p-3 rounded-lg bg-red-950/40 border border-red-800 text-red-400 text-sm flex items-center justify-between gap-3">
-              <span className="break-all">{exportError}</span>
-              <button
-                onClick={() => setExportError(null)}
-                aria-label="Cerrar"
-                className="shrink-0 px-2 text-red-400 hover:text-red-200 transition-colors"
-              >
-                ✕
-              </button>
-            </div>
+            <Alert variant="error" className="text-sm">
+              <div className="flex items-center justify-between gap-3">
+                <span className="break-all">{exportError}</span>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => setExportError(null)}
+                  aria-label="Cerrar"
+                >
+                  ✕
+                </Button>
+              </div>
+            </Alert>
           )}
 
           {showEntryForm ? (
