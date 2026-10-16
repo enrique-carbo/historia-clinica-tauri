@@ -1,5 +1,6 @@
 import { ChangePasswordForm } from "../ChangePasswordForm";
 import { useAuthStore } from "../../stores/useAuthStore";
+import { APP_NAME } from "../../utils/branding";
 
 export function PacienteView() {
   const { activeUser } = useAuthStore();
@@ -42,8 +43,8 @@ export function PacienteView() {
 
       <div className="p-4 bg-blue-950/30 border border-blue-900 rounded-lg text-xs text-blue-400 text-center">
         <span aria-hidden="true">🔒</span> <strong>Privacidad Garantizada:</strong> Tus datos clínicos se
-        guardan cifrados de extremo a extremo. Ni siquiera los servidores de
-        Fichio Care pueden leerlos.
+        guardan cifrados de extremo a extremo. Ni siquiera los servidores de{" "}
+        {APP_NAME} pueden leerlos.
       </div>
     </div>
   );

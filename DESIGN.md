@@ -267,7 +267,7 @@ Registrar y evitar replicar; se limpia al migrar (Fase B):
 | ~~Animaciones muertas (`animate-in` sin plugin)~~ | `Entity:355`, `PatientEhrView:155` | ✅ Instalado `tw-animate-css` (compatible Tailwind v4) + import en `index.css` |
 | Sombras ad-hoc (`shadow-md` en seleccionados, `shadow-emerald-*` en botón export) | `Entity`, `PatientEhrView`, `ProfileView` | ✅ Eliminadas (selección usa solo tint+borde §8; acciones sin sombra). `shadow-lg`/`shadow-2xl` de paneles inline (`AuthBox`, `PacienteView`, EHR) → pendiente Fase D (§7: solo flotantes) |
 | Literals de estado sin token (~108 usos: `AllergyCard` escala de severidad, letras SOAP de `SoapCard`, fills de acciones `emerald`/`amber`/`red`, `AuthBox`, mensajes de `ChangePasswordForm`, chips de `MedicoView`, badge `CONDITION` purple, panel de edición ámbar) | Varios | ⏳ Migrar a tokens `danger/success/warning/info/selected` al tocar cada archivo (en light los literals `-400`/`-950` pierden contraste) |
-| ~~Doble fuente de verdad de `schema.json` (frontend/backend)~~ | `src/config/` + `src-tauri/config/` | ✅ Unificado: única copia en `src-tauri/config/entity_schema.json`; `Entity.tsx` y `PatientEhrView.tsx` importan ese mismo archivo. Export y EHR derivan labels del schema (sin listas hardcodeadas) |
+| ~~Doble fuente de verdad de `schema.json` (frontend/backend)~~ | `src/config/` + `src-tauri/config/` | ✅ Unificado: única copia por perfil en `profiles/{med,vet}/entity_schema.json` (antes `src-tauri/config/`; 2026-10-16 perfiles Med/Vet: Rust la embebe vía `build.rs`→OUT_DIR, frontend importa med/vet según `VITE_FICHIO_PROFILE`). Export y EHR derivan labels del schema (sin listas hardcodeadas) |
 
 ---
 

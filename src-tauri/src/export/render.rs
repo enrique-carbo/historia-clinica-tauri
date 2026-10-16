@@ -202,8 +202,9 @@ pub fn render_markdown(snapshot: &ExportSnapshot, schema: &SchemaConfig) -> Resu
 
     out.push_str(&format!("# Historia Clínica — {}\n\n", heading));
     out.push_str(&format!(
-        "> Documento generado el {} · Fichio Care\n",
-        snapshot.generated_at
+        "> Documento generado el {} · {}\n",
+        snapshot.generated_at,
+        env!("FICHIO_APP_NAME")
     ));
     out.push_str(&format!(
         "> Entries incluidas: {}\n\n",
@@ -354,9 +355,10 @@ pub fn render_markdown(snapshot: &ExportSnapshot, schema: &SchemaConfig) -> Resu
         hex::encode(hash)
     ));
     out.push_str("> Este hash permite verificar la integridad del contenido exportado.\n\n");
-    out.push_str(
-        "*Documento confidencial que contiene información clínica protegida. Generado por Fichio Care.*\n",
-    );
+    out.push_str(&format!(
+        "*Documento confidencial que contiene información clínica protegida. Generado por {}.*\n",
+        env!("FICHIO_APP_NAME")
+    ));
 
     Ok(out)
 }

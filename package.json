@@ -8,7 +8,12 @@
   },
   "scripts": {
     "dev": "vite",
+    "dev:vet:frontend": "vite --mode vet",
     "build": "tsc && vite build",
+    "build:vet:frontend": "tsc && vite build --mode vet",
+    "build:med": "FICHIO_PROFILE=med tauri build",
+    "build:vet": "FICHIO_PROFILE=vet tauri build --config profiles/vet/tauri.json",
+    "dev:vet": "FICHIO_PROFILE=vet tauri dev --config profiles/vet/tauri.json",
     "preview": "vite preview",
     "tauri": "tauri",
     "test": "vitest run",

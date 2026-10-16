@@ -54,15 +54,25 @@ y se diferencian solo en build time:
 | :--- | :--- |
 | `identifier` de Tauri (define `app_local_data_dir` → **DBs separadas**, coexisten en la misma máquina) | Criptografía, vaults, DataKey, blind index, firmas |
 | Nombre / ícono de la app | Entries SOAP, respaldos, auditoría, roles |
-| `config/entity_schema.json` (filiación: humano vs animal + dueño/especie) | Commands Tauri, migraciones, export `.md` |
+| `profiles/{med,vet}/entity_schema.json` (filiación: humano vs animal + dueño/especie) | Commands Tauri, migraciones, export `.md` |
 
 Son **2 builds = 2 productos** (Fichio Care, Fichio Vet). El conteo **no
-crece con clientes** (ver regla abajo). Mecanismo previsto cuando exista
-el caso veterinario real: directorios `profiles/med/` y `profiles/vet/`
-con schema + branding, `pnpm build:med` / `build:vet` (fragmento de
-config de Tauri), `VITE_FICHIO_PROFILE` para branding del frontend. El
-lado Rust no lleva `#[cfg]` por perfil en `security/` ni en el resto del
-Core.
+crece con clientes** (ver regla abajo). Mecanismo implementado
+(2026-10-16):
+
+- `profiles/med/` y `profiles/vet/`: `entity_schema.json` + `branding.json`
+  (`app_name`); el perfil vet trae además `tauri.json` (overlay de
+  `tauri.conf.json`: productName, identifier `ar.com.fichio.vet`, título,
+  beforeBuild/beforeDev → Vite `--mode vet`).
+- Rust: `build.rs` lee `FICHIO_PROFILE` (default `med`), copia el schema
+  del perfil a `OUT_DIR` (lo embebe `config_schema.rs`) y exporta
+  `cargo:rustc-env=FICHIO_APP_NAME` para el branding del export Markdown.
+  Selección = datos; **cero `#[cfg]` por perfil en el Core**.
+- Frontend: `VITE_FICHIO_PROFILE` (`.env.vet` con `vite --mode vet`);
+  `src/utils/schema.ts` importa med/vet y `src/utils/branding.ts` exporta
+  `APP_NAME`.
+- Scripts: `pnpm build:med` / `build:vet` / `dev:vet` (el lado frontend
+  puro usa `build:vet:frontend` / `dev:vet:frontend`).
 
 **Regla del cliente**: un pedido específico de un cliente se resuelve con
 **config** (`entity_schema.json`, `entry_templates/`) o un **plugin**
@@ -70,8 +80,8 @@ Core.
 Core. Si un pedido exige tocar el Core, es una feature del producto, no
 un pedido de cliente.
 
-Estado: decisión de diseño (2026-10-13). No implementado — el producto
-aún no se lanza; aparece cuando haya caso veterinario real.
+Estado: implementado (2026-10-16). Iconos compartidos entre perfiles por
+ahora (mismo `bundle.icon`).
 
 ---
 

@@ -1,0 +1,124 @@
+{
+  "$schema": "simplex-entity-v1",
+  "version": 1,
+  "default_entity": "patient",
+  "entities": {
+    "patient": {
+      "label": "Paciente",
+      "label_plural": "Pacientes",
+      "icon": "user",
+      "blind_index_field": "dni",
+      "fields": [
+        {
+          "name": "nombre",
+          "label": "Nombre",
+          "type": "text",
+          "required": true,
+          "encrypted": true
+        },
+        {
+          "name": "apellido",
+          "label": "Apellido / Tutor",
+          "type": "text",
+          "required": false,
+          "encrypted": true
+        },
+        {
+          "name": "especie",
+          "label": "Especie",
+          "type": "select",
+          "required": true,
+          "encrypted": true,
+          "options": ["Perro", "Gato", "Ave", "Roedor", "Conejo", "Reptil", "Otro"]
+        },
+        {
+          "name": "raza",
+          "label": "Raza",
+          "type": "text",
+          "required": false,
+          "encrypted": true
+        },
+        {
+          "name": "sexo",
+          "label": "Sexo",
+          "type": "select",
+          "required": false,
+          "encrypted": true,
+          "options": ["Macho", "Hembra", "Desconocido"]
+        },
+        {
+          "name": "dni",
+          "label": "N° Registro / Microchip",
+          "type": "text",
+          "required": true,
+          "encrypted": false,
+          "blind_index": true
+        },
+        {
+          "name": "fecha_nacimiento",
+          "label": "Fecha de Nacimiento",
+          "type": "date",
+          "required": false,
+          "encrypted": true
+        },
+        {
+          "name": "telefono",
+          "label": "Teléfono del Tutor",
+          "type": "tel",
+          "required": false,
+          "encrypted": true
+        },
+        {
+          "name": "email",
+          "label": "Correo Electrónico",
+          "type": "email",
+          "required": false,
+          "encrypted": true
+        },
+        {
+          "name": "direccion",
+          "label": "Dirección",
+          "type": "text",
+          "required": false,
+          "encrypted": true
+        },
+        {
+          "name": "ciudad",
+          "label": "Ciudad",
+          "type": "text",
+          "required": false,
+          "encrypted": true
+        },
+        {
+          "name": "provincia_estado",
+          "label": "Provincia - Estado",
+          "type": "text",
+          "required": false,
+          "encrypted": true
+        },
+        {
+          "name": "responsable",
+          "label": "Responsable - Tutor",
+          "type": "group",
+          "required": false,
+          "fields": [
+            {
+              "name": "nombre_completo",
+              "label": "Nombre y Apellido Tutor",
+              "type": "text",
+              "required": false,
+              "encrypted": true
+            },
+            {
+              "name": "telefono",
+              "label": "Teléfono Responsable",
+              "type": "tel",
+              "required": false,
+              "encrypted": true
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

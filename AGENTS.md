@@ -12,8 +12,12 @@ cd src-tauri
 cargo test                    # baseline: 135 tests, 0 fallas
 cargo clippy --all-targets    # baseline: 3 warnings, 0 errores
 cd .. && npx tsc --noEmit     # baseline: sin errores
-pnpm test                     # baseline: 61 tests, 0 fallas (vitest; Node >= 22.12)
+pnpm test                     # baseline: 73 tests, 0 fallas (vitest; Node >= 22.12)
 ```
+
+- Perfiles Med/Vet: verificar también `FICHIO_PROFILE=vet cargo test`
+  (mismo baseline 135) — build.rs copia el schema del perfil a OUT_DIR;
+  `pnpm build` / `pnpm build:vet:frontend` compilan cada lado del frontend.
 
 - Los 3 warnings de clippy son `too_many_arguments` aceptados en
   `unlock_vault`, `seed_recovery` y `create_entry` (los `State<...>` los
@@ -21,7 +25,9 @@ pnpm test                     # baseline: 61 tests, 0 fallas (vitest; Node >= 22
 - **NO correr `cargo fmt`**: el repo no está formateado; fmt reescribiría
   archivos que no tocaste y arruina el diff.
 - Gestor de paquetes: pnpm. Backend: `cargo` desde `src-tauri/`.
-  Scripts npm: `dev/build/preview/tauri` y `test/test:watch` (vitest).
+  Scripts npm: `dev/build/preview/tauri` + perfiles (`build:med`,
+  `build:vet`, `dev:vet`, `dev:vet:frontend`, `build:vet:frontend`) y
+  `test/test:watch` (vitest).
   **Vitest 5 requiere Node >= 22.12** (el default del repo es nvm v22;
   la CI usa node 22). El repo fija eso con `.nvmrc` + `engines` en
   `package.json`: con Node 18 jsdom 30 revienta (`ERR_REQUIRE_ESM`) y
@@ -41,19 +47,27 @@ pnpm test                     # baseline: 61 tests, 0 fallas (vitest; Node >= 22
   - `src/db/migrations/mod.rs` — catálogo de migraciones.
   - `src/export/render.rs` — render del Markdown exportado (puro, sin I/O).
   - `src/security/` — vault, crypto, seed, backup, data_key.
-  - `config/entity_schema.json` — **fuente única** del schema de entities
-    (filiación del paciente). La consume el backend (`from_embedded()` en
-    `db/config_schema.rs`, vía `include_str!`) y el frontend
-    (`src/utils/schema.ts`, que exporta `PATIENT_FIELDS` y
-    `FLAT_PATIENT_FIELDS`). Los labels del export y de la ficha EHR se
-    derivan del schema — **no agregar listas hardcodeadas de campos**.
-    Groups (`type: "group"`, ej. responsable): la UI los renderiza como
-    sección, pero el storage guarda los subcampos **aplanados con prefijo
+- `profiles/{med,vet}/` — perfiles de producto Med/Vet (un core, dos
+  builds). Cada perfil: `entity_schema.json` (**fuente única** del schema
+  de entities: filiación del paciente) + `branding.json` (`app_name`).
+  El vet trae además `tauri.json` (overlay de `tauri.conf.json`:
+  productName/identifier/título; identifier distinto → DBs separadas,
+  coinstalables). Selección = datos, **cero `#[cfg]` en el Core**:
+  - Rust: `FICHIO_PROFILE` (default `med`) → `build.rs` copia el schema
+    a OUT_DIR (`include_str!` en `db/config_schema.rs`) y exporta
+    `FICHIO_APP_NAME` (branding del export en `render.rs`).
+  - Frontend: `VITE_FICHIO_PROFILE` (`.env.vet` con `vite --mode vet`) →
+    `src/utils/schema.ts` importa med/vet y exporta `PATIENT_FIELDS` /
+    `FLAT_PATIENT_FIELDS`; `src/utils/branding.ts` exporta `APP_NAME`.
+  - Los labels del export y de la ficha EHR se derivan del schema —
+    **no agregar listas hardcodeadas de campos**. Groups (`type:
+    "group"`, ej. responsable): la UI los renderiza como sección, pero
+    el storage guarda los subcampos **aplanados con prefijo
     `{group}_{campo}`** (ej. `responsable_nombre_completo`); los
     `required` de un grupo solo aplican si el grupo tiene algún dato
-    ("nada o todo"). **No recrear una copia en `src/`**: el watcher de
-    Vite ignora `src-tauri/`, así que el archivo vive acá para que Tauri
-    lo detecte y reinicie cargo al cambiar.
+    ("nada o todo"). **No recrear una copia en `src/`**. Ojo: el watcher
+    de `tauri dev` no cubre `profiles/` — tras editar un schema,
+    reiniciá el dev o tocá un `.rs` para que cargo recompile.
 - `src/` — React + TS. Vistas en `src/components/views/`, stores en
   `src/stores/`.
 - `config/entry_templates/*.json` — labels y orden canónicos de entries.
@@ -66,10 +80,10 @@ pnpm test                     # baseline: 61 tests, 0 fallas (vitest; Node >= 22
   `docs/PLUGIN_ARCHITECTURE.md` (Principio Rector) para la lista
   Core/no-Core.
 - **Productos Med/Vet**: un core, dos perfiles de build mínimos
-  (identifier + branding + `entity_schema.json`); el Core es agnóstico
-  de especie. Pedidos de clientes específicos → config o plugin, nunca
-  forks ni `#ifdefs` en Core (ver `docs/PLUGIN_ARCHITECTURE.md`,
-  "Perfiles de producto").
+  (identifier + branding + `entity_schema.json` en `profiles/`); el Core
+  es agnóstico de especie. Pedidos de clientes específicos → config o
+  plugin, nunca forks ni `#ifdefs` en Core (ver
+  `docs/PLUGIN_ARCHITECTURE.md`, "Perfiles de producto").
 - **Sesión**: el `user_id` nunca se confía en lo que manda el frontend.
   Derivar con `require_session()` / `require_admin()` /
   `require_admin_or_assistant()` (definidos en

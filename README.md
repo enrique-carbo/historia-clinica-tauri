@@ -46,7 +46,7 @@ src-tauri/src/
  │   └── vault.rs         # Gestión de Bóvedas criptográficas por usuario (Cold Start + Llave Privada de Firma).
  │
  ├── db/                  # Capa de persistencia.
- │   ├── config_schema.rs # Structs del schema de entities + `from_embedded()` (include_str! de entity_schema.json) + `field_labels()`.
+ │   ├── config_schema.rs # Structs del schema de entities + `from_embedded()` (include_str! del schema copiado a OUT_DIR por build.rs) + `field_labels()`.
  │   ├── database.rs      # Apertura de SQLite (WAL) + delegación en `run_migrations`.
  │   └── migrations/      # Migraciones append-only versionadas con `PRAGMA user_version`
  │       └── mod.rs       # (v001 baseline, transacción por migración, guard de downgrade).
@@ -260,13 +260,13 @@ CREATE INDEX idx_entries_sync ON entries(is_synced) WHERE is_synced = 0;
 ### Archivos de Configuración Empaquetados
 | Archivo | Propósito | Consumidor |
 |---|---|---|
-| `src-tauri/config/entity_schema.json` (fuente única) | Define entidades, campos de filiación y groups (ej. Responsable - Tutor) | `entity_commands.rs` (validación + blind index), `export_commands.rs` (labels del .md), `src/utils/schema.ts` → `Entity.tsx` + `PatientEhrView.tsx` |
+| `profiles/{med,vet}/entity_schema.json` (fuente única por perfil) | Define entidades, campos de filiación y groups (ej. Responsable - Tutor) | `entity_commands.rs` (validación + blind index), `export_commands.rs` (labels del .md), `src/utils/schema.ts` → `Entity.tsx` + `PatientEhrView.tsx` |
 | `config/entry_templates/soap.json` | Template de entry SOAP | `EntryForm.tsx` |
 | `config/entry_templates/allergy.json` | Template de alergia | `EntryForm.tsx` |
 | `config/entry_templates/medication.json` | Template de medicación | `EntryForm.tsx` |
 | `config/entry_templates/condition.json` | Template de condición médica | `EntryForm.tsx` |
 
-`entity_schema.json` se empaqueta en el binario con `include_str!` (`config_schema.rs::from_embedded()`) y el frontend consume el mismo archivo vía `src/utils/schema.ts` — es la fuente única: labels y orden del export Markdown y del grid de contacto del EHR se derivan del schema, así que agregar un campo al JSON lo propaga a form, ficha EHR y export sin tocar código. Los groups (`type: "group"`) se renderizan como sección en el form pero se guardan aplanados con prefijo `{group}_{campo}` (ej. `responsable_nombre_completo`), con validación "nada o todo". Los `entry_templates/` se embeben en el bundle de Vite con `import.meta.glob(..., { eager: true })`: `EntryForm.tsx` los descubre del disco en build time, valida el shape (`category`, `label`, `fields`) y arma el diccionario de templates. Todo funciona offline y es inmutable en runtime.
+`entity_schema.json` se empaqueta en el binario con `include_str!` desde OUT_DIR (`config_schema.rs::from_embedded()`; `build.rs` copia `profiles/{FICHIO_PROFILE}/entity_schema.json`, default `med`) y el frontend consume los mismos perfiles vía `src/utils/schema.ts` (selección por `VITE_FICHIO_PROFILE`) — es la fuente única: labels y orden del export Markdown y del grid de contacto del EHR se derivan del schema, así que agregar un campo al JSON lo propaga a form, ficha EHR y export sin tocar código. Los groups (`type: "group"`) se renderizan como sección en el form pero se guardan aplanados con prefijo `{group}_{campo}` (ej. `responsable_nombre_completo`), con validación "nada o todo". Los `entry_templates/` se embeben en el bundle de Vite con `import.meta.glob(..., { eager: true })`: `EntryForm.tsx` los descubre del disco en build time, valida el shape (`category`, `label`, `fields`) y arma el diccionario de templates. Todo funciona offline y es inmutable en runtime.
 
 **Paradigma Entity-Entry**: El core no conoce el significado clínico de cada campo. Simplemente almacena `entries` cifradas con su categoría y las presenta según el template JSON correspondiente. Agregar nuevos tipos de entries solo requiere crear un nuevo archivo JSON en `config/entry_templates/` (y sumar la categoría al tipo `EntryCategory` y al CHECK de SQLite).
 

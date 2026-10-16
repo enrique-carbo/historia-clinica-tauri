@@ -43,9 +43,10 @@ pub struct FieldSchema {
 // ========== ENTITY SCHEMA METHODS ==========
 
 /// Único punto de carga del schema embebido en el binario.
-/// Fuente única: `src-tauri/config/entity_schema.json` (el frontend consume
-/// el mismo archivo vía `src/utils/schema.ts`).
-pub const SCHEMA_JSON: &str = include_str!("../../config/entity_schema.json");
+/// Fuente: `profiles/{FICHIO_PROFILE}/entity_schema.json` (med|vet, default
+/// med), copiado a OUT_DIR por `build.rs`. El frontend consume los mismos
+/// archivos vía `src/utils/schema.ts` (selección por `VITE_FICHIO_PROFILE`).
+pub const SCHEMA_JSON: &str = include_str!(concat!(env!("OUT_DIR"), "/entity_schema.json"));
 
 pub fn from_embedded() -> Result<SchemaConfig, String> {
     serde_json::from_str(SCHEMA_JSON).map_err(|e| format!("Schema inválido: {}", e))

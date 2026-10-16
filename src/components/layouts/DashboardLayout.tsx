@@ -10,6 +10,7 @@ import { SeedPhraseSetup } from "../SeedPhraseSetup";
 import { Alert } from "../ui/Alert";
 import { Button } from "../ui/Button";
 import { useEntryStore } from "../../stores/useEntryStore";
+import { APP_NAME } from "../../utils/branding";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -96,7 +97,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
           <div>
             <h1 className="text-lg sm:text-xl font-bold text-text-primary m-0">
-              <span aria-hidden="true">🩺</span> Fichio Care
+              <span aria-hidden="true">🩺</span> {APP_NAME}
             </h1>
             <p className="text-xs text-text-muted mt-0.5 hidden sm:block">
               Historia Clínica — Rol:{" "}

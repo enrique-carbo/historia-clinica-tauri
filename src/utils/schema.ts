@@ -1,11 +1,15 @@
 // src/utils/schema.ts
 //
 // Único punto de consumo del schema de entities en el frontend.
-// Convención de storage (igual que el backend, ver config_schema.rs):
-// los subcampos de un group se guardan aplanados con la clave
-// `{group}_{campo}` (ej: responsable_nombre_completo).
+// Perfiles Med/Vet (docs/PLUGIN_ARCHITECTURE.md): la selección es
+// `VITE_FICHIO_PROFILE` (.env.vet en `vite --mode vet`); default med.
+// El backend embebe el mismo archivo (profiles/{FICHIO_PROFILE}/ vía
+// build.rs). Convención de storage (igual que el backend, ver
+// config_schema.rs): los subcampos de un group se guardan aplanados con
+// la clave `{group}_{campo}` (ej: responsable_nombre_completo).
 
-import schemaConfig from "../../src-tauri/config/entity_schema.json";
+import medSchemaConfig from "../../profiles/med/entity_schema.json";
+import vetSchemaConfig from "../../profiles/vet/entity_schema.json";
 
 export interface FieldDef {
   name: string;
@@ -13,8 +17,12 @@ export interface FieldDef {
   type: string;
   required: boolean;
   encrypted?: boolean;
+  options?: string[];
   fields?: FieldDef[];
 }
+
+const schemaConfig =
+  import.meta.env.VITE_FICHIO_PROFILE === "vet" ? vetSchemaConfig : medSchemaConfig;
 
 export const PATIENT_LABEL: string = schemaConfig.entities.patient.label;
 export const PATIENT_FIELDS: FieldDef[] = schemaConfig.entities.patient.fields;

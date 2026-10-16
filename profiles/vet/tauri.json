@@ -1,0 +1,17 @@
+{
+  "productName": "Fichio Vet",
+  "identifier": "ar.com.fichio.vet",
+  "build": {
+    "beforeDevCommand": "pnpm dev:vet:frontend",
+    "beforeBuildCommand": "pnpm build:vet:frontend"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Fichio Vet",
+        "width": 1280,
+        "height": 720
+      }
+    ]
+  }
+}
