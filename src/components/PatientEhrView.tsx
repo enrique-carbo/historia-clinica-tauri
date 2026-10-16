@@ -82,7 +82,7 @@ export function PatientEhrView() {
       <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar max-h-[40vh] md:max-h-none">
         {isLoading ? (
           <div className="flex justify-center py-8">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-focus"></div>
           </div>
         ) : entities.length === 0 ? (
           <EmptyState
@@ -96,16 +96,16 @@ export function PatientEhrView() {
               onClick={() => handleSelectPatient(entity.id)}
               className={`w-full text-left p-3 rounded-lg transition-colors duration-200 group ${
                 patient?.id === entity.id
-                  ? "bg-blue-900/20 border border-blue-500/50"
+                  ? "bg-selected-tint/20 border border-selected-border/50"
                   : "bg-canvas/50 border border-transparent hover:bg-surface-raised hover:border-border-strong"
               }`}
             >
               <div className="flex justify-between items-start gap-2">
-                <div className="font-semibold text-text-primary group-hover:text-text-inverse truncate min-w-0 flex-1">
+                <div className="font-semibold text-text-primary truncate min-w-0 flex-1">
                   {entity.data.nombre} {entity.data.apellido}
                 </div>
                 {patient?.id === entity.id && (
-                  <span className="h-2 w-2 shrink-0 rounded-full bg-blue-500 mt-1.5"></span>
+                    <span className="h-2 w-2 shrink-0 rounded-full bg-selected-border mt-1.5"></span>
                 )}
               </div>
               <div className="text-xs text-text-muted mt-1.5 flex flex-wrap items-center gap-2">
@@ -140,7 +140,7 @@ export function PatientEhrView() {
               aria-expanded={isPatientDetailsOpen}
             >
               <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-                <div className="p-2.5 sm:p-3 rounded-full bg-blue-900/20 text-blue-400 shrink-0">
+                <div className="p-2.5 sm:p-3 rounded-full bg-info-tint/20 text-info-text shrink-0">
                   <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 sm:h-6 sm:w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                   </svg>
@@ -209,7 +209,7 @@ export function PatientEhrView() {
             <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
               {entriesLoading && soapEntries.length === 0 ? (
                 <div className="flex justify-center py-10">
-                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-focus"></div>
                 </div>
               ) : entriesError ? (
                 <Alert variant="error" className="text-sm">

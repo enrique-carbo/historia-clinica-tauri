@@ -1,14 +1,54 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-/* Tokens semánticos (DESIGN.md §2/§12). Tema controlado por clase en
-   <html class="dark">; hoy solo existe el oscuro, así que :root ya lo
-   define (sin cambio visual) y .dark duplica los valores como punto de
-   extensión para la Fase C (tema claro). */
+/* Tokens semánticos (DESIGN.md §2/§9/§12). Doble tema: `:root` define el
+   tema claro y `.dark` (clase en <html>, gestionada por useThemeStore)
+   el oscuro. El toggle inicial respeta prefers-color-scheme y persiste
+   en localStorage ("fichio-theme"); index.html aplica el tema antes del
+   primer paint para evitar flash. */
 
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
+  color-scheme: light;
+
+  --canvas: #fafafa; /* zinc-50 */
+  --surface: #ffffff; /* white */
+  --surface-raised: #f4f4f5; /* zinc-100 */
+  --field: #ffffff; /* white */
+  --border: #e4e4e7; /* zinc-200 */
+  --border-strong: #d4d4d8; /* zinc-300 */
+  --text-primary: #18181b; /* zinc-900 */
+  --text-secondary: #52525b; /* zinc-600 */
+  --text-muted: #71717a; /* zinc-500 */
+  --text-placeholder: #a1a1aa; /* zinc-400 */
+  --text-inverse: #ffffff;
+  --action-primary: #2563eb; /* blue-600 */
+  --action-primary-hover: #1d4ed8; /* blue-700 */
+  --focus: #3b82f6; /* blue-500 */
+
+  /* Semánticos de estado (§9): fórmula texto + tint + borde */
+  --danger-text: #dc2626; /* red-600 */
+  --danger-tint: #fef2f2; /* red-50 */
+  --danger-border: #fecaca; /* red-200 */
+  --success-text: #16a34a; /* green-600 */
+  --success-tint: #f0fdf4; /* green-50 */
+  --success-border: #bbf7d0; /* green-200 */
+  --warning-text: #d97706; /* amber-600 */
+  --warning-tint: #fffbeb; /* amber-50 */
+  --warning-border: #fde68a; /* amber-200 */
+  --info-text: #2563eb; /* blue-600 */
+  --info-tint: #eff6ff; /* blue-50 */
+  --info-border: #bfdbfe; /* blue-200 */
+  /* Seleccionado/activo (§8) */
+  --selected-text: #1d4ed8; /* blue-700 */
+  --selected-tint: #dbeafe; /* blue-100 */
+  --selected-border: #3b82f6; /* blue-500 */
+}
+
+.dark {
+  color-scheme: dark;
+
   --canvas: #09090b; /* zinc-950 */
   --surface: #18181b; /* zinc-900 */
   --surface-raised: #27272a; /* zinc-800 */
@@ -23,29 +63,29 @@
   --action-primary: #2563eb; /* blue-600 */
   --action-primary-hover: #1d4ed8; /* blue-700 */
   --focus: #3b82f6; /* blue-500 */
-}
 
-.dark {
-  /* Mismo que :root hasta que exista el tema claro (Fase C). */
-  --canvas: #09090b;
-  --surface: #18181b;
-  --surface-raised: #27272a;
-  --field: #09090b;
-  --border: #27272a;
-  --border-strong: #3f3f46;
-  --text-primary: #e4e4e7;
-  --text-secondary: #a1a1aa;
-  --text-muted: #71717a;
-  --text-placeholder: #3f3f46;
-  --text-inverse: #ffffff;
-  --action-primary: #2563eb;
-  --action-primary-hover: #1d4ed8;
-  --focus: #3b82f6;
+  /* Semánticos de estado (§9): fórmula texto + tint + borde */
+  --danger-text: #f87171; /* red-400 */
+  --danger-tint: #450a0a; /* red-950 */
+  --danger-border: #991b1b; /* red-800 */
+  --success-text: #4ade80; /* green-400 */
+  --success-tint: #052e16; /* green-950 */
+  --success-border: #166534; /* green-800 */
+  --warning-text: #fbbf24; /* amber-400 */
+  --warning-tint: #451a03; /* amber-950 */
+  --warning-border: #92400e; /* amber-800 */
+  --info-text: #60a5fa; /* blue-400 */
+  --info-tint: #172554; /* blue-950 */
+  --info-border: #1e40af; /* blue-800 */
+  /* Seleccionado/activo (§8) */
+  --selected-text: #60a5fa; /* blue-400 */
+  --selected-tint: #1e3a8a; /* blue-900 */
+  --selected-border: #3b82f6; /* blue-500 */
 }
 
 /* `inline` = las utilities leen la variable viva → siguen el tema activo.
    Genera bg-canvas, bg-surface, border-border, text-text-primary,
-   ring-focus, etc. */
+   text-danger-text, bg-info-tint/30, ring-focus, etc. */
 @theme inline {
   --color-canvas: var(--canvas);
   --color-surface: var(--surface);
@@ -61,4 +101,19 @@
   --color-action-primary: var(--action-primary);
   --color-action-primary-hover: var(--action-primary-hover);
   --color-focus: var(--focus);
+  --color-danger-text: var(--danger-text);
+  --color-danger-tint: var(--danger-tint);
+  --color-danger-border: var(--danger-border);
+  --color-success-text: var(--success-text);
+  --color-success-tint: var(--success-tint);
+  --color-success-border: var(--success-border);
+  --color-warning-text: var(--warning-text);
+  --color-warning-tint: var(--warning-tint);
+  --color-warning-border: var(--warning-border);
+  --color-info-text: var(--info-text);
+  --color-info-tint: var(--info-tint);
+  --color-info-border: var(--info-border);
+  --color-selected-text: var(--selected-text);
+  --color-selected-tint: var(--selected-tint);
+  --color-selected-border: var(--selected-border);
 }

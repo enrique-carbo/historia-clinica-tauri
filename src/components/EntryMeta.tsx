@@ -10,17 +10,17 @@ const CATEGORY_CONFIG: Record<
   SOAP_NOTE: {
     label: "Nota SOAP",
     icon: "📋",
-    color: "bg-blue-900/30 text-blue-400 border-blue-800/50",
+    color: "bg-info-tint/30 text-info-text border-info-border/50",
   },
   MEDICATION: {
     label: "Medicación",
     icon: "💊",
-    color: "bg-green-900/30 text-green-400 border-green-800/50",
+    color: "bg-success-tint/30 text-success-text border-success-border/50",
   },
   ALLERGY: {
     label: "Alergia",
     icon: "⚠️",
-    color: "bg-red-900/30 text-red-400 border-red-800/50",
+    color: "bg-danger-tint/30 text-danger-text border-danger-border/50",
   },
   CONDITION: {
     label: "Condición",
@@ -30,8 +30,8 @@ const CATEGORY_CONFIG: Record<
 };
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
-  ACTIVE: { label: "Activo", color: "bg-yellow-900/30 text-yellow-400" },
-  RESOLVED: { label: "Resuelto", color: "bg-green-900/30 text-green-400" },
+  ACTIVE: { label: "Activo", color: "bg-warning-tint/30 text-warning-text" },
+  RESOLVED: { label: "Resuelto", color: "bg-success-tint/30 text-success-text" },
   COMPLETED: { label: "Completado", color: "bg-border-strong text-text-primary" },
 };
 
@@ -87,7 +87,7 @@ export function SignatureStatus({
   if (isVerified) {
     return (
       <span
-        className="flex items-center gap-1 text-green-400"
+        className="flex items-center gap-1 text-success-text"
         title={`Firma verificada: ${signature.slice(0, 16)}...`}
       >
         <svg
@@ -107,7 +107,7 @@ export function SignatureStatus({
     );
   }
   return (
-    <span className="flex items-center gap-1 text-yellow-500" title="Firma no verificada">
+    <span className="flex items-center gap-1 text-warning-text" title="Firma no verificada">
       <svg
         aria-hidden="true"
         className="w-3.5 h-3.5"

@@ -292,7 +292,7 @@ export function ProfileView() {
                       <span className="text-text-muted"> — {lic.jurisdiction.trim()}</span>
                     )}
                     {i === 0 && (
-                      <span className="ml-2 text-[10px] uppercase tracking-wider text-blue-500">
+                      <span className="ml-2 text-[10px] uppercase tracking-wider text-info-text">
                         principal
                       </span>
                     )}

@@ -25,7 +25,7 @@ export function Button({
     success: "bg-emerald-700 hover:bg-emerald-600 text-text-inverse",
     danger: "bg-red-600 hover:bg-red-700 text-text-inverse",
     "ghost-danger":
-      "bg-transparent hover:bg-red-950/40 text-red-400 hover:text-red-300",
+      "bg-transparent hover:bg-danger-tint/40 text-danger-text hover:text-danger-text",
   };
 
   const sizes = {

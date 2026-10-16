@@ -2,6 +2,7 @@ import { ReactNode, useEffect } from "react";
 import { useNavigationStore, MedicoTab, AdminTab } from "../../stores/useNavigationStore";
 import { useAuthStore } from "../../stores/useAuthStore";
 import { Button } from "./Button";
+import { ThemeToggle } from "./ThemeToggle";
 
 interface NavigationDrawerProps {
   onLogout: () => void;
@@ -196,12 +197,15 @@ export function NavigationDrawer({ onLogout }: NavigationDrawerProps) {
         </div>
 
         {/* Info del usuario */}
-        <div className="p-4 border-b border-border">
-          <p className="text-xs text-text-secondary">Sesión activa</p>
-          <p className="text-sm font-semibold text-text-primary">{user?.username}</p>
-          <span className="inline-block mt-1 text-[10px] font-mono font-bold bg-blue-900/30 text-blue-400 border border-blue-800/50 px-1.5 py-0.5 rounded uppercase">
-            {user?.role}
-          </span>
+        <div className="p-4 border-b border-border flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs text-text-secondary">Sesión activa</p>
+            <p className="text-sm font-semibold text-text-primary">{user?.username}</p>
+            <span className="inline-block mt-1 text-[10px] font-mono font-bold bg-info-tint/30 text-info-text border border-info-border/50 px-1.5 py-0.5 rounded uppercase">
+              {user?.role}
+            </span>
+          </div>
+          <ThemeToggle />
         </div>
 
         {/* Menú de navegación */}
@@ -217,8 +221,8 @@ export function NavigationDrawer({ onLogout }: NavigationDrawerProps) {
                     onClick={() => handleMenuClick(item.key)}
                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors text-left ${
                       isActive
-                        ? "bg-surface-raised text-text-inverse"
-                        : "text-text-primary hover:bg-surface-raised hover:text-text-inverse"
+                        ? "bg-surface-raised text-text-primary"
+                        : "text-text-primary hover:bg-surface-raised hover:text-text-primary"
                     }`}
                   >
                     <span aria-hidden="true">{item.icon}</span>

@@ -94,7 +94,7 @@ export function PatientListPanel({
       <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar max-h-[50vh] md:max-h-none">
         {loading ? (
           <div className="flex justify-center py-8">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-focus"></div>
           </div>
         ) : entities.length === 0 ? (
           <EmptyState
@@ -112,7 +112,7 @@ export function PatientListPanel({
               key={e.id}
               className={`w-full text-left p-3 rounded-lg transition-colors duration-200 group flex items-center justify-between gap-2 ${
                 selectedId === e.id
-                  ? "bg-blue-900/20 border border-blue-500/50"
+                  ? "bg-selected-tint/20 border border-selected-border/50"
                   : "bg-canvas/50 border border-transparent hover:bg-surface-raised hover:border-border-strong"
               }`}
             >
@@ -125,14 +125,14 @@ export function PatientListPanel({
                   <div
                     className={`font-semibold transition-colors truncate ${
                       selectedId === e.id
-                        ? "text-blue-400"
-                        : "text-text-primary group-hover:text-text-inverse"
+                        ? "text-selected-text"
+                        : "text-text-primary"
                     }`}
                   >
                     {e.data.nombre} {e.data.apellido}
                   </div>
                   {selectedId === e.id && (
-                    <span className="h-2 w-2 shrink-0 rounded-full bg-blue-500 mt-1.5"></span>
+                    <span className="h-2 w-2 shrink-0 rounded-full bg-selected-border mt-1.5"></span>
                   )}
                 </div>
                 <div className="text-xs text-text-muted mt-1.5 flex flex-wrap items-center gap-2">

@@ -76,7 +76,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           {/* Botón Hamburguesa */}
           <button
             onClick={openDrawer}
-            className="p-2 rounded-lg bg-surface border border-border text-text-primary hover:text-text-inverse hover:bg-surface-raised transition-colors"
+            className="p-2 rounded-lg bg-surface border border-border text-text-primary hover:text-text-primary hover:bg-surface-raised transition-colors"
             aria-label="Abrir menú"
           >
             <svg
@@ -100,7 +100,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             </h1>
             <p className="text-xs text-text-muted mt-0.5 hidden sm:block">
               Historia Clínica — Rol:{" "}
-              <strong className="text-blue-500 uppercase">{user.role}</strong>
+              <strong className="text-info-text uppercase">{user.role}</strong>
             </p>
           </div>
         </div>

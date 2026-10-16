@@ -94,7 +94,7 @@ export function PatientAccessPanel({
         {accessMsg && (
           <span
             className={`text-xs font-medium ${
-              accessMsg.type === "ok" ? "text-emerald-400" : "text-red-400"
+              accessMsg.type === "ok" ? "text-success-text" : "text-danger-text"
             }`}
           >
             {accessMsg.type === "ok" ? "✓ " : "✕ "}
@@ -105,7 +105,7 @@ export function PatientAccessPanel({
 
       {accessLoading ? (
         <div className="flex items-center gap-2 text-sm text-text-muted">
-          <span className="animate-spin inline-block h-4 w-4 rounded-full border-b-2 border-blue-500"></span>
+          <span className="animate-spin inline-block h-4 w-4 rounded-full border-b-2 border-focus"></span>
           Consultando…
         </div>
       ) : access && access.is_active ? (

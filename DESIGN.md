@@ -2,7 +2,7 @@
 
 Fuente de verdad de las decisiones de diseño de la UI (`src/components/`). Todo componente nuevo o cambio visual debe ajustarse a estas reglas.
 
-> **Estado actual**: tema oscuro único con colores codificados en duro sobre Tailwind v4. Los tokens de este documento ya están nombrados de forma semántica para migrar a **doble tema (claro/oscuro) sin reescribir componentes** — ver §12.
+> **Estado actual**: doble tema (claro/oscuro) sobre tokens semánticos en `src/index.css`. `:root` = light, `.dark` = oscuro; el toggle vive en `Navbar`/`Drawer` (`useThemeStore`), persiste en localStorage y arranca desde `prefers-color-scheme`. Los semánticos de estado (`danger/success/warning/info/selected`) también son tokens; queda deuda de adopción en literals sueltos (§14).
 
 ---
 
@@ -39,7 +39,7 @@ Los nombres de la columna *Token* son los que deben existir en la migración (§
 
 ### Semánticos de estado
 
-Cada estado tiene 3 variantes: **texto/icono** (`-400`), **tint de fondo** (`-950` o `-900` con opacidad) y **borde** (`-800/50`).
+**Tokens** (viven en `index.css` con valores por tema): `danger`, `success`, `warning`, `info` (texto/tint/borde) y `selected` (texto/tint/borde). Cada estado tiene 3 variantes: **texto/icono**, **tint de fondo** y **borde**.
 
 | Estado | Texto | Tint de fondo | Borde | Uso |
 |---|---|---|---|---|
@@ -48,7 +48,7 @@ Cada estado tiene 3 variantes: **texto/icono** (`-400`), **tint de fondo** (`-95
 | Warning (`warning`) | `amber-400` / `yellow-400` | `yellow-900/30` | `yellow-800/50` | Advertencias, firmas pendientes |
 | Info (`info`) | `blue-400` | `blue-950/30` o `blue-900/30` | `blue-800/50` | Información, tabs activos |
 
-En modo claro (futuro) se sustituyen los tints por versiones aclaradas (`-50`/`-100` con el mismo `-500`/`-600` de texto) — conservar siempre la fórmula *texto + tint + borde*.
+En light los tokens de estado usan versiones aclaradas (`-600` de texto, `-50` de tint, `-200` de borde). Components sin token aún usan los literals de la tabla (deuda §14) — conservar siempre la fórmula *texto + tint + borde*.
 
 ---
 
@@ -236,7 +236,7 @@ Con esto, `bg-surface` significa "superficie" y se resuelve según el tema activ
 
 1. **Fase A — Tokens sin cambio visual** ✅: creados `:root`/`.dark`/`@theme inline` en `index.css` con los valores actuales (oscuro) y migrados los componentes de `ui/` a las utilities semánticas.
 2. **Fase B — Vistas** ✅: clases sueltas reemplazadas por tokens semánticos en `src/components/**/*.tsx` (verificado con `grep -rn "bg-zinc\|text-zinc\|border-zinc" src/` → 0 residuos; acciones azules → `action-primary`). Colores de estado (`sky`/`teal`/`amber` en badges) quedan como literales por decisión.
-3. **Fase C — Tema claro**: valores reales en `:root`, toggle de tema (clase `.dark` en `<html>`, preferencia persistida + respeto de `prefers-color-scheme` inicial), QA de contraste en ambos temas.
+3. **Fase C — Tema claro** ✅: valores light en `:root`, oscuro en `.dark`; toggle (`ui/ThemeToggle` en `Navbar` y `Drawer`) con persistencia en localStorage (`fichio-theme`) + `prefers-color-scheme` inicial + script anti-flash en `index.html`; tokens de estado (`danger/success/warning/info/selected`) con valores por tema; contraste corregido en textos de estado, listados seleccionados, tabs activos y hovers `text-inverse`.
 4. **Fase D — Componentes exploratorios**: Drawer, modales y sombras; estados hover/active en light.
 
 ---
@@ -266,6 +266,7 @@ Registrar y evitar replicar; se limpia al migrar (Fase B):
 | ~~`text-zinc-600/700` en texto no-placeholder~~ | 13 usos en 8 archivos (meta, empty states, iconos decorativos) | ✅ Todos a `text-zinc-500` (`text-muted`). Placeholders (`zinc-700`) intactos por diseño |
 | ~~Animaciones muertas (`animate-in` sin plugin)~~ | `Entity:355`, `PatientEhrView:155` | ✅ Instalado `tw-animate-css` (compatible Tailwind v4) + import en `index.css` |
 | Sombras ad-hoc (`shadow-md` en seleccionados, `shadow-emerald-*` en botón export) | `Entity`, `PatientEhrView`, `ProfileView` | ✅ Eliminadas (selección usa solo tint+borde §8; acciones sin sombra). `shadow-lg`/`shadow-2xl` de paneles inline (`AuthBox`, `PacienteView`, EHR) → pendiente Fase D (§7: solo flotantes) |
+| Literals de estado sin token (~108 usos: `AllergyCard` escala de severidad, letras SOAP de `SoapCard`, fills de acciones `emerald`/`amber`/`red`, `AuthBox`, mensajes de `ChangePasswordForm`, chips de `MedicoView`, badge `CONDITION` purple, panel de edición ámbar) | Varios | ⏳ Migrar a tokens `danger/success/warning/info/selected` al tocar cada archivo (en light los literals `-400`/`-950` pierden contraste) |
 | ~~Doble fuente de verdad de `schema.json` (frontend/backend)~~ | `src/config/` + `src-tauri/config/` | ✅ Unificado: única copia en `src-tauri/config/entity_schema.json`; `Entity.tsx` y `PatientEhrView.tsx` importan ese mismo archivo. Export y EHR derivan labels del schema (sin listas hardcodeadas) |
 
 ---

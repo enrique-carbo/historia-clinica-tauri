@@ -78,7 +78,7 @@ export function EntryTimeline({ subjectId }: EntryTimelineProps) {
               onClick={() => handleFilterChange(cat.value)}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${
                 filter === cat.value
-                  ? "bg-blue-900/40 border border-blue-700 text-blue-300"
+                  ? "bg-selected-tint/40 border border-selected-border/60 text-selected-text"
                   : "bg-surface border border-border text-text-secondary hover:border-border-strong hover:text-text-primary"
               }`}
             >

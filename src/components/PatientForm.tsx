@@ -100,7 +100,7 @@ function FieldBlock({
       <div className="col-span-1 sm:col-span-2 rounded-lg border border-border bg-canvas/40 p-4">
         <h4 className="text-xs font-bold text-text-secondary uppercase tracking-wide mb-3">
           {field.label}{" "}
-          {field.required && <span className="text-red-500">*</span>}
+          {field.required && <span className="text-danger-text">*</span>}
         </h4>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {field.fields?.map((sub) => {
@@ -124,7 +124,7 @@ function FieldBlock({
                   className="block text-xs font-bold text-text-muted mb-1.5 uppercase tracking-wide"
                 >
                   {prefixed.label}{" "}
-                  {prefixed.required && <span className="text-red-500">*</span>}
+                  {prefixed.required && <span className="text-danger-text">*</span>}
                 </label>
                 <FieldInput
                   field={prefixed}
@@ -150,7 +150,7 @@ function FieldBlock({
         className="block text-xs font-bold text-text-muted mb-1.5 uppercase tracking-wide"
       >
         {field.label}{" "}
-        {field.required && <span className="text-red-500">*</span>}
+        {field.required && <span className="text-danger-text">*</span>}
       </label>
       <FieldInput field={field} value={form[field.name] || ""} onChange={onChange} />
     </div>
@@ -181,7 +181,7 @@ export function PatientForm({
         {editingId && (
           <button
             onClick={onReset}
-            className="text-xs text-text-secondary hover:text-text-inverse underline transition-colors"
+            className="text-xs text-text-secondary hover:text-text-primary underline transition-colors"
           >
             Cancelar Edición
           </button>
