@@ -75,8 +75,8 @@ export function MedicoView() {
       {activeMedicoTab === "paciente" && (
         <div className="flex flex-col mx-auto w-full p-2">
           <div>
-            <h2 className="text-lg font-semibold mb-4 text-zinc-300 flex items-center gap-2">
-              <span className="p-1.5 rounded bg-blue-900/20 text-blue-400">👤</span>
+            <h2 className="text-lg font-semibold mb-4 text-text-primary flex items-center gap-2">
+              <span className="p-1.5 rounded bg-blue-900/20 text-blue-400" aria-hidden="true">👤</span>
               Gestión Pacientes
             </h2>
             <Entity/>
@@ -95,11 +95,11 @@ export function MedicoView() {
       {activeMedicoTab === "entries" && (
         <div className="flex flex-col gap-6 mx-auto w-full p-6">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-lg font-semibold text-zinc-300 flex items-center gap-2">
-              <span className="p-1.5 rounded bg-purple-900/20 text-purple-400">⏱️</span>
+            <h2 className="text-lg font-semibold text-text-primary flex items-center gap-2">
+              <span className="p-1.5 rounded bg-purple-900/20 text-purple-400" aria-hidden="true">⏱️</span>
               Entries <span className="hidden md:inline">(Append-Only)</span>
               {selectedPatient && (
-                <span className="text-zinc-500 font-normal text-sm">
+                <span className="text-text-muted font-normal text-sm">
                   · {selectedPatient.data.nombre} {selectedPatient.data.apellido}
                 </span>
               )}
@@ -160,7 +160,7 @@ export function MedicoView() {
               {selectedPatient ? (
                 <EntryTimeline subjectId={selectedPatient.id} />
               ) : (
-                <div className="p-4 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-500 text-sm">
+                <div className="p-4 rounded-lg bg-surface border border-border text-text-muted text-sm">
                   Seleccioná un paciente primero para ver sus entries.
                 </div>
               )}

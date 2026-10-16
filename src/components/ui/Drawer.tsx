@@ -174,30 +174,30 @@ export function NavigationDrawer({ onLogout }: NavigationDrawerProps) {
 
       {/* Panel del Drawer */}
       <aside
-        className={`absolute top-0 left-0 h-full w-80 max-w-[85vw] bg-zinc-900 border-r border-zinc-800 text-zinc-200 shadow-2xl flex flex-col transform transition-transform duration-300 ease-in-out ${
+        className={`absolute top-0 left-0 h-full w-80 max-w-[85vw] bg-surface border-r border-border text-text-primary shadow-2xl flex flex-col transform transition-transform duration-300 ease-in-out ${
           isDrawerOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
         {/* Cabecera */}
-        <div className="p-4 border-b border-zinc-800 flex justify-between items-center bg-zinc-950/50">
-          <h2 className="text-sm font-bold text-zinc-300 uppercase tracking-wider">
+        <div className="p-4 border-b border-border flex justify-between items-center bg-canvas/50">
+          <h2 className="text-sm font-bold text-text-primary uppercase tracking-wider">
             Navegación
           </h2>
           <button
             onClick={closeDrawer}
-            className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 transition-colors"
+            className="p-1.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface-raised transition-colors"
             aria-label="Cerrar menú"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg aria-hidden="true" className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
 
         {/* Info del usuario */}
-        <div className="p-4 border-b border-zinc-800">
-          <p className="text-xs text-zinc-400">Sesión activa</p>
-          <p className="text-sm font-semibold text-zinc-200">{user?.username}</p>
+        <div className="p-4 border-b border-border">
+          <p className="text-xs text-text-secondary">Sesión activa</p>
+          <p className="text-sm font-semibold text-text-primary">{user?.username}</p>
           <span className="inline-block mt-1 text-[10px] font-mono font-bold bg-blue-900/30 text-blue-400 border border-blue-800/50 px-1.5 py-0.5 rounded uppercase">
             {user?.role}
           </span>
@@ -216,11 +216,11 @@ export function NavigationDrawer({ onLogout }: NavigationDrawerProps) {
                     onClick={() => handleMenuClick(item.key)}
                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors text-left ${
                       isActive
-                        ? "bg-zinc-800 text-white"
-                        : "text-zinc-300 hover:bg-zinc-800 hover:text-white"
+                        ? "bg-surface-raised text-text-inverse"
+                        : "text-text-primary hover:bg-surface-raised hover:text-text-inverse"
                     }`}
                   >
-                    {item.icon}
+                    <span aria-hidden="true">{item.icon}</span>
                     {item.label}
                   </button>
                 </li>
@@ -230,7 +230,7 @@ export function NavigationDrawer({ onLogout }: NavigationDrawerProps) {
         </nav>
 
         {/* Logout */}
-        <div className="p-4 border-t border-zinc-800">
+        <div className="p-4 border-t border-border">
           <button
             onClick={() => {
               closeDrawer();
@@ -238,7 +238,7 @@ export function NavigationDrawer({ onLogout }: NavigationDrawerProps) {
             }}
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-red-400 hover:bg-red-950/40 hover:text-red-300 transition-colors text-left"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg aria-hidden="true" className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
             </svg>
             Cerrar Bóveda

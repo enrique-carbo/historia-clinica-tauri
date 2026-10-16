@@ -20,15 +20,17 @@ export function Navbar({
   children,
 }: NavbarProps) {
   return (
-    <div className="flex flex-col h-full w-full overflow-hidden select-none bg-zinc-950">
+    <div className="flex flex-col h-full w-full overflow-hidden select-none bg-canvas">
       {/* Contenedor del Navbar con flex-wrap */}
-      <div className="w-full border-b border-zinc-800 bg-zinc-950 p-3 sm:px-4 sm:pt-3">
-        <nav className="flex flex-wrap gap-2 sm:gap-1.5 w-full">
+      <div className="w-full border-b border-border bg-canvas p-3 sm:px-4 sm:pt-3">
+        <nav role="tablist" aria-label="Secciones" className="flex flex-wrap gap-2 sm:gap-1.5 w-full">
           {tabs.map((tab) => {
             const isActive = activeTab === tab.id;
             return (
               <button
                 key={tab.id}
+                role="tab"
+                aria-selected={isActive}
                 onClick={() => onTabChange(tab.id)}
                 className={`
                   flex-1 sm:flex-none
@@ -36,12 +38,16 @@ export function Navbar({
                   rounded-t-lg rounded-b-none
                   ${
                     isActive
-                      ? "text-white bg-zinc-900 border-b-2 border-indigo-500"
-                      : "text-zinc-400 hover:text-zinc-200 bg-zinc-900/40 hover:bg-zinc-900/60 border-b-2 border-transparent"
+                      ? "text-text-inverse bg-surface border-b-2 border-blue-500"
+                      : "text-text-secondary hover:text-text-primary bg-surface/40 hover:bg-surface/60 border-b-2 border-transparent"
                   }
                 `}
               >
-                {tab.icon && <span className="text-base">{tab.icon}</span>}
+                {tab.icon && (
+                  <span className="text-base" aria-hidden="true">
+                    {tab.icon}
+                  </span>
+                )}
                 <span className="truncate">{tab.label}</span>
               </button>
             );
@@ -50,7 +56,7 @@ export function Navbar({
       </div>
 
       {/* Contenido principal */}
-      <div className="flex-1 w-full overflow-auto bg-zinc-950 p-4">
+      <div className="flex-1 w-full overflow-auto bg-canvas p-4">
         {children}
       </div>
     </div>

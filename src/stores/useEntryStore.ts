@@ -25,6 +25,7 @@ interface EntryState {
   entries: Entry[];
   selectedEntry: Entry | null;
   isLoading: boolean;
+  isLoadingMore: boolean;
   error: string | null;
 
   // Paginación
@@ -53,6 +54,7 @@ export const useEntryStore = create<EntryState>((set, get) => ({
   entries: [],
   selectedEntry: null,
   isLoading: false,
+  isLoadingMore: false,
   error: null,
   page: 0,
   pageSize: 20,
@@ -60,7 +62,7 @@ export const useEntryStore = create<EntryState>((set, get) => ({
 
   fetchEntries: async (subjectId: number, category?: EntryCategory) => {
     const { pageSize } = get();
-    set({ isLoading: true, error: null, page: 0, hasMore: true, entries: [] });
+    set({ isLoading: true, isLoadingMore: false, error: null, page: 0, hasMore: true, entries: [] });
     try {
       const res = category
         ? await invoke<Entry[]>("get_entries_by_category", {
@@ -88,7 +90,7 @@ export const useEntryStore = create<EntryState>((set, get) => ({
 
   searchEntries: async (subjectId: number, query: string, category?: EntryCategory) => {
     const { pageSize } = get();
-    set({ isLoading: true, error: null, page: 0, hasMore: true, entries: [] });
+    set({ isLoading: true, isLoadingMore: false, error: null, page: 0, hasMore: true, entries: [] });
     try {
       const res = await invoke<Entry[]>("search_entries", {
         subjectId,
@@ -110,10 +112,10 @@ export const useEntryStore = create<EntryState>((set, get) => ({
   },
 
   loadMore: async (subjectId: number, category?: EntryCategory, query?: string) => {
-    const { page, pageSize, entries, hasMore, isLoading } = get();
-    if (isLoading || !hasMore) return;
+    const { page, pageSize, entries, hasMore, isLoadingMore } = get();
+    if (isLoadingMore || !hasMore) return;
 
-    set({ isLoading: true, error: null });
+    set({ isLoadingMore: true, error: null });
     try {
       const offset = page * pageSize;
       let res: Entry[];
@@ -143,12 +145,12 @@ export const useEntryStore = create<EntryState>((set, get) => ({
 
       set({
         entries: [...entries, ...res],
-        isLoading: false,
+        isLoadingMore: false,
         page: page + 1,
         hasMore: res.length === pageSize,
       });
     } catch (err) {
-      set({ error: String(err), isLoading: false });
+      set({ error: String(err), isLoadingMore: false });
     }
   },
 

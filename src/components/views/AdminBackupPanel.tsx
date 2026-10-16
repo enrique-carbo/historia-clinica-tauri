@@ -130,8 +130,8 @@ export function AdminBackupPanel() {
   return (
     <div className="flex flex-col gap-6 max-w-3xl">
       <div>
-        <h2 className="text-lg font-semibold text-zinc-300">Respaldos</h2>
-        <p className="text-xs text-zinc-500 mt-1">
+        <h2 className="text-lg font-semibold text-text-primary">Respaldos</h2>
+        <p className="text-xs text-text-muted mt-1">
           Copia de seguridad de la base de datos, vaults y wraps de claves. Todo el contenido va
           cifrado en reposo.
         </p>
@@ -160,14 +160,14 @@ export function AdminBackupPanel() {
       )}
 
       {/* Generar respaldo */}
-      <section className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 flex flex-col gap-4">
-        <h3 className="text-sm font-bold text-zinc-300 uppercase tracking-wide">
+      <section className="bg-surface border border-border rounded-xl p-5 flex flex-col gap-4">
+        <h3 className="text-sm font-bold text-text-primary uppercase tracking-wide">
           Generar respaldo
         </h3>
-        <p className="text-xs text-zinc-500">
-            Crea una carpeta <code className="text-zinc-400">respaldo-fecha</code> con la base de
+        <p className="text-xs text-text-muted">
+            Crea una carpeta <code className="text-text-secondary">respaldo-fecha</code> con la base de
           datos, los vaults, los wraps de claves y la sal de instalación, más un{" "}
-          <code className="text-zinc-400">manifest.json</code> con la huella SHA-256 de cada
+          <code className="text-text-secondary">manifest.json</code> con la huella SHA-256 de cada
           archivo. Guardalo en un disco externo o nube junto a tu frase semilla.
         </p>
         <div className="flex justify-end">
@@ -177,18 +177,18 @@ export function AdminBackupPanel() {
         </div>
 
         {created && (
-          <div className="border border-zinc-700 rounded-lg p-4 bg-zinc-950 text-xs text-zinc-400 flex flex-col gap-2">
+          <div className="border border-border-strong rounded-lg p-4 bg-canvas text-xs text-text-secondary flex flex-col gap-2">
             <div className="flex justify-between gap-4">
-              <span className="text-zinc-500">Ruta</span>
-              <span className="text-zinc-200 break-all text-right">{created.path}</span>
+              <span className="text-text-muted">Ruta</span>
+              <span className="text-text-primary break-all text-right">{created.path}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-zinc-500">Fecha</span>
-                      <span className="text-zinc-200">{formatDateTime(created.created_at)}</span>
+              <span className="text-text-muted">Fecha</span>
+                      <span className="text-text-primary">{formatDateTime(created.created_at)}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-zinc-500">Archivos</span>
-              <span className="text-zinc-200">
+              <span className="text-text-muted">Archivos</span>
+              <span className="text-text-primary">
                 {created.file_count} · {formatBytes(created.total_bytes)} · esquema v
                 {created.schema_version}
               </span>
@@ -204,8 +204,8 @@ export function AdminBackupPanel() {
       </section>
 
       {/* Restaurar respaldo */}
-      <section className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 flex flex-col gap-4">
-        <h3 className="text-sm font-bold text-zinc-300 uppercase tracking-wide">
+      <section className="bg-surface border border-border rounded-xl p-5 flex flex-col gap-4">
+        <h3 className="text-sm font-bold text-text-primary uppercase tracking-wide">
           Restaurar respaldo
         </h3>
         <Alert variant="info" className="my-0">
@@ -219,25 +219,25 @@ export function AdminBackupPanel() {
             <Button onClick={handlePickRestore}>Elegir carpeta de respaldo…</Button>
           </div>
         ) : (
-          <div className="border border-zinc-700 rounded-lg p-4 bg-zinc-950 flex flex-col gap-3">
-            <div className="text-xs text-zinc-400 flex flex-col gap-2">
+          <div className="border border-border-strong rounded-lg p-4 bg-canvas flex flex-col gap-3">
+            <div className="text-xs text-text-secondary flex flex-col gap-2">
               <div className="flex justify-between gap-4">
-                <span className="text-zinc-500">Carpeta</span>
-                <span className="text-zinc-200 break-all text-right">{pending.path}</span>
+                <span className="text-text-muted">Carpeta</span>
+                <span className="text-text-primary break-all text-right">{pending.path}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-zinc-500">Creado</span>
-                      <span className="text-zinc-200">{formatDateTime(pending.manifest.created_at)}</span>
+                <span className="text-text-muted">Creado</span>
+                      <span className="text-text-primary">{formatDateTime(pending.manifest.created_at)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-zinc-500">Versión / esquema</span>
-                <span className="text-zinc-200">
+                <span className="text-text-muted">Versión / esquema</span>
+                <span className="text-text-primary">
                   app {pending.manifest.app_version} · esquema v{pending.manifest.schema_version}
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-zinc-500">Contenido</span>
-                <span className="text-zinc-200">
+                <span className="text-text-muted">Contenido</span>
+                <span className="text-text-primary">
                   {pending.manifest.files.length} archivos · {formatBytes(pendingTotal)} ·
                   integridad ✓ ·{" "}
                   {pending.signatureStatus === "verified"

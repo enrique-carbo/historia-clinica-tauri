@@ -1,2 +1,64 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+
+/* Tokens semánticos (DESIGN.md §2/§12). Tema controlado por clase en
+   <html class="dark">; hoy solo existe el oscuro, así que :root ya lo
+   define (sin cambio visual) y .dark duplica los valores como punto de
+   extensión para la Fase C (tema claro). */
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --canvas: #09090b; /* zinc-950 */
+  --surface: #18181b; /* zinc-900 */
+  --surface-raised: #27272a; /* zinc-800 */
+  --field: #09090b; /* zinc-950 */
+  --border: #27272a; /* zinc-800 */
+  --border-strong: #3f3f46; /* zinc-700 */
+  --text-primary: #e4e4e7; /* zinc-200 */
+  --text-secondary: #a1a1aa; /* zinc-400 */
+  --text-muted: #71717a; /* zinc-500 */
+  --text-placeholder: #3f3f46; /* zinc-700 */
+  --text-inverse: #ffffff;
+  --action-primary: #2563eb; /* blue-600 */
+  --action-primary-hover: #1d4ed8; /* blue-700 */
+  --focus: #3b82f6; /* blue-500 */
+}
+
+.dark {
+  /* Mismo que :root hasta que exista el tema claro (Fase C). */
+  --canvas: #09090b;
+  --surface: #18181b;
+  --surface-raised: #27272a;
+  --field: #09090b;
+  --border: #27272a;
+  --border-strong: #3f3f46;
+  --text-primary: #e4e4e7;
+  --text-secondary: #a1a1aa;
+  --text-muted: #71717a;
+  --text-placeholder: #3f3f46;
+  --text-inverse: #ffffff;
+  --action-primary: #2563eb;
+  --action-primary-hover: #1d4ed8;
+  --focus: #3b82f6;
+}
+
+/* `inline` = las utilities leen la variable viva → siguen el tema activo.
+   Genera bg-canvas, bg-surface, border-border, text-text-primary,
+   ring-focus, etc. */
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-field: var(--field);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-text-placeholder: var(--text-placeholder);
+  --color-text-inverse: var(--text-inverse);
+  --color-action-primary: var(--action-primary);
+  --color-action-primary-hover: var(--action-primary-hover);
+  --color-focus: var(--focus);
+}

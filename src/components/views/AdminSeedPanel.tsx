@@ -61,8 +61,8 @@ export function AdminSeedPanel() {
   return (
     <div className="max-w-3xl mx-auto flex flex-col gap-5">
       <div>
-        <h2 className="text-lg font-semibold text-zinc-300">Frase Semilla</h2>
-        <p className="text-xs text-zinc-500 mt-1">
+        <h2 className="text-lg font-semibold text-text-primary">Frase Semilla</h2>
+        <p className="text-xs text-text-muted mt-1">
           La frase de 6 palabras es el respaldo maestro de esta instalación: sirve
           para recuperar los datos cifrados si un usuario pierde su contraseña.
         </p>
@@ -89,8 +89,8 @@ export function AdminSeedPanel() {
       )}
 
       {phase === "idle" && (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
-          <p className="text-sm text-zinc-400 mb-4">
+        <div className="bg-surface border border-border rounded-xl p-6">
+          <p className="text-sm text-text-secondary mb-4">
             Al rotar, se generará una frase nueva de 6 palabras que reemplazará a la
             actual.
           </p>
@@ -101,15 +101,15 @@ export function AdminSeedPanel() {
       )}
 
       {phase === "shown" && (
-        <form onSubmit={handleConfirmRotate} className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 flex flex-col gap-5">
+        <form onSubmit={handleConfirmRotate} className="bg-surface border border-border rounded-xl p-6 flex flex-col gap-5">
           <div>
             <p className="text-xs font-bold text-amber-400 uppercase tracking-wider mb-3">
               1. Anotá esta frase en papel — no está aplicada todavía
             </p>
-            <div className="bg-zinc-950 border border-amber-800/50 rounded-lg p-4 grid grid-cols-2 md:grid-cols-3 gap-2">
+            <div className="bg-field border border-amber-800/50 rounded-lg p-4 grid grid-cols-2 md:grid-cols-3 gap-2">
               {phrase.split(" ").map((word, i) => (
-                <span key={i} className="text-sm font-mono text-zinc-200">
-                  <span className="text-zinc-600 mr-2">{i + 1}.</span>
+                <span key={i} className="text-sm font-mono text-text-primary">
+                  <span className="text-text-muted mr-2">{i + 1}.</span>
                   {word}
                 </span>
               ))}
@@ -142,11 +142,11 @@ export function AdminSeedPanel() {
       )}
 
       {phase === "done" && (
-        <div className="bg-zinc-900 border border-emerald-800/50 rounded-xl p-6 flex flex-col gap-4">
+        <div className="bg-surface border border-emerald-800/50 rounded-xl p-6 flex flex-col gap-4">
           <Alert variant="success" className="my-0">
             Frase semilla rotada. La frase anterior quedó invalidada.
           </Alert>
-          <p className="text-sm text-zinc-400">
+          <p className="text-sm text-text-secondary">
             Guardá la nueva frase en papel en un lugar seguro. Es la única forma de
             recuperar los datos si se pierden todas las contraseñas.
           </p>

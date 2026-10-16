@@ -46,44 +46,56 @@ export function ChangePasswordForm() {
   return (
     <div>
       <h3 className="text-xs font-bold text-amber-400 uppercase tracking-widest mb-4">
-        🔒 Seguridad — Cambiar contraseña
+        <span aria-hidden="true">🔒</span> Seguridad — Cambiar contraseña
       </h3>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5 max-w-3xl">
         <div>
-          <label className="block text-xs font-semibold text-zinc-500 mb-1.5 uppercase">
+          <label
+            htmlFor="pwd-current"
+            className="block text-xs font-semibold text-text-muted mb-1.5 uppercase"
+          >
             Contraseña Actual
           </label>
           <input
+            id="pwd-current"
             type="password"
             autoComplete="current-password"
             value={pwdForm.current}
             onChange={(e) => setPwdForm((p) => ({ ...p, current: e.target.value }))}
-            className="w-full rounded-lg bg-zinc-950 border border-zinc-700 px-3 py-2.5 text-sm text-zinc-200 focus:border-amber-500 outline-none transition-colors"
+            className="w-full rounded-lg bg-field border border-border-strong px-3 py-2.5 text-sm text-text-primary focus:border-focus outline-none transition-colors"
           />
         </div>
         <div>
-          <label className="block text-xs font-semibold text-zinc-500 mb-1.5 uppercase">
+          <label
+            htmlFor="pwd-new"
+            className="block text-xs font-semibold text-text-muted mb-1.5 uppercase"
+          >
             Nueva Contraseña
           </label>
           <input
+            id="pwd-new"
             type="password"
             autoComplete="new-password"
             value={pwdForm.new}
             onChange={(e) => setPwdForm((p) => ({ ...p, new: e.target.value }))}
-            className="w-full rounded-lg bg-zinc-950 border border-zinc-700 px-3 py-2.5 text-sm text-zinc-200 focus:border-amber-500 outline-none transition-colors"
+            className="w-full rounded-lg bg-field border border-border-strong px-3 py-2.5 text-sm text-text-primary focus:border-focus outline-none transition-colors"
           />
         </div>
         <div>
-          <label className="block text-xs font-semibold text-zinc-500 mb-1.5 uppercase">
+          <label
+            htmlFor="pwd-confirm"
+            className="block text-xs font-semibold text-text-muted mb-1.5 uppercase"
+          >
             Repetir Nueva
           </label>
           <input
+            id="pwd-confirm"
             type="password"
             autoComplete="new-password"
             value={pwdForm.confirm}
             onChange={(e) => setPwdForm((p) => ({ ...p, confirm: e.target.value }))}
-            className="w-full rounded-lg bg-zinc-950 border border-zinc-700 px-3 py-2.5 text-sm text-zinc-200 focus:border-amber-500 outline-none transition-colors"
+            className="w-full rounded-lg bg-field border border-border-strong px-3 py-2.5 text-sm text-text-primary focus:border-focus outline-none transition-colors"
           />
         </div>
       </div>
@@ -94,7 +106,7 @@ export function ChangePasswordForm() {
           disabled={
             pwdLoading || !pwdForm.current || !pwdForm.new || !pwdForm.confirm
           }
-          className="rounded-lg bg-amber-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-amber-700 disabled:opacity-50 transition-colors"
+          className="rounded-lg bg-amber-600 px-5 py-2.5 text-sm font-bold text-text-inverse hover:bg-amber-700 disabled:opacity-50 transition-colors"
         >
           {pwdLoading ? "Cambiando..." : "Cambiar Contraseña"}
         </button>
@@ -111,7 +123,7 @@ export function ChangePasswordForm() {
         )}
       </div>
 
-      <p className="mt-3 text-xs text-zinc-500">
+      <p className="mt-3 text-xs text-text-muted">
         Cambiar la contraseña re-cifra tu bóveda local con la nueva llave. Tu
         frase semilla en papel no se ve afectada.
       </p>

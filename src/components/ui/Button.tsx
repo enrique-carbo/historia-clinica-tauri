@@ -16,12 +16,12 @@ export function Button({
 }: ButtonProps) {
   // Definimos los estilos base para cada variante
   const variants = {
-    primary: "bg-blue-600 hover:bg-blue-700 text-white",
+    primary: "bg-action-primary hover:bg-action-primary-hover text-text-inverse",
     secondary:
-      "bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700",
-    ghost: "bg-transparent hover:bg-zinc-800 text-zinc-400",
-    success: "bg-emerald-700 hover:bg-emerald-600 text-white",
-    danger: "bg-red-600 hover:bg-red-700 text-white",
+      "bg-surface-raised hover:bg-border-strong text-text-primary border border-border-strong",
+    ghost: "bg-transparent hover:bg-surface-raised text-text-secondary",
+    success: "bg-emerald-700 hover:bg-emerald-600 text-text-inverse",
+    danger: "bg-red-600 hover:bg-red-700 text-text-inverse",
   };
 
   return (

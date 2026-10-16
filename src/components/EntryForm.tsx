@@ -63,6 +63,7 @@ function loadTemplates(): Record<EntryCategory, Template> {
 }
 
 const TEMPLATES = loadTemplates();
+const MISSING_TEMPLATES = CATEGORY_ORDER.filter((c) => !TEMPLATES[c]);
 
 const CATEGORY_ICONS: Record<EntryCategory, string> = {
   SOAP_NOTE: "📋",
@@ -121,23 +122,7 @@ export function EntryForm({ onSuccess }: EntryFormProps) {
     e.preventDefault();
     setError(null);
 
-  if (profileBlocked) {
-    return (
-      <div className="p-4 rounded-lg bg-amber-950/40 border border-amber-800 text-amber-200 text-sm flex flex-col gap-3">
-        <p>
-          Para crear entries necesitás completar tu perfil profesional:
-          <strong> nombre, profesión y matrícula</strong>.
-        </p>
-        <div>
-          <Button onClick={() => setActiveMedicoTab("perfil")}>
-            Completar mi perfil
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  if (!selectedPatient) {
+    if (!selectedPatient) {
       setError("No hay paciente seleccionado");
       return;
     }
@@ -177,27 +162,58 @@ export function EntryForm({ onSuccess }: EntryFormProps) {
     }
   };
 
+  if (profileBlocked) {
+    return (
+      <div className="p-4 rounded-lg bg-amber-950/40 border border-amber-800 text-amber-200 text-sm flex flex-col gap-3">
+        <p>
+          Para crear entries necesitás completar tu perfil profesional:
+          <strong> nombre, profesión y matrícula</strong>.
+        </p>
+        <div>
+          <Button onClick={() => setActiveMedicoTab("perfil")}>
+            Completar mi perfil
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   if (!selectedPatient) {
     return (
-      <div className="p-4 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-500 text-sm">
+      <div className="p-4 rounded-lg bg-surface border border-border text-text-muted text-sm">
         Seleccioná un paciente primero para crear una entry.
       </div>
     );
   }
 
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
-      <h3 className="text-lg font-semibold text-zinc-200 mb-4 flex items-center gap-2">
-        <span className="text-2xl">➕</span>
+    <div className="bg-surface border border-border rounded-xl p-6">
+      {MISSING_TEMPLATES.length > 0 && (
+        <div className="mb-4 p-3 bg-red-950/30 border border-red-800/50 rounded-lg">
+          <p className="text-xs text-red-400">
+            Faltan templates de entry: {MISSING_TEMPLATES.join(", ")}. Revisá
+            config/entry_templates/.
+          </p>
+        </div>
+      )}
+      <h3 className="text-lg font-semibold text-text-primary mb-4 flex items-center gap-2">
+        <span className="text-2xl" aria-hidden="true">➕</span>
         Nueva Entry
       </h3>
 
       {/* Selector de categoría */}
       <div className="mb-6">
-        <label className="block text-sm font-medium text-zinc-400 mb-2">
+        <span
+          id="entry-category-label"
+          className="block text-sm font-medium text-text-secondary mb-2"
+        >
           Categoría
-        </label>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        </span>
+        <div
+          role="group"
+          aria-labelledby="entry-category-label"
+          className="grid grid-cols-2 sm:grid-cols-4 gap-2"
+        >
           {CATEGORY_ORDER.filter((category) => TEMPLATES[category]).map((category) => (
             <button
               key={category}
@@ -206,10 +222,10 @@ export function EntryForm({ onSuccess }: EntryFormProps) {
               className={`p-3 rounded-lg border text-sm font-medium transition-colors ${
                 selectedCategory === category
                   ? "bg-blue-900/30 border-blue-700 text-blue-300"
-                  : "bg-zinc-950 border-zinc-800 text-zinc-400 hover:border-zinc-700"
+                  : "bg-field border-border text-text-secondary hover:border-border-strong"
               }`}
             >
-              <span className="text-lg block mb-1">{CATEGORY_ICONS[category]}</span>
+              <span className="text-lg block mb-1" aria-hidden="true">{CATEGORY_ICONS[category]}</span>
               {TEMPLATES[category].label}
             </button>
           ))}
@@ -221,27 +237,35 @@ export function EntryForm({ onSuccess }: EntryFormProps) {
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Título */}
           <div>
-            <label className="block text-sm font-medium text-zinc-400 mb-1">
+            <label
+              htmlFor="entry-title"
+              className="block text-sm font-medium text-text-secondary mb-1"
+            >
               Título *
             </label>
             <input
+              id="entry-title"
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Resumen de la entry..."
-              className="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-lg text-zinc-200 text-sm placeholder-zinc-600 focus:outline-none focus:border-blue-600"
+              className="w-full px-3 py-2 bg-field border border-border-strong rounded-lg text-text-primary text-sm placeholder:text-text-placeholder focus:outline-none focus:border-focus"
             />
           </div>
 
           {/* Status */}
           <div>
-            <label className="block text-sm font-medium text-zinc-400 mb-1">
+            <label
+              htmlFor="entry-status"
+              className="block text-sm font-medium text-text-secondary mb-1"
+            >
               Estado
             </label>
             <select
+              id="entry-status"
               value={status}
               onChange={(e) => setStatus(e.target.value as EntryStatus)}
-              className="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-lg text-zinc-200 text-sm focus:outline-none focus:border-blue-600 appearance-none"
+              className="w-full px-3 py-2 bg-field border border-border-strong rounded-lg text-text-primary text-sm focus:outline-none focus:border-focus appearance-none"
             >
               <option value="ACTIVE">Activo</option>
               <option value="RESOLVED">Resuelto</option>
@@ -252,22 +276,27 @@ export function EntryForm({ onSuccess }: EntryFormProps) {
           {/* Campos dinámicos */}
           {template.fields.map((field) => (
             <div key={field.name}>
-              <label className="block text-sm font-medium text-zinc-400 mb-1">
+              <label
+                htmlFor={`entry-${field.name}`}
+                className="block text-sm font-medium text-text-secondary mb-1"
+              >
                 {field.label} {field.required && "*"}
               </label>
               {field.type === "textarea" ? (
                 <textarea
+                  id={`entry-${field.name}`}
                   value={formData[field.name] || ""}
                   onChange={(e) => handleFieldChange(field.name, e.target.value)}
                   placeholder={field.placeholder}
                   rows={3}
-                  className="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-lg text-zinc-200 text-sm placeholder-zinc-600 focus:outline-none focus:border-blue-600 resize-none"
+                  className="w-full px-3 py-2 bg-field border border-border-strong rounded-lg text-text-primary text-sm placeholder:text-text-placeholder focus:outline-none focus:border-focus resize-none"
                 />
               ) : field.type === "select" ? (
                 <select
+                  id={`entry-${field.name}`}
                   value={formData[field.name] || ""}
                   onChange={(e) => handleFieldChange(field.name, e.target.value)}
-                  className="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-lg text-zinc-200 text-sm focus:outline-none focus:border-blue-600 appearance-none"
+                  className="w-full px-3 py-2 bg-field border border-border-strong rounded-lg text-text-primary text-sm focus:outline-none focus:border-focus appearance-none"
                 >
                   <option value="">Seleccionar...</option>
                   {field.options?.map((opt) => (
@@ -278,11 +307,12 @@ export function EntryForm({ onSuccess }: EntryFormProps) {
                 </select>
               ) : (
                 <input
+                  id={`entry-${field.name}`}
                   type="text"
                   value={formData[field.name] || ""}
                   onChange={(e) => handleFieldChange(field.name, e.target.value)}
                   placeholder={field.placeholder}
-                  className="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-lg text-zinc-200 text-sm placeholder-zinc-600 focus:outline-none focus:border-blue-600"
+                  className="w-full px-3 py-2 bg-field border border-border-strong rounded-lg text-text-primary text-sm placeholder:text-text-placeholder focus:outline-none focus:border-focus"
                 />
               )}
             </div>

@@ -56,28 +56,28 @@ export function SeedPhraseSetup({ onComplete }: SeedPhraseSetupProps) {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-canvas flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         {/* Paso 1: Generar */}
         {step === "generate" && (
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 text-center">
-            <div className="text-4xl mb-4">🔐</div>
-            <h2 className="text-xl font-bold text-zinc-100 mb-2">Frase Semilla</h2>
-            <p className="text-sm text-zinc-400 mb-6">
+          <div className="bg-surface border border-border rounded-xl p-6 text-center">
+            <div className="text-4xl mb-4" aria-hidden="true">🔐</div>
+            <h2 className="text-xl font-bold text-text-primary mb-2">Frase Semilla</h2>
+            <p className="text-sm text-text-secondary mb-6">
               Generá una frase de 6 palabras que servirá como capa adicional de seguridad.
               <br />
-              <strong className="text-zinc-300">Guardala en un lugar seguro (placa de metal).</strong>
+              <strong className="text-text-primary">Guardala en un lugar seguro (placa de metal).</strong>
             </p>
             <button
               onClick={handleGenerate}
               disabled={isLoading}
-              className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-700 text-white rounded-lg font-medium transition-colors"
+              className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-border-strong text-text-inverse rounded-lg font-medium transition-colors"
             >
               {isLoading ? "Generando..." : "Generar Frase Semilla"}
             </button>
             <button
               onClick={handleSkip}
-              className="w-full mt-3 px-4 py-2 text-zinc-500 hover:text-zinc-300 text-sm transition-colors"
+              className="w-full mt-3 px-4 py-2 text-text-muted hover:text-text-primary text-sm transition-colors"
             >
               Omitir por ahora
             </button>
@@ -86,11 +86,11 @@ export function SeedPhraseSetup({ onComplete }: SeedPhraseSetupProps) {
 
         {/* Paso 2: Mostrar frase */}
         {step === "display" && (
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+          <div className="bg-surface border border-border rounded-xl p-6">
             <div className="text-center mb-4">
               <div className="text-4xl mb-2">📝</div>
-              <h2 className="text-xl font-bold text-zinc-100">Tu Frase Semilla</h2>
-              <p className="text-xs text-zinc-500 mt-1">
+              <h2 className="text-xl font-bold text-text-primary">Tu Frase Semilla</h2>
+              <p className="text-xs text-text-muted mt-1">
                 Anotala y guardala en un lugar seguro
               </p>
             </div>
@@ -100,10 +100,10 @@ export function SeedPhraseSetup({ onComplete }: SeedPhraseSetupProps) {
               {phrase.split(" ").map((word, i) => (
                 <div
                   key={i}
-                  className="flex items-center gap-2 px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-lg"
+                  className="flex items-center gap-2 px-3 py-2 bg-field border border-border-strong rounded-lg"
                 >
-                  <span className="text-xs text-zinc-500 w-4">{i + 1}.</span>
-                  <span className="text-sm font-mono text-zinc-200">{word}</span>
+                  <span className="text-xs text-text-muted w-4">{i + 1}.</span>
+                  <span className="text-sm font-mono text-text-primary">{word}</span>
                 </div>
               ))}
             </div>
@@ -111,13 +111,13 @@ export function SeedPhraseSetup({ onComplete }: SeedPhraseSetupProps) {
             {/* Advertencia */}
             <div className="p-3 bg-yellow-950/30 border border-yellow-800/50 rounded-lg mb-4">
               <p className="text-xs text-yellow-400">
-                ⚠️ <strong>Importante:</strong> Si perdés esta frase y tu computadora se daña, los datos son irrecuperables.
+                <span aria-hidden="true">⚠️</span> <strong>Importante:</strong> Si perdés esta frase y tu computadora se daña, los datos son irrecuperables.
               </p>
             </div>
 
             <button
               onClick={() => setStep("verify")}
-              className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium transition-colors"
+              className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-500 text-text-inverse rounded-lg font-medium transition-colors"
             >
               Continuar
             </button>
@@ -126,11 +126,11 @@ export function SeedPhraseSetup({ onComplete }: SeedPhraseSetupProps) {
 
         {/* Paso 3: Verificar */}
         {step === "verify" && (
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+          <div className="bg-surface border border-border rounded-xl p-6">
             <div className="text-center mb-4">
-              <div className="text-4xl mb-2">✅</div>
-              <h2 className="text-xl font-bold text-zinc-100">Verificar Frase</h2>
-              <p className="text-sm text-zinc-400">
+              <div className="text-4xl mb-2" aria-hidden="true">✅</div>
+              <h2 className="text-xl font-bold text-text-primary">Verificar Frase</h2>
+              <p className="text-sm text-text-secondary">
                 Ingresá las 6 palabras para confirmar que las guardaste
               </p>
             </div>
@@ -140,7 +140,7 @@ export function SeedPhraseSetup({ onComplete }: SeedPhraseSetupProps) {
               value={verifyInput}
               onChange={(e) => setVerifyInput(e.target.value)}
               placeholder="Escribí las 6 palabras separadas por espacio"
-              className="w-full px-4 py-3 bg-zinc-950 border border-zinc-700 rounded-lg text-zinc-200 text-sm placeholder-zinc-600 focus:outline-none focus:border-blue-600 mb-4"
+              className="w-full px-4 py-3 bg-field border border-border-strong rounded-lg text-text-primary text-sm placeholder:text-text-placeholder focus:outline-none focus:border-focus mb-4"
             />
 
             {error && (
@@ -152,7 +152,7 @@ export function SeedPhraseSetup({ onComplete }: SeedPhraseSetupProps) {
             <button
               onClick={handleVerify}
               disabled={!verifyInput.trim() || isLoading}
-              className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-700 text-white rounded-lg font-medium transition-colors"
+              className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-border-strong text-text-inverse rounded-lg font-medium transition-colors"
             >
               {isLoading ? "Verificando..." : "Verificar"}
             </button>
@@ -161,10 +161,10 @@ export function SeedPhraseSetup({ onComplete }: SeedPhraseSetupProps) {
 
         {/* Paso 4: Éxito */}
         {step === "success" && (
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 text-center">
+          <div className="bg-surface border border-border rounded-xl p-6 text-center">
             <div className="text-4xl mb-4">🎉</div>
-            <h2 className="text-xl font-bold text-zinc-100 mb-2">¡Frase Verificada!</h2>
-            <p className="text-sm text-zinc-400">
+            <h2 className="text-xl font-bold text-text-primary mb-2">¡Frase Verificada!</h2>
+            <p className="text-sm text-text-secondary">
               Tu frase semilla está configurada correctamente.
             </p>
           </div>

@@ -1,18 +1,30 @@
-import { TextareaHTMLAttributes } from "react";
+import { useId, TextareaHTMLAttributes } from "react";
 
 interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
   label?: string;
 }
 
-export function Textarea({ label, className = "", ...props }: TextareaProps) {
+export function Textarea({
+  label,
+  className = "",
+  id,
+  ...props
+}: TextareaProps) {
+  const autoId = useId();
+  const textareaId = id ?? autoId;
+
   if (label) {
     return (
       <div>
-        <label className="block text-xs text-zinc-500 mb-1 font-semibold">
+        <label
+          htmlFor={textareaId}
+          className="block text-xs text-text-muted mb-1 font-semibold"
+        >
           {label}
         </label>
         <textarea
-          className={`w-full bg-zinc-950 text-zinc-200 border border-zinc-800 rounded px-3 py-2 text-sm font-[inherit] resize-y focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-zinc-700 ${className}`}
+          id={textareaId}
+          className={`w-full bg-field text-text-primary border border-border rounded px-3 py-2 text-sm font-[inherit] resize-y focus:outline-none focus:ring-1 focus:ring-focus placeholder:text-text-placeholder ${className}`}
           {...props}
         />
       </div>
@@ -21,7 +33,8 @@ export function Textarea({ label, className = "", ...props }: TextareaProps) {
 
   return (
     <textarea
-      className={`w-full bg-zinc-950 text-zinc-200 border border-zinc-800 rounded px-3 py-2 text-sm font-[inherit] resize-y focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-zinc-700 ${className}`}
+      id={textareaId}
+      className={`w-full bg-field text-text-primary border border-border rounded px-3 py-2 text-sm font-[inherit] resize-y focus:outline-none focus:ring-1 focus:ring-focus placeholder:text-text-placeholder ${className}`}
       {...props}
     />
   );

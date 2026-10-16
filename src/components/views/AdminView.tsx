@@ -36,7 +36,7 @@ export function AdminView() {
       {activeTab === "paciente" && (
         <div className="flex flex-col gap-8">
           <div>
-            <h2 className="text-lg font-semibold mb-4 text-zinc-300">
+            <h2 className="text-lg font-semibold mb-4 text-text-primary">
               Admitir Nuevo Paciente
             </h2>
             <Entity />

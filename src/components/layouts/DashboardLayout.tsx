@@ -7,6 +7,7 @@ import { useNavigationStore } from "../../stores/useNavigationStore";
 import { useSeedStore } from "../../stores/useSeedStore";
 import { NavigationDrawer } from "../ui/Drawer";
 import { SeedPhraseSetup } from "../SeedPhraseSetup";
+import { Alert } from "../ui/Alert";
 import { useEntryStore } from "../../stores/useEntryStore";
 
 interface DashboardLayoutProps {
@@ -18,8 +19,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const { openDrawer } = useNavigationStore();
   const { isSeedConfigured, setSeedConfigured } = useSeedStore();
   const [showSeedSetup, setShowSeedSetup] = useState(false);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
 
   const handleLogout = async () => {
+    setLogoutError(null);
     try {
       await invoke("lock_vault");
       lockVault();
@@ -42,10 +45,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         entries: [],
         selectedEntry: null,
         isLoading: false,
+        isLoadingMore: false,
         error: null,
       });
     } catch (err) {
-      console.error("Error al cerrar la bóveda:", err);
+      setLogoutError(String(err));
     }
   };
 
@@ -64,14 +68,14 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-200 font-sans flex flex-col">
+    <div className="min-h-screen bg-canvas text-text-primary font-sans flex flex-col">
       {/* HEADER */}
-      <header className="sticky top-0 z-10 bg-zinc-950/80 backdrop-blur-sm border-b border-zinc-800 px-4 sm:px-10 py-4 flex justify-between items-center">
+      <header className="sticky top-0 z-10 bg-canvas/80 backdrop-blur-sm border-b border-border px-4 sm:px-10 py-4 flex justify-between items-center">
         <div className="flex items-center gap-3">
           {/* Botón Hamburguesa */}
           <button
             onClick={openDrawer}
-            className="p-2 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors"
+            className="p-2 rounded-lg bg-surface border border-border text-text-primary hover:text-text-inverse hover:bg-surface-raised transition-colors"
             aria-label="Abrir menú"
           >
             <svg
@@ -90,10 +94,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           </button>
 
           <div>
-            <h1 className="text-lg sm:text-xl font-bold text-zinc-100 m-0">
-              🩺 Fichio Care
+            <h1 className="text-lg sm:text-xl font-bold text-text-primary m-0">
+              <span aria-hidden="true">🩺</span> Fichio Care
             </h1>
-            <p className="text-xs text-zinc-500 mt-0.5 hidden sm:block">
+            <p className="text-xs text-text-muted mt-0.5 hidden sm:block">
               Historia Clínica — Rol:{" "}
               <strong className="text-blue-500 uppercase">{user.role}</strong>
             </p>
@@ -105,23 +109,40 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           {!isSeedConfigured && (
             <button
               onClick={() => setShowSeedSetup(true)}
-              className="px-3 py-1.5 bg-yellow-900/30 border border-yellow-700/50 text-yellow-400 rounded text-xs hover:bg-yellow-900/50 transition-colors cursor-pointer hidden sm:block"
+              className="px-3 py-1.5 bg-yellow-900/30 border border-yellow-700/50 text-yellow-400 rounded text-xs hover:bg-yellow-900/50 transition-colors cursor-pointer"
               title="Configurar frase semilla"
             >
-              🔐 Configurar Seed
+              <span aria-hidden="true">🔐</span>{" "}
+              <span className="hidden sm:inline">Configurar Seed</span>
+              <span className="sm:hidden">Seed</span>
             </button>
           )}
-          <span className="text-xs sm:text-sm text-zinc-500 hidden sm:inline">
-            Usuario: <strong className="text-zinc-300">{user.username}</strong>
+          <span className="text-xs sm:text-sm text-text-muted hidden sm:inline">
+            Usuario: <strong className="text-text-primary">{user.username}</strong>
           </span>
           <button
             onClick={handleLogout}
-            className="px-3 py-1.5 bg-zinc-800 border border-zinc-700 text-zinc-300 rounded text-xs hover:bg-red-900/50 hover:border-red-800 hover:text-red-300 transition-colors cursor-pointer"
+            className="px-3 py-1.5 bg-surface-raised border border-border-strong text-text-primary rounded text-xs hover:bg-red-900/50 hover:border-red-800 hover:text-red-300 transition-colors cursor-pointer"
           >
-            🔒 Cerrar
+            <span aria-hidden="true">🔒</span> Cerrar
           </button>
         </div>
       </header>
+
+      {logoutError && (
+        <Alert variant="error" className="mx-4 mt-3 sm:mx-10">
+          <div className="flex justify-between gap-4">
+            <span>No se pudo cerrar la bóveda: {logoutError}</span>
+            <button
+              onClick={() => setLogoutError(null)}
+              className="font-bold"
+              aria-label="Cerrar"
+            >
+              ✕
+            </button>
+          </div>
+        </Alert>
+      )}
 
       {/* NAVIGATION DRAWER */}
       <NavigationDrawer onLogout={handleLogout} />

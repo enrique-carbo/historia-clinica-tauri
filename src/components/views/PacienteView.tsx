@@ -7,41 +7,41 @@ export function PacienteView() {
   return (
     <div className="max-w-3xl mx-auto flex flex-col gap-8">
       <div>
-        <h2 className="text-lg font-semibold mb-2 text-zinc-300">
-          👤 Mi Cuenta
+        <h2 className="text-lg font-semibold mb-2 text-text-primary">
+          <span aria-hidden="true">👤</span> Mi Cuenta
         </h2>
-        <p className="text-sm text-zinc-500">
+        <p className="text-sm text-text-muted">
           Tu usuario de acceso y la seguridad de tu cuenta.
         </p>
       </div>
 
-      <div className="p-6 bg-zinc-900 rounded-xl border border-zinc-800 shadow-lg">
+      <div className="p-6 bg-surface rounded-xl border border-border shadow-lg">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
           <div>
-            <label className="block text-xs font-semibold text-zinc-500 mb-1.5 uppercase">
+            <span className="block text-xs font-semibold text-text-muted mb-1.5 uppercase">
               Usuario
-            </label>
-            <p className="text-sm text-zinc-200 font-mono font-medium py-2.5 border-b border-zinc-800/50">
+            </span>
+            <p className="text-sm text-text-primary font-mono font-medium py-2.5 border-b border-border/50">
               {activeUser?.username || "—"}
             </p>
           </div>
           <div>
-            <label className="block text-xs font-semibold text-zinc-500 mb-1.5 uppercase">
+            <span className="block text-xs font-semibold text-text-muted mb-1.5 uppercase">
               Rol
-            </label>
-            <p className="text-sm text-zinc-200 font-medium py-2.5 border-b border-zinc-800/50 uppercase">
+            </span>
+            <p className="text-sm text-text-primary font-medium py-2.5 border-b border-border/50 uppercase">
               {activeUser?.role || "—"}
             </p>
           </div>
         </div>
 
-        <div className="mt-8 pt-6 border-t border-zinc-800">
+        <div className="mt-8 pt-6 border-t border-border">
           <ChangePasswordForm />
         </div>
       </div>
 
       <div className="p-4 bg-blue-950/30 border border-blue-900 rounded-lg text-xs text-blue-400 text-center">
-        🔒 <strong>Privacidad Garantizada:</strong> Tus datos clínicos se
+        <span aria-hidden="true">🔒</span> <strong>Privacidad Garantizada:</strong> Tus datos clínicos se
         guardan cifrados de extremo a extremo. Ni siquiera los servidores de
         Fichio Care pueden leerlos.
       </div>

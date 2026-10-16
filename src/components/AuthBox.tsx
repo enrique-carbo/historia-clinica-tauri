@@ -137,22 +137,22 @@ export function AuthBox() {
 
   if (bootstrap === null) {
     return (
-      <div className="w-full max-w-md mx-auto mt-24 bg-zinc-900 p-8 rounded-lg border border-zinc-800 text-center text-zinc-500 text-sm">
+      <div className="w-full max-w-md mx-auto mt-24 bg-surface p-8 rounded-lg border border-border text-center text-text-muted text-sm">
         Verificando instalación…
       </div>
     );
   }
 
   return (
-    <div className="w-full max-w-md mx-auto mt-24 bg-zinc-900 p-8 rounded-lg border border-zinc-800 shadow-2xl">
-      <h2 className="text-xl font-bold text-zinc-100 mb-1">
+    <div className="w-full max-w-md mx-auto mt-24 bg-surface p-8 rounded-lg border border-border shadow-2xl">
+      <h2 className="text-xl font-bold text-text-primary mb-1">
         {bootstrap
           ? "🌱 Crear Primer Administrador"
           : recovering
             ? "🚨 Recuperar Acceso"
             : "🔑 Iniciar Sesión Core"}
       </h2>
-      <p className="text-xs text-zinc-500 mb-6">
+      <p className="text-xs text-text-muted mb-6">
         {bootstrap
           ? "Esta instalación no tiene usuarios. Creá la cuenta administradora (será la dueña de la gestión técnica)."
           : recovering
@@ -288,7 +288,7 @@ export function AuthBox() {
               setNeedsSeed(false);
               setError(null);
             }}
-            className="text-xs text-zinc-500 hover:text-zinc-300 underline text-center mt-1"
+            className="text-xs text-text-muted hover:text-text-primary underline text-center mt-1"
           >
             ¿Olvidaste la contraseña? → Recuperar con frase semilla
           </button>

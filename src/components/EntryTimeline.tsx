@@ -19,6 +19,7 @@ export function EntryTimeline({ subjectId }: EntryTimelineProps) {
   const {
     entries,
     isLoading,
+    isLoadingMore,
     error,
     hasMore,
     fetchEntries,
@@ -76,7 +77,7 @@ export function EntryTimeline({ subjectId }: EntryTimelineProps) {
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${
                 filter === cat.value
                   ? "bg-blue-900/40 border border-blue-700 text-blue-300"
-                  : "bg-zinc-900 border border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-zinc-300"
+                  : "bg-surface border border-border text-text-secondary hover:border-border-strong hover:text-text-primary"
               }`}
             >
               <span>{cat.icon}</span>
@@ -88,7 +89,7 @@ export function EntryTimeline({ subjectId }: EntryTimelineProps) {
         {/* Búsqueda por título */}
         <div className="relative w-full sm:w-64 self-start shrink-0">
           <svg
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 z-10 w-4 h-4 text-zinc-500"
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 z-10 w-4 h-4 text-text-muted"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -105,12 +106,12 @@ export function EntryTimeline({ subjectId }: EntryTimelineProps) {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Buscar por título..."
-            className="relative w-full pl-9 pr-8 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-blue-600"
+            className="relative w-full pl-9 pr-8 py-1.5 bg-surface border border-border rounded-lg text-sm text-text-primary placeholder:text-text-placeholder focus:outline-none focus:border-focus"
           />
           {searchQuery && (
             <button
               onClick={handleClearSearch}
-              className="absolute right-2 top-1/2 -translate-y-1/2 z-10 text-zinc-500 hover:text-zinc-300"
+              className="absolute right-2 top-1/2 -translate-y-1/2 z-10 text-text-muted hover:text-text-primary"
               aria-label="Limpiar búsqueda"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -127,9 +128,9 @@ export function EntryTimeline({ subjectId }: EntryTimelineProps) {
           {error}
         </div>
       ) : entries.length === 0 && !isLoading ? (
-        <div className="flex flex-col items-center justify-center py-12 text-zinc-500">
+        <div className="flex flex-col items-center justify-center py-12 text-text-muted">
           <svg
-            className="w-12 h-12 mb-3 text-zinc-500"
+            className="w-12 h-12 mb-3 text-text-muted"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -148,7 +149,7 @@ export function EntryTimeline({ subjectId }: EntryTimelineProps) {
                 ? "No hay entries registradas"
                 : `No hay entries de tipo ${CATEGORIES.find((c) => c.value === filter)?.label}`}
           </p>
-          <p className="text-xs text-zinc-500 mt-1">
+          <p className="text-xs text-text-muted mt-1">
             {debouncedQuery
               ? "Probá con otro término de búsqueda"
               : "Las entries son inmutables y se crean al registrar datos clínicos"}
@@ -158,7 +159,7 @@ export function EntryTimeline({ subjectId }: EntryTimelineProps) {
         <>
           {/* Contador */}
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-zinc-300">
+            <h3 className="text-sm font-semibold text-text-primary">
               {debouncedQuery
                 ? `Resultados para "${debouncedQuery}" (${entries.length})`
                 : filter === "ALL"
@@ -170,14 +171,14 @@ export function EntryTimeline({ subjectId }: EntryTimelineProps) {
           {/* Timeline */}
           <div className="relative">
             {/* Línea vertical conectora */}
-            <div className="absolute left-4 top-0 bottom-0 w-px bg-zinc-800" />
+            <div className="absolute left-4 top-0 bottom-0 w-px bg-surface-raised" />
 
             {/* Entries */}
             <div className="space-y-4">
               {entries.map((entry) => (
                 <div key={entry.id} className="relative pl-10">
                   {/* Punto en la línea de tiempo */}
-                  <div className="absolute left-2.5 top-4 w-3 h-3 rounded-full bg-zinc-700 border-2 border-zinc-600" />
+                  <div className="absolute left-2.5 top-4 w-3 h-3 rounded-full bg-border-strong border-2 border-text-muted" />
 
                   <EntryCard entry={entry} onClick={() => selectEntry(entry)} />
                 </div>
@@ -187,8 +188,8 @@ export function EntryTimeline({ subjectId }: EntryTimelineProps) {
 
           {/* Load more */}
           <div className="flex justify-center mt-6">
-            {isLoading ? (
-              <div className="flex items-center gap-2 text-zinc-500 text-sm">
+            {isLoading || isLoadingMore ? (
+              <div className="flex items-center gap-2 text-text-muted text-sm">
                 <svg
                   className="animate-spin h-4 w-4"
                   xmlns="http://www.w3.org/2000/svg"
@@ -216,7 +217,7 @@ export function EntryTimeline({ subjectId }: EntryTimelineProps) {
                 Cargar más ({entries.length} cargadas)
               </Button>
             ) : (
-              <span className="text-xs text-zinc-500">
+              <span className="text-xs text-text-muted">
                 Fin de la lista
               </span>
             )}
