@@ -13,6 +13,7 @@ cargo test                    # baseline: 135 tests, 0 fallas
 cargo clippy --all-targets    # baseline: 3 warnings, 0 errores
 cd .. && npx tsc --noEmit     # baseline: sin errores
 pnpm test                     # baseline: 73 tests, 0 fallas (vitest; Node >= 22.12)
+pnpm version:check            # tauri.conf.json = package.json = Cargo.toml
 ```
 
 - Perfiles Med/Vet: verificar también `FICHIO_PROFILE=vet cargo test`
@@ -27,7 +28,8 @@ pnpm test                     # baseline: 73 tests, 0 fallas (vitest; Node >= 22
 - Gestor de paquetes: pnpm. Backend: `cargo` desde `src-tauri/`.
   Scripts npm: `dev/build/preview/tauri` + perfiles (`build:med`,
   `build:vet`, `dev:vet`, `dev:vet:frontend`, `build:vet:frontend`) y
-  `test/test:watch` (vitest).
+  `test/test:watch` (vitest). Versión: fuente única en
+  `tauri.conf.json` → `pnpm version:sync` (check: `version:check`).
   **Vitest 5 requiere Node >= 22.12** (el default del repo es nvm v22;
   la CI usa node 22). El repo fija eso con `.nvmrc` + `engines` en
   `package.json`: con Node 18 jsdom 30 revienta (`ERR_REQUIRE_ESM`) y
@@ -128,6 +130,8 @@ pnpm test                     # baseline: 73 tests, 0 fallas (vitest; Node >= 22
 
 - `README.md` — seguridad, esquema, roles, tests, export (fuente del porqué).
 - `docs/estrategia_encriptacion.md` — diseño cripto por capas.
+- `docs/release.md` — checklist de release, política de update manual y
+  pendiente del auto-updater.
 - `docs/fase4-diseno-sync.md` — diseño de sync (fase 4) y deuda pendiente.
 - `docs/plugin-teleconsulta-v1.md` — diseño del plugin de teleconsulta (v4,
   paciente como usuario `role: 'paciente'`; alcance mínimo: canal + pago +

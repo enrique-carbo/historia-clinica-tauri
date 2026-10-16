@@ -16,6 +16,8 @@
     "dev:vet": "FICHIO_PROFILE=vet tauri dev --config profiles/vet/tauri.json",
     "preview": "vite preview",
     "tauri": "tauri",
+    "version:sync": "node scripts/sync-version.mjs",
+    "version:check": "node scripts/sync-version.mjs --check",
     "test": "vitest run",
     "test:watch": "vitest"
   },

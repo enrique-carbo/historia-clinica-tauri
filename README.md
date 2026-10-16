@@ -341,9 +341,39 @@ cargo test --lib  # 135 passed; 0 failed
 | `stores/useNavigationStore.test.ts` | 3 | drawer (toggle/open/close), vistas y tabs |
 
 ```bash
-pnpm test        # 35 passed; 0 failed (vitest run)
+pnpm test        # 73 passed; 0 failed (vitest run)
 pnpm test:watch  # modo watch
 ```
+
+## 🔄 Versiones y actualizaciones
+
+**Fuente única de versión**: `src-tauri/tauri.conf.json`. Tras un bump ahí,
+sincronizar las otras dos copias (`package.json`, `src-tauri/Cargo.toml`):
+
+```bash
+pnpm version:sync     # escribe package.json + Cargo.toml
+pnpm version:check    # falla si las 3 no coinciden (para CI/verificación)
+```
+
+**Update hoy (manual)**: no hay auto-updater todavía — el update es
+publicar el instalador nuevo y que el profesional lo instale **encima**.
+Eso no toca los datos: la base vive en `app_local_data_dir` y el
+`identifier` no cambia entre versiones. Las migraciones (append-only,
+`user_version`) corren solas en el primer arranque posterior.
+
+- **Antes de cada actualización: respaldar** (`Respaldos` → archivo
+  firmado). Si una migración posterior a un release rompiera algo, el
+  rollback es **restaurar el backup con la versión anterior** — no existe
+  downgrade de esquema (regla de migraciones append-only).
+- Las claves (DataKey, seed, firmas) **no cambian con un update**: la
+  seed no se regenera nunca al actualizar.
+
+**Hacia el auto-updater (pendiente, cuando haya ~3+ instalaciones)**:
+`tauri-plugin-updater` con artefactos firmados (clave propia, guardada en
+CI + copia offline) y endpoints **separados por perfil**
+(`med/latest.json` / `vet/latest.json` — son productos distintos).
+Primer rollout: notificar y abrir la página de release (ya existe
+`opener`), no auto-instalar en silencio. Ver `docs/release.md`.
 
 ## 🗺️ Mapa de Ruta del Desarrollo (Roadmap)
 
