@@ -8,6 +8,7 @@ import { useSeedStore } from "../../stores/useSeedStore";
 import { NavigationDrawer } from "../ui/Drawer";
 import { SeedPhraseSetup } from "../SeedPhraseSetup";
 import { Alert } from "../ui/Alert";
+import { Button } from "../ui/Button";
 import { useEntryStore } from "../../stores/useEntryStore";
 
 interface DashboardLayoutProps {
@@ -133,13 +134,14 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         <Alert variant="error" className="mx-4 mt-3 sm:mx-10">
           <div className="flex justify-between gap-4">
             <span>No se pudo cerrar la bóveda: {logoutError}</span>
-            <button
+            <Button
+              size="icon"
+              variant="ghost"
               onClick={() => setLogoutError(null)}
-              className="font-bold"
               aria-label="Cerrar"
             >
               ✕
-            </button>
+            </Button>
           </div>
         </Alert>
       )}

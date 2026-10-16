@@ -23,7 +23,9 @@ pnpm test                     # baseline: 57 tests, 0 fallas (vitest; Node >= 22
 - Gestor de paquetes: pnpm. Backend: `cargo` desde `src-tauri/`.
   Scripts npm: `dev/build/preview/tauri` y `test/test:watch` (vitest).
   **Vitest 5 requiere Node >= 22.12** (el default del repo es nvm v22;
-  la CI usa node 22).
+  la CI usa node 22). El repo fija eso con `.nvmrc` + `engines` en
+  `package.json`: con Node 18 jsdom 30 revienta (`ERR_REQUIRE_ESM`) y
+  los tests de `dateUtils` fallan por ICU viejo.
 - Tests frontend: co-located `src/**/*.test.ts`; `@tauri-apps/api/core`
   se mockea con `vi.mock`. Igual que en Rust: los tests de lógica usan
   **fixtures propios** — no acoplarlos al contenido de

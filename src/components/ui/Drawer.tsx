@@ -1,6 +1,7 @@
 import { ReactNode, useEffect } from "react";
 import { useNavigationStore, MedicoTab, AdminTab } from "../../stores/useNavigationStore";
 import { useAuthStore } from "../../stores/useAuthStore";
+import { Button } from "./Button";
 
 interface NavigationDrawerProps {
   onLogout: () => void;
@@ -231,18 +232,19 @@ export function NavigationDrawer({ onLogout }: NavigationDrawerProps) {
 
         {/* Logout */}
         <div className="p-4 border-t border-border">
-          <button
+          <Button
+            variant="ghost-danger"
             onClick={() => {
               closeDrawer();
               onLogout();
             }}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-red-400 hover:bg-red-950/40 hover:text-red-300 transition-colors text-left"
+            className="w-full flex items-center gap-3 font-normal"
           >
             <svg aria-hidden="true" className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
             </svg>
             Cerrar Bóveda
-          </button>
+          </Button>
         </div>
       </aside>
     </div>

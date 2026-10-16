@@ -141,9 +141,9 @@ export function AdminUsersPanel() {
         <Alert variant="error" className="my-0">
           <div className="flex justify-between gap-4">
             <span>{error}</span>
-            <button onClick={() => setError(null)} className="font-bold" aria-label="Cerrar">
+            <Button size="icon" variant="ghost" onClick={() => setError(null)} aria-label="Cerrar">
               ✕
-            </button>
+            </Button>
           </div>
         </Alert>
       )}
@@ -151,9 +151,9 @@ export function AdminUsersPanel() {
         <Alert variant="success" className="my-0">
           <div className="flex justify-between gap-4">
             <span>{notice}</span>
-            <button onClick={() => setNotice(null)} className="font-bold" aria-label="Cerrar">
+            <Button size="icon" variant="ghost" onClick={() => setNotice(null)} aria-label="Cerrar">
               ✕
-            </button>
+            </Button>
           </div>
         </Alert>
       )}

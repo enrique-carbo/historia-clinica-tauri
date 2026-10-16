@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { formatDateTime } from "../../utils/dateUtils";
 import { Alert } from "../ui/Alert";
+import { Button } from "../ui/Button";
 
 interface AuditRow {
   id: number;
@@ -47,9 +48,9 @@ export function AdminAuditPanel() {
         <Alert variant="error">
           <div className="flex justify-between gap-4">
             <span>{error}</span>
-            <button onClick={() => setError(null)} className="font-bold" aria-label="Cerrar">
+            <Button size="icon" variant="ghost" onClick={() => setError(null)} aria-label="Cerrar">
               ✕
-            </button>
+            </Button>
           </div>
         </Alert>
       )}

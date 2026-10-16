@@ -5,6 +5,7 @@ import { useAuthStore } from "../stores/useAuthStore";
 import { invoke } from "@tauri-apps/api/core";
 import { ChangePasswordForm } from "./ChangePasswordForm";
 import { Alert } from "./ui/Alert";
+import { Button } from "./ui/Button";
 
 type License = { number: string; jurisdiction: string };
 
@@ -122,13 +123,14 @@ export function ProfileView() {
         <Alert variant="error" className="mb-6">
           <div className="flex justify-between gap-4">
             <span>{error}</span>
-            <button
+            <Button
+              size="icon"
+              variant="ghost"
               onClick={() => setError(null)}
-              className="font-bold"
               aria-label="Cerrar"
             >
               ✕
-            </button>
+            </Button>
           </div>
         </Alert>
       )}
@@ -363,7 +365,7 @@ export function ProfileView() {
           <button
             onClick={handleSave}
             disabled={loading}
-            className="rounded-lg bg-emerald-600 px-6 py-2.5 text-sm font-bold text-text-inverse hover:bg-emerald-700 disabled:opacity-50 shadow-lg shadow-emerald-900/20 transition-colors"
+            className="rounded-lg bg-emerald-600 px-6 py-2.5 text-sm font-bold text-text-inverse hover:bg-emerald-700 disabled:opacity-50 transition-colors"
           >
             {loading ? "Guardando cambios..." : "Guardar Perfil"}
           </button>

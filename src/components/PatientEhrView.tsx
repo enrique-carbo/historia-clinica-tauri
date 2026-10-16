@@ -93,7 +93,7 @@ export function PatientEhrView() {
               onClick={() => handleSelectPatient(entity.id)}
               className={`w-full text-left p-3 rounded-lg transition-colors duration-200 group ${
                 patient?.id === entity.id
-                  ? "bg-blue-900/20 border border-blue-500/50 shadow-md"
+                  ? "bg-blue-900/20 border border-blue-500/50"
                   : "bg-canvas/50 border border-transparent hover:bg-surface-raised hover:border-border-strong"
               }`}
             >

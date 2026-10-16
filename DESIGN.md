@@ -259,12 +259,13 @@ Registrar y evitar replicar; se limpia al migrar (Fase B):
 |---|---|---|
 | ~~Botones inline con clases sueltas~~ | `MedicoView`, `EntryTimeline`, `Entity`, `EntryForm` + variante `success` nueva en `Button` | ✅ Migrados. `AuthBox` ya usaba `Button` |
 | ~~`transition-all` (19 usos)~~ | `ProfileView`, `Entity`, `PatientEhrView`, `Navbar` | ✅ Todos a `transition-colors` (el reveal de `✏️` usa lista arbitrary) |
-| Botones icon-only (`✕`, `✏️`) y logout del `Drawer` (danger ghost sin variante) | Vistas y `Drawer` | ⏳ Excepción aceptada: `<button>` puro con `aria-label` + tokens. Agregar `size`/`ghost-danger` a `Button` las eliminará |
+| ~~Logout del Drawer (danger ghost sin variante)~~ | `Drawer.tsx` | ✅ Migrado a `Button` `ghost-danger`; variante y `size` (`sm`/`md`/`icon`) agregadas a `Button` |
+| Botones icon-only `✕` (dismisss de Alert) y `✏️` (reveal de `Entity`) | Vistas | ⏳ Excepción aceptada: `✕` de Alerts ahora usa `Button` `size="icon"`; `✏️` de `Entity` conserva `<button>` puro (hover-reveal con `opacity` + `transition-[...]` no mapea limpio a `Button`) |
 | ~~Botones de acción con clases sueltas (fase B)~~ | `ProfileView`, `SeedPhraseSetup`, `DashboardLayout` | ✅ Clases a tokens (`bg-action-primary`/`hover:bg-action-primary-hover`/`text-text-inverse`); aún `<button>` puro — pasar a `Button` al tocar cada vista |
 | ~~`Alert` con `m-3` interno~~ | `Alert.tsx` + `AuthBox` | ✅ `m-3` eliminado; `Alert` ahora acepta `className` y el consumidor pone su margen (`my-3`) |
 | ~~`text-zinc-600/700` en texto no-placeholder~~ | 13 usos en 8 archivos (meta, empty states, iconos decorativos) | ✅ Todos a `text-zinc-500` (`text-muted`). Placeholders (`zinc-700`) intactos por diseño |
 | ~~Animaciones muertas (`animate-in` sin plugin)~~ | `Entity:355`, `PatientEhrView:155` | ✅ Instalado `tw-animate-css` (compatible Tailwind v4) + import en `index.css` |
-| Sombras ad-hoc sin token (`shadow-md`, `shadow-emerald-*`) | Puntuales | ⏳ Mapear a §7 al migrar |
+| Sombras ad-hoc (`shadow-md` en seleccionados, `shadow-emerald-*` en botón export) | `Entity`, `PatientEhrView`, `ProfileView` | ✅ Eliminadas (selección usa solo tint+borde §8; acciones sin sombra). `shadow-lg`/`shadow-2xl` de paneles inline (`AuthBox`, `PacienteView`, EHR) → pendiente Fase D (§7: solo flotantes) |
 | ~~Doble fuente de verdad de `schema.json` (frontend/backend)~~ | `src/config/` + `src-tauri/config/` | ✅ Unificado: única copia en `src-tauri/config/entity_schema.json`; `Entity.tsx` y `PatientEhrView.tsx` importan ese mismo archivo. Export y EHR derivan labels del schema (sin listas hardcodeadas) |
 
 ---
