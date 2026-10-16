@@ -13,10 +13,10 @@ interface SoapCardProps {
 }
 
 const SOAP_SECTIONS: { key: string; label: string; letter: string; color: string }[] = [
-  { key: "subjetivo", label: "Subjetivo", letter: "S", color: "text-blue-400 bg-blue-900/30 border-blue-800/50" },
-  { key: "objetivo", label: "Objetivo", letter: "O", color: "text-teal-400 bg-teal-900/30 border-teal-800/50" },
-  { key: "evaluacion", label: "Evaluación", letter: "E", color: "text-amber-400 bg-amber-900/30 border-amber-800/50" },
-  { key: "plan", label: "Plan", letter: "P", color: "text-purple-400 bg-purple-900/30 border-purple-800/50" },
+  { key: "subjetivo", label: "Subjetivo", letter: "S", color: "text-blue-200 bg-blue-900/80 border-blue-800/50" },
+  { key: "objetivo", label: "Objetivo", letter: "O", color: "text-teal-200 bg-teal-900/80 border-teal-800/50" },
+  { key: "evaluacion", label: "Análisis / Evaluación", letter: "A", color: "text-amber-200 bg-amber-900/80 border-amber-800/50" },
+  { key: "plan", label: "Plan", letter: "P", color: "text-purple-200 bg-purple-900/80 border-purple-800/50" },
 ];
 
 export function SoapCard({ entry, onClick }: SoapCardProps) {

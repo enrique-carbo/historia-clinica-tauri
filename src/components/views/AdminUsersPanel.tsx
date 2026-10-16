@@ -23,9 +23,9 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 const ROLE_BADGE: Record<string, string> = {
-  administrador: "bg-purple-900/40 text-purple-300 border-purple-700/50",
-  asistente: "bg-sky-900/40 text-sky-300 border-sky-700/50",
-  profesional: "bg-blue-900/40 text-blue-300 border-blue-700/50",
+  administrador: "bg-purple-900/90 text-purple-300 border-purple-700/50",
+  asistente: "bg-sky-900/90 text-sky-300 border-sky-700/50",
+  profesional: "bg-blue-900/90 text-blue-300 border-blue-700/50",
   paciente: "bg-surface-raised text-text-primary border-border-strong",
 };
 

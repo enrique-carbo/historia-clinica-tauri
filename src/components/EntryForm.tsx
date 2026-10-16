@@ -220,7 +220,7 @@ export function EntryForm({ onSuccess }: EntryFormProps) {
               onClick={() => handleCategoryChange(category)}
               className={`p-3 rounded-lg border text-sm font-medium transition-colors ${
                 selectedCategory === category
-                  ? "bg-blue-900/30 border-blue-700 text-blue-300"
+                  ? "bg-blue-900/20 border-blue-800 text-blue-500"
                   : "bg-field border-border text-text-secondary hover:border-border-strong"
               }`}
             >

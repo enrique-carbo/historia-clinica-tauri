@@ -24,7 +24,7 @@ const FIELD_ORDER: Record<string, string[]> = {
 const FIELD_LABELS: Record<string, string> = {
   subjetivo: "S — Subjetivo",
   objetivo: "O — Objetivo",
-  evaluacion: "E — Evaluación",
+  evaluacion: "A — Análisis / Evaluación",
   plan: "P — Plan",
 };
 

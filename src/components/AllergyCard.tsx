@@ -74,9 +74,15 @@ export function AllergyCard({ subjectId }: AllergyCardProps) {
           </span>
         ) : (
           <>
-            <span className="text-[10px] font-mono bg-red-900/40 text-red-300 border border-red-800/60 px-1.5 py-0.5 rounded">
-              {allergies.length}
-            </span>
+            <div className="relative inline-flex">
+              {/* Anillo que parpadea y se expande por detrás */}
+              <span className="absolute inline-flex h-full w-full animate-ping rounded bg-red-900/70 opacity-75"></span>
+
+              {/* Tu etiqueta original fija en el frente */}
+              <span className="relative text-[10px] font-mono bg-red-900/80 text-red-100 border border-red-800/60 px-1.5 py-0.5 rounded">
+                {allergies.length}
+              </span>
+            </div>
             {/* Chips rápidos: sustancia + severidad */}
             {allergies.map((a) => {
               const sev = severityOf(a);
