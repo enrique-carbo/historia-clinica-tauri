@@ -329,7 +329,7 @@ cargo test --lib  # 135 passed; 0 failed
 
 ### Frontend (Vitest)
 
-35 tests unitarios sobre la capa React (`pnpm test`; requiere Node >= 22.12). Config en `vitest.config.ts`; los tests son co-located (`src/**/*.test.ts`) y `@tauri-apps/api/core` se mockea con `vi.mock`.
+57 tests unitarios sobre la capa React (`pnpm test`; requiere Node >= 22.12). Config en `vitest.config.ts` (jsdom + Testing Library; setup en `src/test/setup.ts` con cleanup explícito); los tests son co-located (`src/**/*.test.{ts,tsx}`) y `@tauri-apps/api/core` se mockea con `vi.mock`.
 
 | Módulo | Tests | Cobertura |
 |---|---|---|
@@ -461,7 +461,7 @@ pnpm test:watch  # modo watch
 pnpm tauri dev          # Levanta el entorno (Rust + React HMR)
 pnpm tauri build        # Compila en modo release para producción
 npx tsc --noEmit        # Verifica TypeScript sin generar archivos
-pnpm test               # Ejecuta los 35 tests unitarios del frontend (vitest)
+pnpm test               # Ejecuta los 57 tests unitarios del frontend (vitest)
 pnpm test:watch         # Vitest en modo watch
 cargo check             # Verifica compilación Rust
 cargo test --lib        # Ejecuta los 135 tests unitarios del Core
