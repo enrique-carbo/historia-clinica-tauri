@@ -212,7 +212,7 @@ export function EntryForm({ onSuccess }: EntryFormProps) {
         <div
           role="group"
           aria-labelledby="entry-category-label"
-          className="grid grid-cols-2 sm:grid-cols-4 gap-2"
+          className="grid grid-cols-1 sm:grid-cols-4 gap-2"
         >
           {CATEGORY_ORDER.filter((category) => TEMPLATES[category]).map((category) => (
             <button
