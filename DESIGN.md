@@ -234,8 +234,8 @@ Con esto, `bg-surface` significa "superficie" y se resuelve según el tema activ
 
 ### Fases de migración
 
-1. **Fase A — Tokens sin cambio visual**: crear `:root`/`.dark`/`@theme inline` en `index.css` con los valores actuales (oscuro) y migrar **primero los componentes de `ui/`** a las utilities semánticas. Nadie nota diferencias.
-2. **Fase B — Vistas**: reemplazar clases sueltas en `src/components/**/*.tsx` por tokens semánticos. Cazar residuos con `rg "bg-zinc|text-zinc|border-zinc" src/`.
+1. **Fase A — Tokens sin cambio visual** ✅: creados `:root`/`.dark`/`@theme inline` en `index.css` con los valores actuales (oscuro) y migrados los componentes de `ui/` a las utilities semánticas.
+2. **Fase B — Vistas** ✅: clases sueltas reemplazadas por tokens semánticos en `src/components/**/*.tsx` (verificado con `grep -rn "bg-zinc\|text-zinc\|border-zinc" src/` → 0 residuos; acciones azules → `action-primary`). Colores de estado (`sky`/`teal`/`amber` en badges) quedan como literales por decisión.
 3. **Fase C — Tema claro**: valores reales en `:root`, toggle de tema (clase `.dark` en `<html>`, preferencia persistida + respeto de `prefers-color-scheme` inicial), QA de contraste en ambos temas.
 4. **Fase D — Componentes exploratorios**: Drawer, modales y sombras; estados hover/active en light.
 
@@ -260,7 +260,7 @@ Registrar y evitar replicar; se limpia al migrar (Fase B):
 | ~~Botones inline con clases sueltas~~ | `MedicoView`, `EntryTimeline`, `Entity`, `EntryForm` + variante `success` nueva en `Button` | ✅ Migrados. `AuthBox` ya usaba `Button` |
 | ~~`transition-all` (19 usos)~~ | `ProfileView`, `Entity`, `PatientEhrView`, `Navbar` | ✅ Todos a `transition-colors` (el reveal de `✏️` usa lista arbitrary) |
 | Botones icon-only (`✕`, `✏️`) y logout del `Drawer` (danger ghost sin variante) | Vistas y `Drawer` | ⏳ Excepción aceptada: `<button>` puro con `aria-label` + tokens. Agregar `size`/`ghost-danger` a `Button` las eliminará |
-| Botones de acción con clases sueltas (fase B) | `ProfileView`, `SeedPhraseSetup`, `DashboardLayout` | ⏳ Migrar al tocar cada vista |
+| ~~Botones de acción con clases sueltas (fase B)~~ | `ProfileView`, `SeedPhraseSetup`, `DashboardLayout` | ✅ Clases a tokens (`bg-action-primary`/`hover:bg-action-primary-hover`/`text-text-inverse`); aún `<button>` puro — pasar a `Button` al tocar cada vista |
 | ~~`Alert` con `m-3` interno~~ | `Alert.tsx` + `AuthBox` | ✅ `m-3` eliminado; `Alert` ahora acepta `className` y el consumidor pone su margen (`my-3`) |
 | ~~`text-zinc-600/700` en texto no-placeholder~~ | 13 usos en 8 archivos (meta, empty states, iconos decorativos) | ✅ Todos a `text-zinc-500` (`text-muted`). Placeholders (`zinc-700`) intactos por diseño |
 | ~~Animaciones muertas (`animate-in` sin plugin)~~ | `Entity:355`, `PatientEhrView:155` | ✅ Instalado `tw-animate-css` (compatible Tailwind v4) + import en `index.css` |

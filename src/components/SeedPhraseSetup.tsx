@@ -71,7 +71,7 @@ export function SeedPhraseSetup({ onComplete }: SeedPhraseSetupProps) {
             <button
               onClick={handleGenerate}
               disabled={isLoading}
-              className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-border-strong text-text-inverse rounded-lg font-medium transition-colors"
+              className="w-full px-4 py-3 bg-action-primary hover:bg-action-primary-hover disabled:bg-border-strong text-text-inverse rounded-lg font-medium transition-colors"
             >
               {isLoading ? "Generando..." : "Generar Frase Semilla"}
             </button>
@@ -117,7 +117,7 @@ export function SeedPhraseSetup({ onComplete }: SeedPhraseSetupProps) {
 
             <button
               onClick={() => setStep("verify")}
-              className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-500 text-text-inverse rounded-lg font-medium transition-colors"
+              className="w-full px-4 py-3 bg-action-primary hover:bg-action-primary-hover text-text-inverse rounded-lg font-medium transition-colors"
             >
               Continuar
             </button>
@@ -152,7 +152,7 @@ export function SeedPhraseSetup({ onComplete }: SeedPhraseSetupProps) {
             <button
               onClick={handleVerify}
               disabled={!verifyInput.trim() || isLoading}
-              className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-border-strong text-text-inverse rounded-lg font-medium transition-colors"
+              className="w-full px-4 py-3 bg-action-primary hover:bg-action-primary-hover disabled:bg-border-strong text-text-inverse rounded-lg font-medium transition-colors"
             >
               {isLoading ? "Verificando..." : "Verificar"}
             </button>

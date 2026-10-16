@@ -139,7 +139,7 @@ export function ProfileView() {
         {!isEditing && (
           <button
             onClick={() => setIsEditing(true)}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-text-inverse hover:bg-blue-700 transition-colors"
+            className="rounded-lg bg-action-primary px-4 py-2 text-sm font-medium text-text-inverse hover:bg-action-primary-hover transition-colors"
           >
             Editar
           </button>
