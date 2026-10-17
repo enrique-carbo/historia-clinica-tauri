@@ -1,15 +1,17 @@
 use crate::db::config_schema::SchemaConfig;
 use crate::export::render::{
-    export_filename, render_markdown, ExportEntry, ExportPatient, ExportProfessional, ExportSnapshot,
+    append_signature_section, export_filename, render_markdown, ExportEntry, ExportPatient,
+    ExportProfessional, ExportSnapshot,
 };
-use crate::types::{DataKey, DbState, SessionState};
+use crate::security::crypto;
+use crate::types::{DataKey, DbState, SessionState, SigningState};
 use serde::Serialize;
 use std::path::Path;
 use tauri::{AppHandle, Manager, State};
 
 use super::{
     get_entity, get_entries_by_subject, professional_profile_commands::load_profile,
-    require_session,
+    record_audit, require_session,
 };
 
 #[derive(Debug, Serialize)]
@@ -17,6 +19,9 @@ pub struct ExportResult {
     pub path: String,
     pub filename: String,
     pub entries_count: usize,
+    /// SHA-256 del contenido firmado (sin el bloque de firma) — viaja al
+    /// frontend para el banner y se registra en el audit_log.
+    pub sha256: String,
 }
 
 /// Arma el snapshot completo (paciente + perfil + TODAS las entries) ya
@@ -91,27 +96,68 @@ pub fn export_history<R: tauri::Runtime>(
     db_state: State<'_, DbState>,
     data_key_state: State<'_, DataKey>,
     schema_state: State<'_, SchemaConfig>,
+    signing_state: State<'_, SigningState>,
 ) -> Result<ExportResult, String> {
-    let snapshot = build_export_snapshot(subject_id, session_state, db_state, data_key_state)?;
+    let session = require_session(&session_state)?;
+    let snapshot =
+        build_export_snapshot(subject_id, session_state, db_state.clone(), data_key_state)?;
+
+    let sign_guard = signing_state.0.lock().map_err(|_| "Lock poisoned".to_string())?;
+    let private_key_bytes = sign_guard
+        .as_ref()
+        .ok_or("Error de Seguridad: No hay llave de firma en RAM. ¿Bóveda cerrada?")?;
 
     let base_dir = app
         .path()
         .app_local_data_dir()
         .map_err(|_| "No se pudo determinar la ruta de almacenamiento".to_string())?;
 
-    write_export(&base_dir.join("exports"), &snapshot, &schema_state)
+    let result = write_export(
+        &base_dir.join("exports"),
+        &snapshot,
+        &schema_state,
+        private_key_bytes,
+    )?;
+
+    // Auditoría solo en éxito: metadata pura (ids, hash, filename) — nunca
+    // valores clínicos (regla de record_audit).
+    {
+        let guard = db_state.0.lock().map_err(|_| "Lock poisoned".to_string())?;
+        let conn = guard
+            .as_ref()
+            .ok_or("Base de datos no inicializada".to_string())?;
+        record_audit(
+            conn,
+            &session.user_id,
+            "export_emitted",
+            None,
+            &format!(
+                "subject_id={} entries={} sha256={} file={}",
+                subject_id, result.entries_count, result.sha256, result.filename
+            ),
+        )?;
+    }
+
+    Ok(result)
 }
 
 fn write_export(
     dir: &Path,
     snapshot: &ExportSnapshot,
     schema: &SchemaConfig,
+    private_key_bytes: &[u8; 32],
 ) -> Result<ExportResult, String> {
     if snapshot.entries.is_empty() {
         return Err("El paciente no tiene entries para exportar.".to_string());
     }
 
     let markdown = render_markdown(snapshot, schema)?;
+    // Firma del documento completo (hasta el footer de hash) con la clave
+    // Ed25519 del profesional de la sesión.
+    let doc_hash = crypto::hash_document(&markdown);
+    let signature_hex = crypto::sign_hash(&doc_hash, private_key_bytes)?;
+    let public_hex = crypto::public_key_from_private(private_key_bytes);
+    let final_doc = append_signature_section(&markdown, &signature_hex, &public_hex);
     let filename = export_filename(snapshot);
 
     std::fs::create_dir_all(dir)
@@ -129,10 +175,10 @@ fn write_export(
         }
     }
 
-    std::fs::write(&path, &markdown)
+    std::fs::write(&path, &final_doc)
         .map_err(|e| format!("Error escribiendo el archivo: {}", e))?;
 
-    println!("✅ [Export] Historia clínica exportada: {:?}", path);
+    println!("✅ [Export] Historia clínica exportada (firmada): {:?}", path);
 
     Ok(ExportResult {
         path: path.to_string_lossy().into_owned(),
@@ -142,6 +188,7 @@ fn write_export(
             .unwrap_or(&filename)
             .to_string(),
         entries_count: snapshot.entries.len(),
+        sha256: hex::encode(doc_hash),
     })
 }
 
@@ -275,6 +322,17 @@ mod tests {
         )
     }
 
+    fn signing_key_of(env: &TestEnv) -> Zeroizing<[u8; 32]> {
+        env.app
+            .state::<SigningState>()
+            .0
+            .lock()
+            .unwrap()
+            .as_ref()
+            .expect("signing key en el env de test")
+            .clone()
+    }
+
     #[test]
     fn snapshot_decrypts_patient_and_profile() {
         let env = setup(true);
@@ -310,6 +368,7 @@ mod tests {
     #[test]
     fn write_export_generates_markdown_file() {
         let env = setup(true);
+        let key = signing_key_of(&env);
         let mut snapshot = snapshot_of(&env).expect("snapshot");
         snapshot.entries.push(ExportEntry {
             category: "SOAP_NOTE".to_string(),
@@ -328,30 +387,149 @@ mod tests {
         });
 
         let dir = tempfile::tempdir().expect("tempdir");
-        let result = write_export(dir.path(), &snapshot, &from_embedded().expect("schema"))
+        let result = write_export(dir.path(), &snapshot, &from_embedded().expect("schema"), &key)
             .expect("write_export");
 
         assert!(result.filename.ends_with(".md"));
         assert!(result.filename.starts_with("HistoriaClinica_Pérez_Juan_"));
         assert_eq!(result.entries_count, 1);
+        assert!(!result.sha256.is_empty());
         assert!(Path::new(&result.path).exists());
 
         let content = std::fs::read_to_string(&result.path).expect("read");
         assert!(content.contains("# Historia Clínica — Juan Pérez"));
         assert!(content.contains("Primera consulta"));
         assert!(content.contains("SHA-256"));
+        assert!(content.contains("## Firma digital (Ed25519)"));
+    }
+
+    #[test]
+    fn write_export_signature_verifies_roundtrip() {
+        // El bloque de firma cubre el documento completo hasta el footer de
+        // hash: quitar el bloque y verificar Ed25519 con la pública del env.
+        let env = setup(true);
+        let key = signing_key_of(&env);
+        let public_hex = crypto::public_key_from_private(&key);
+        let mut snapshot = snapshot_of(&env).expect("snapshot");
+        snapshot.entries.push(ExportEntry {
+            category: "SOAP_NOTE".to_string(),
+            title: "Nota firmada".to_string(),
+            status: "ACTIVE".to_string(),
+            timestamp: chrono::Utc::now().to_rfc3339(),
+            author_name: "Dra. Export Test".to_string(),
+            author_profession: "Médica".to_string(),
+            payload: HashMap::from([("subjetivo".to_string(), "ok".to_string())]),
+            signature: "b".repeat(64),
+            is_verified: true,
+        });
+
+        let dir = tempfile::tempdir().expect("tempdir");
+        let result = write_export(dir.path(), &snapshot, &from_embedded().expect("schema"), &key)
+            .expect("write_export");
+        let content = std::fs::read_to_string(&result.path).expect("read");
+
+        let marker = "## Firma digital (Ed25519)";
+        let idx = content.find(marker).expect("bloque de firma presente");
+        let signed_portion = content[..idx]
+            .strip_suffix("\n---\n\n")
+            .expect("separador antes del bloque");
+
+        let sig_start = content.find("**Firma:** `").expect("línea de firma")
+            + "**Firma:** `".len();
+        let sig_end = content[sig_start..].find('`').expect("cierre de firma") + sig_start;
+        let signature_hex = &content[sig_start..sig_end];
+
+        let hash = crypto::hash_document(signed_portion);
+        let ok = crypto::verify_signature(&hash, signature_hex, &public_hex)
+            .expect("verificación");
+        assert!(ok, "firma del documento debe verificar");
+
+        // Alterar una letra del contenido firmado invalida la firma
+        // (verify_signature devuelve Err en matemática inválida).
+        let tampered = signed_portion.replace("Nota firmada", "Xota firmada");
+        let hash2 = crypto::hash_document(&tampered);
+        let ok2 = crypto::verify_signature(&hash2, signature_hex, &public_hex);
+        assert!(ok2.is_err() || ok2 == Ok(false), "contenido alterado no debe verificar");
     }
 
     #[test]
     fn write_export_rejects_empty_history() {
         let env = setup(true);
+        let key = signing_key_of(&env);
         let snapshot = snapshot_of(&env).expect("snapshot");
         assert!(snapshot.entries.is_empty());
 
         let dir = tempfile::tempdir().expect("tempdir");
-        let err = write_export(dir.path(), &snapshot, &from_embedded().expect("schema"))
+        let err = write_export(dir.path(), &snapshot, &from_embedded().expect("schema"), &key)
             .expect_err("debe rechazar 0 entries");
         assert!(err.contains("no tiene entries"));
+    }
+
+    #[test]
+    fn export_history_emits_audit_and_signed_file() {
+        // Flujo completo del command con 1 entry real en la DB: archivo
+        // firmado + fila export_emitted en audit_log (solo metadata).
+        let env = setup(true);
+        {
+            let db_state = env.app.state::<DbState>();
+            let guard = db_state.0.lock().unwrap();
+            let conn = guard.as_ref().expect("conn");
+            let payload_field =
+                crypto::encrypt_text("Dolor leve", &DATA_KEY).expect("enc");
+            let payload_json = serde_json::json!({
+                "subjetivo": format!("{}:{}", payload_field.ciphertext, payload_field.nonce)
+            })
+            .to_string()
+            .into_bytes();
+            conn.execute(
+                "INSERT INTO entries (id, category, subject_id, author_id, title, status, timestamp, payload, signature, created_at)
+                 VALUES (?1, 'SOAP_NOTE', ?2, ?3, 'Consulta', 'ACTIVE', ?4, ?5, ?6, ?4)",
+                rusqlite::params![
+                    "entry-audit-1",
+                    env.entity_id,
+                    "author-export-1",
+                    chrono::Utc::now().to_rfc3339(),
+                    payload_json,
+                    "c".repeat(64),
+                ],
+            )
+            .expect("insert entry");
+        }
+
+        let result = export_history(
+            env.app.handle().clone(),
+            env.entity_id,
+            env.app.state::<SessionState>(),
+            env.app.state::<DbState>(),
+            env.app.state::<DataKey>(),
+            env.app.state::<SchemaConfig>(),
+            env.app.state::<SigningState>(),
+        )
+        .expect("export_history");
+
+        assert_eq!(result.entries_count, 1);
+        assert!(!result.sha256.is_empty());
+
+        let content = std::fs::read_to_string(&result.path).expect("read");
+        assert!(content.contains("## Firma digital (Ed25519)"));
+        assert!(content.contains("SHA-256 del documento"));
+        // Limpieza: el mock runtime resuelve app_local_data_dir al home real.
+        let _ = std::fs::remove_file(&result.path);
+
+        let db_state = env.app.state::<DbState>();
+        let guard = db_state.0.lock().unwrap();
+        let conn = guard.as_ref().expect("conn");
+        let (action, detail): (String, String) = conn
+            .query_row(
+                "SELECT action, detail FROM audit_log WHERE action = 'export_emitted';",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .expect("fila export_emitted");
+        assert_eq!(action, "export_emitted");
+        assert!(detail.contains(&format!("subject_id={}", env.entity_id)));
+        assert!(detail.contains("entries=1"));
+        assert!(detail.contains(&format!("sha256={}", result.sha256)));
     }
 
     #[test]
@@ -369,6 +547,7 @@ mod tests {
             env.app.state::<DbState>(),
             env.app.state::<DataKey>(),
             env.app.state::<SchemaConfig>(),
+            env.app.state::<SigningState>(),
         )
         .expect_err("0 entries");
         assert!(err.contains("no tiene entries"), "err: {}", err);
@@ -384,6 +563,7 @@ mod tests {
             env.app.state::<DbState>(),
             env.app.state::<DataKey>(),
             env.app.state::<SchemaConfig>(),
+            env.app.state::<SigningState>(),
         )
         .expect_err("bóveda cerrada");
         assert!(err.contains("Data key"), "err: {}", err);

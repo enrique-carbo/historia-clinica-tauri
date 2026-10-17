@@ -9,7 +9,7 @@ El "porqué" del diseño vive en `README.md` y `docs/` — acá va lo operativo.
 
 ```bash
 cd src-tauri
-cargo test                    # baseline: 136 tests, 0 fallas
+cargo test                    # baseline: 139 tests, 0 fallas
 cargo clippy --all-targets    # baseline: 3 warnings, 0 errores
 cd .. && npx tsc --noEmit     # baseline: sin errores
 pnpm test                     # baseline: 73 tests, 0 fallas (vitest; Node >= 22.12)
@@ -17,7 +17,7 @@ pnpm version:check            # tauri.conf.json = package.json = Cargo.toml
 ```
 
 - Perfiles Med/Vet: verificar también `FICHIO_PROFILE=vet cargo test`
-  (mismo baseline 136) — build.rs copia el schema del perfil a OUT_DIR;
+  (mismo baseline 139) — build.rs copia el schema del perfil a OUT_DIR;
   `pnpm build` / `pnpm build:vet:frontend` compilan cada lado del frontend.
 
 - Los 3 warnings de clippy son `too_many_arguments` aceptados en
@@ -126,7 +126,10 @@ pnpm version:check            # tauri.conf.json = package.json = Cargo.toml
   ancla la pública en el histórico local `signing_keys` vía
   `public_key_at`, **nunca** en la clave embebida en el propio
   manifest. Firma inválida = restore bloqueado; no verificable (legado
-  o firmante ajeno) = solo con confirmación explícita.
+  o firmante ajeno) = solo con confirmación explícita. El **export** se
+  firma aparte: Ed25519 sobre el SHA-256 del Markdown completo (con el
+  footer de hash, sin el bloque de firma — el bloque declara los bytes
+  que cubre) y emite `export_emitted` en `audit_log` con metadata pura.
 - **Mapas serializados**: si un mapa se convierte en bytes que otro
   componente lee, compara o firma, usar BTreeMap. Ojo: hoy la firma no
   depende del orden de claves (el payload se firma como hex crudo) — el

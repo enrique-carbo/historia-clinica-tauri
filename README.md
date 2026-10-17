@@ -284,8 +284,12 @@ MedicoView (tab Entries) ─ "Exportar .md"
          1. build_export_snapshot: descifra paciente + perfil + TODAS las
             entries (sesión activa; error claro si la bóveda está cerrada).
          2. render puro a Markdown (labels/orden desde entity_schema.json)
-         3. escritura en <app_local_data_dir>/exports/
-         → { path, filename, entries_count } → banner "Revelar en carpeta"
+         3. firma Ed25519 del documento completo (clave de la sesión) +
+            bloque "Firma digital" con fingerprint de la pública
+         4. escritura en <app_local_data_dir>/exports/ + auditoría
+            export_emitted (solo metadata: subject_id, entries, sha256, file)
+         → { path, filename, entries_count, sha256 } → banner "✓ firmado ·
+           Revelar en carpeta"
 ```
 
 ### Decisiones de diseño
@@ -296,15 +300,16 @@ MedicoView (tab Entries) ─ "Exportar .md"
 | Nombre de archivo | `HistoriaClinica_Apellido_Nombre_YYYY-MM-DD_HHMMSS.md` (sanitizado, único por timestamp) | Sin conflictos de sobrescritura ni diálogos |
 | Campos por categoría | Labels canónicos de `config/entry_templates/*.json` (orden y nombre) | El `.md` es espejo del formulario clínico |
 | Orden | Cronológico ascendente | Lectura continua de la evolución |
-| Firma | Check ✓/✗ por entry + longitud corta de la firma | El `.md` es una foto, no la fuente de verdad — la verificación real sigue en la app |
+| Firma | Check ✓/✗ por entry + **firma Ed25519 del documento completo** (bloque final con firma y fingerprint de la pública) | Integridad + atribución + no-repudio del archivo entregado; la firma cubre el contenido hasta el footer de hash |
+| Auditoría | Evento `export_emitted` en `audit_log` con subject_id, entries, sha256 y filename (solo metadata, nunca valores) | Constancia de emisión trazable al profesional de la sesión |
 | Integridad | SHA-256 del contenido en el footer + aviso de confidencialidad | Permite detectar alteraciones del archivo exportado |
 | "Revelar en carpeta" | `revealItemInDir` de `@tauri-apps/plugin-opener` | Ya instalado y concedido vía `opener:default` (sin cambios de capability) |
 
-El único command registrado es `export_history` (en `lib.rs`), la lógica vive en `commands/export_commands.rs` y el render puro en `export/render.rs` (sin estado, sin I/O → 6 tests unitarios directos). Los `Export*` no llevan serde: al no cruzar IPC, el compilador hace cumplir que el snapshot queda en Rust.
+El único command registrado es `export_history` (en `lib.rs`), la lógica vive en `commands/export_commands.rs` y el render puro en `export/render.rs` (sin estado, sin I/O → 7 tests unitarios directos). Los `Export*` no llevan serde: al no cruzar IPC, el compilador hace cumplir que el snapshot queda en Rust.
 
 ## 🧪 Tests Automatizados
 
-El Core (Rust) cuenta con 136 tests unitarios que cubren:
+El Core (Rust) cuenta con 139 tests unitarios que cubren:
 | Módulo | Tests | Cobertura |
 |---|---|---|
 | `security/crypto.rs` | 14 | AES-GCM roundtrip, nonces únicos, clave incorrecta, manipulación, Blind Index (**HMAC con clave derivada de la DataKey**: determinismo, normalización, dependencia de la clave — sin ella no se enumera), Firma Ed25519, derivación de pública desde privada |
@@ -318,12 +323,12 @@ El Core (Rust) cuenta con 136 tests unitarios que cubren:
 | `commands/admin_commands.rs` | 5 | **`admin_reset_password` role-aware**: paciente sin wrap personal (incluso con DataKey en RAM), staff exige DataKey antes de tocar nada, staff re-envuelve, auditoría |
 | `commands/entity_commands.rs` | 9 | **`grant_patient_access`** (admin/asistente, gate de rol, acceso activo único, username UNIQUE, tipo de entidad, auditoría sin valores), **`get_entity_access`** (estados activo/inactivo, gate admin/asistente — un paciente no puede sondear otros accesos) y **lookup por DNI** (bóveda cerrada rechazada, normalización, clave incorrecta no encuentra) |
 | `commands/entry_commands.rs` | 24 | CRUD completo end-to-end con DB real (roundtrip cifrado→descifrado, payload sin texto plano en DB, validaciones de categoría/status, states obligatorios, firma rota por manipulación, wrong data key, autor sin perfil, paginación e isolación por paciente, filtro por categoría, búsqueda case-insensitive, `decrypt_payload`, **histórico `public_key_at`** — clave vigente por timestamp, fallback sin histórico, usuario inexistente, **firma de todos los campos de la fila**: payload/created_at/id alterados rompen la firma, delimitadores sin ambigüedad) |
-| `commands/export_commands.rs` | 6 | Snapshot descifrado (paciente + perfil), bóveda cerrada, escritura del `.md` (heading, filename, footer), rechazo con 0 entries y 2 tests e2e del command único `export_history` (bóveda cerrada / 0 entries) |
+| `commands/export_commands.rs` | 8 | Snapshot descifrado (paciente + perfil), bóveda cerrada, escritura del `.md` firmado (heading, filename, footer, bloque de firma), roundtrip de verificación Ed25519 + rechazo con firma alterada, rechazo con 0 entries, evento `export_emitted` en audit_log y 2 tests e2e del command único `export_history` (bóveda cerrada / 0 entries) |
 | `commands/professional_profile_commands.rs` | 4 | Roundtrip update→get con matrículas múltiples (orden preservado, número vacío descartado, auditoría registra campos y **nunca** valores), user_id ajeno rechazado, commands exigen sesión activa, perfil sin editar vacío con `public_key` intacta |
-| `export/render.rs` | 6 | Header con paciente/perfil, orden cronológico, orden/labels canónicos de campos, footer SHA-256 + aviso, filename sanitizado y fallback sin nombre |
+| `export/render.rs` | 7 | Header con paciente/perfil, orden cronológico, orden/labels canónicos de campos, footer SHA-256 + aviso, filename sanitizado y fallback sin nombre, estructura del bloque de firma digital |
 
 ```bash
-cargo test --lib  # 136 passed; 0 failed
+cargo test --lib  # 139 passed; 0 failed
 ```
 
 > Los tests de `entry_commands` usan `tauri::test` (feature habilitada solo en `[dev-dependencies]`; el binario de producción no la incluye).
@@ -516,6 +521,6 @@ npx tsc --noEmit        # Verifica TypeScript sin generar archivos
 pnpm test               # Ejecuta los 73 tests unitarios del frontend (vitest)
 pnpm test:watch         # Vitest en modo watch
 cargo check             # Verifica compilación Rust
-cargo test --lib        # Ejecuta los 136 tests unitarios del Core
+cargo test --lib        # Ejecuta los 139 tests unitarios del Core
 cargo add <crate>       # Añade dependencias al backend (desde src-tauri)
 ```

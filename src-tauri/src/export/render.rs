@@ -363,6 +363,30 @@ pub fn render_markdown(snapshot: &ExportSnapshot, schema: &SchemaConfig) -> Resu
     Ok(out)
 }
 
+/// Bloque de firma digital del documento exportado. La firma Ed25519 se
+/// calcula sobre el SHA-256 del documento COMPLETO hasta el footer de
+/// hash (sin este bloque) — el bloque lo declara explícitamente para que
+/// un verificador futuro sepa exactamente qué bytes cubre.
+pub fn append_signature_section(
+    doc: &str,
+    signature_hex: &str,
+    public_key_hex: &str,
+) -> String {
+    let fingerprint = hex::encode(crypto::hash_document(public_key_hex));
+    format!(
+        "{}\n---\n\n\
+         ## Firma digital (Ed25519)\n\n\
+         - **Firma:** `{}`\n\
+         - **Huella de la pública (SHA-256):** `{}`\n\n\
+         Documento generado por {}. La firma Ed25519 cubre todo el contenido\n\
+         anterior (incluido el hash SHA-256 del footer), emitida con la clave\n\
+         del profesional que realizó la exportación. Verificación: hashiar\n\
+         (SHA-256) el contenido sin este bloque y verificar la firma con la\n\
+         pública del profesional cuya huella figura arriba.\n",
+        doc, signature_hex, fingerprint, env!("FICHIO_APP_NAME")
+    )
+}
+
 fn sanitize_component(raw: &str) -> String {
     let mut out = String::new();
     for c in raw.trim().chars() {
@@ -591,5 +615,26 @@ mod tests {
         let name = export_filename(&snapshot);
         assert!(name.starts_with("HistoriaClinica_"));
         assert!(name.ends_with(".md"));
+    }
+
+    #[test]
+    fn append_signature_section_estructura() {
+        let doc = "# Documento\n\ncontenido\n\n> SHA-256: `abc`\n";
+        let out = append_signature_section(doc, "firma123", "pub456");
+        assert!(out.starts_with(doc));
+        assert!(out.contains("## Firma digital (Ed25519)"));
+        assert!(out.contains("`firma123`"));
+        // Fingerprint = SHA-256 hex de la pública (64 chars).
+        let fp_line = out
+            .lines()
+            .find(|l| l.contains("Huella de la pública"))
+            .expect("línea de huella");
+        let fp = fp_line
+            .split('`')
+            .nth(1)
+            .expect("hex de la huella");
+        assert_eq!(fp.len(), 64);
+        // El bloque declara qué bytes cubre la firma.
+        assert!(out.contains("sin este bloque") || out.contains("contenido\nanterior") || out.contains("anterior"));
     }
 }

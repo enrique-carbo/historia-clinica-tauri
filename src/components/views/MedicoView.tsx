@@ -25,6 +25,7 @@ interface ExportResult {
   path: string;
   filename: string;
   entries_count: number;
+  sha256: string;
 }
 
 export function MedicoView() {
@@ -126,6 +127,11 @@ export function MedicoView() {
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <span className="break-all">
                   Exportado: {exportResult.filename} ({exportResult.entries_count} entries)
+                  <span className="text-success-text"> ✓ firmado</span>
+                  {" · sha256 "}
+                  <code title={exportResult.sha256}>
+                    {exportResult.sha256.slice(0, 12)}…
+                  </code>
                 </span>
                 <div className="flex items-center gap-2 shrink-0">
                   <Button variant="success" onClick={handleReveal}>
