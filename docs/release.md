@@ -54,5 +54,5 @@ página de release, no auto-instalar en silencio.
 
 **Solo desktop**: iOS/Android prohíben el auto-update fuera de sus
 tiendas — en mobile el update lo gestiona Play Store / App Store (ver
-README §"Futuro: Mobile"). El patrón unificado es "notificar + abrir
+`docs/roadmap.md` §"Futuro: Mobile"). El patrón unificado es "notificar + abrir
 enlace" (`openUrl`), que corre en todos los targets.

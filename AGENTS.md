@@ -86,7 +86,7 @@ pnpm version:check            # tauri.conf.json = package.json = Cargo.toml
   es agnóstico de especie. Pedidos de clientes específicos → config o
   módulo, nunca forks ni `#ifdefs` en Core (ver
   `docs/module-contract.md` §1, "Un perfil de producto").
-- **Mobile-aware** (futuro tras Fase 4, ver README §"Futuro: Mobile"):
+- **Mobile-aware** (futuro tras Fase 4, ver `docs/roadmap.md` §"Futuro: Mobile"):
   al usar APIs/UI de escritorio, verificar soporte mobile o dejar el
   fallback explícito. `dialog` ✅ y `opener.openUrl` ✅ funcionan en
   mobile; `revealItemInDir` ❌ es desktop-only → fallback sharesheet.
@@ -115,8 +115,9 @@ pnpm version:check            # tauri.conf.json = package.json = Cargo.toml
   después (una DB nueva arranca en `user_version = 0`).
 - **Zeroize**: claves en `Zeroizing<...>`; deref coercion mantiene los
   call sites (`&key` → `&[u8; 32]`), usá `&mut *x` para `fill_bytes` /
-  `hash_password_into`. La sección "Límites de zeroize" del README es la
-  verdad oficial: no sobrevender limpieza de RAM.
+  `hash_password_into`. La sección §4.7 "Límites de zeroize" de
+  `docs/estrategia_encriptacion.md` es la verdad oficial: no sobrevender
+  limpieza de RAM.
 - **Firmas**: `signed_hash()` (en `entry_commands.rs`) es la única fuente
   de verdad del material de las entries. `SignedMaterial` tiene orden de
   campos fijo y hay que verificar cada campo de la fila (payload,
@@ -137,11 +138,16 @@ pnpm version:check            # tauri.conf.json = package.json = Cargo.toml
 
 ## Docs
 
-- `README.md` — seguridad, esquema, roles, tests, export (fuente del porqué).
+- `README.md` — pitch, stack, principios, resumen de seguridad, roles,
+  export, versiones (fuente del porqué; el detalle vive en `docs/`).
 - `docs/estrategia_encriptacion.md` — diseño cripto por capas.
 - `docs/release.md` — checklist de release, política de update manual y
   pendiente del auto-updater.
 - `docs/fase4-diseno-sync.md` — diseño de sync (fase 4) y deuda pendiente.
+- `docs/roadmap.md` — mapa de ruta completo (fases 1→6 + "Futuro: Mobile");
+  el README solo resume.
+- `docs/esquema-db.md` — esquema de DB (tablas, SQL de `entries`) y
+  arquitectura de templates.
 - `docs/module-contract.md` — **arquitectura de módulos vinculante**
   (Ruta 1: compilados + feature flags, paywall build-time, trait `Module`
   + `ModuleContext` + `module_execute`; reemplaza a

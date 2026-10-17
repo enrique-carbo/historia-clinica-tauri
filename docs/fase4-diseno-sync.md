@@ -11,7 +11,7 @@
 Requisito de producto: un policonsultorio con varios profesionales, **cada uno en su propio equipo**, viendo las mismas evoluciones de los pacientes, con atribución de autor intacta (cada entry firmada por quien la creó).
 
 > Nota estratégica (2026-10-17): la sync es además el **prerequisito del
-> mobile futuro** (README §"Futuro: Mobile") — multi-dispositivo es el
+> mobile futuro** (`docs/roadmap.md` §"Futuro: Mobile") — multi-dispositivo es el
 > valor principal de tener app en el celular; diseñar sync con ese
 > horizonte evita decisiones que cierren el port.
 
@@ -385,7 +385,7 @@ Cobertura objetivo: las reglas de §4 y el orden de §6.4 tienen test de invaria
 | M2 | Infra + identidad de dispositivo | Compose perfiles lan/vps, colecciones PB, pairing + tokens, panel admin "Dispositivos" | M |
 | M3 | Engine push/pull | Worker, reglas de conflicto, indicador de estado, tests unit + integración PB + 2 dispositivos | L |
 | M4 | Onboarding + vaults E2E | Flujo "Unirse al consultorio", sync de archivos (salt/vaults/wraps), re-login por rotación, invariante de firma cross-install | M |
-| M5 | Hardening y docs | Guía de deploy LAN/VPS, operación (revocación, break-glass multi-equipo), checklist de release, §5 de `estrategia_encriptacion.md` actualizado, README roadmap | S |
+| M5 | Hardening y docs | Guía de deploy LAN/VPS, operación (revocación, break-glass multi-equipo), checklist de release, §5 de `estrategia_encriptacion.md` actualizado, `docs/roadmap.md` | S |
 
 **Fuera de alcance de la Fase 4 (post-v1):** realtime PocketBase (v2), búsqueda server-side con múltiples blind indexes, centralización de `audit_log`, telemedicina / `entity_keys`, multi-clínica (varias instalaciones con claves distintas), `previous_entry_id` (cadena de correcciones), notificaciones push, app web.
 

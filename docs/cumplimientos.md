@@ -239,7 +239,8 @@ incomprensible para alguien con acceso físico. **No protege**:
 | **Semilla en papel perdida o robada** | Quien tenga la semilla puede hacer `seed_recovery` y resetear la contraseña del admin. Está auditado, pero no prevenido. |
 | **Swap / hibernación** | Si el OS swappea el proceso, las llaves pueden quedar en disco sin cifrar. Fichio no usa `mlock`. |
 
-Estos límites están documentados en el README (§"Límites de zeroize") y son
+Estos límites están documentados en `docs/estrategia_encriptacion.md` (§4.7
+"Límites de zeroize") y son
 inherentes a cualquier aplicación que necesite usar las llaves en RAM.
 
 ---

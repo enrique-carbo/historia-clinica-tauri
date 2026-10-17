@@ -42,6 +42,8 @@ El sistema clínico vive en la tabla `entries` (paradigma Entity-Entry): un regi
 * `entities.enc_data_blob`: filiación del paciente cifrada campo a campo con la DataKey.
 * `professional_profiles.*_ciphertext`: cada dato del perfil cifrado individualmente (nombre, matrícula, especialidad, contacto).
 * `entries.signature`: firma Ed25519 en hex — verificable con la llave pública del autor (ver §4.4).
+* `vault_{user_id}.bin`: llave privada de firma Ed25519 cifrada con la master key derivada de la contraseña (ver §4.1).
+* `.data_key.{user_id}` / `.data_key.master`: envoltorios AES-GCM de la DataKey (ver §4.2).
 
 > ⚠️ **Nota de Seguridad:** Dos payloads con el mismo texto generarán cadenas de bytes completamente diferentes en la base de datos, porque el `nonce` se genera con un generador criptográficamente seguro (`rand::rngs::OsRng`) en cada escritura. Los tests del Core verifican además que ninguna palabra en claro del payload aparezca en la DB.
 
@@ -73,7 +75,21 @@ No hay sal persistida: `.installation_salt` fue **eliminado** (del disco, del re
 
 ## 🔑 4. Ciclo de Vida de las Claves
 
-La seguridad descansa sobre la generación y destrucción estricta de las llaves en la memoria volátil (RAM). **No existen claves hardcodeadas en el binario.** Las llaves viven envueltas en `Zeroizing` (crate `zeroize`): al liberarse se **ponen a cero** en vez de dejar bytes residuales en el heap — borrado *best-effort*, con los límites documentados en `README.md` §"Límites de zeroize". El sistema maneja **dos familias de claves** con responsabilidades distintas:
+La seguridad descansa sobre la generación y destrucción estricta de las llaves en la memoria volátil (RAM). **No existen claves hardcodeadas en el binario.** Las llaves viven envueltas en `Zeroizing` (crate `zeroize`): al liberarse se **ponen a cero** en vez de dejar bytes residuales en el heap — borrado *best-effort*, con los límites documentados en §4.7. El sistema maneja **dos familias de claves** con responsabilidades distintas:
+
+### 4.0 Secuencia de unlock (cold start)
+
+El sistema no utiliza claves hardcodeadas. Las claves nacen y mueren en la RAM:
+
+1. El usuario ingresa su contraseña en la UI.
+2. React llama a `unlock_vault`. Rust verifica el hash en la tabla `users` (Argon2id).
+3. La misma contraseña se usa como semilla para derivar 32 bytes mediante Argon2id en modo KDF (Llave Maestra). La sal del KDF es única por usuario (`vault_{user_id}.salt`).
+4. Se desbloquea el archivo `vault_{user_id}.bin`, el cual contiene la Llave Privada de Firma (Ed25519) cifrada con la Llave Maestra.
+5. Se resuelve la **DataKey** (ver §4.2): wrap personal → master wrap → migración legacy → generación.
+6. Las tres llaves (Master, Signing, DataKey) se inyectan en `CryptoState`, `SigningState` y `DataKey` (RAM volátil de Rust).
+7. Al cerrar sesión, React llama a `lock_vault`. Rust descarta los `Option` de las tres llaves: cada `Zeroizing` se **pone a cero al caer** (`Drop`), en vez de dejar los 32 bytes residuales en la memoria. Las llaves dejan de estar disponibles para cualquier lectura posterior del proceso.
+
+**Nota**: la DataKey **no** se carga al arrancar la app — solo existe en RAM después de un `unlock_vault` exitoso.
 
 ### 4.1 Vault por usuario → llave de firma Ed25519
 
@@ -81,7 +97,7 @@ La seguridad descansa sobre la generación y destrucción estricta de las llaves
 2. **Validación (`vault.rs`):** esos 32 bytes descifran `vault_{user}.bin` (AES-GCM). Si la firma mágica `HISTORIA_CLINICA_VAULT_OK` aparece, la contraseña es correcta y el payload contiene la **llave privada Ed25519** del usuario.
 3. **Primer login:** si el vault no existe, se crea con un keypair nuevo.
 4. **Inyección en Memoria:** la llave privada y la master key viven solo en `Mutex` de Rust (`CryptoState`/`SigningState`); el frontend (React) nunca las ve — solo recibe datos ya descifrados por el canal IPC.
-5. **Destrucción:** `lock_vault` descarta los `Option` de los states y limpia la sesión (`SessionState`); cada `Zeroizing` se pone a cero en su `Drop`. Al cerrar la aplicación, el proceso de Rust muere y todo desaparece de la RAM. Nota: es borrado *best-effort* — con la bóveda abierta, un volcado de memoria del proceso expone las llaves vivas (ver `README.md` §"Límites de zeroize").
+5. **Destrucción:** `lock_vault` descarta los `Option` de los states y limpia la sesión (`SessionState`); cada `Zeroizing` se pone a cero en su `Drop`. Al cerrar la aplicación, el proceso de Rust muere y todo desaparece de la RAM. Nota: es borrado *best-effort* — con la bóveda abierta, un volcado de memoria del proceso expone las llaves vivas (ver §4.7).
 
 ### 4.2 DataKey de instalación → datos clínicos
 
@@ -89,10 +105,19 @@ Una única **DataKey** (32 bytes, generada una sola vez) cifra todo lo clínico:
 
 | Archivo | Llave que la envuelve | Rol |
 | :--- | :--- | :--- |
-| `.data_key.{user_id}` | master key derivada de la contraseña del usuario | **Fast path**: login normal sin tipear la semilla |
-| `.data_key.master` | `SHA-256(frase semilla)` | **Bootstrap / recovery**: primer login y wrap huérfano |
+| `.data_key.{user_id}` | master key derivada de la contraseña del usuario (Argon2id) | **Fast path**: login normal sin tipear la semilla |
+| `.data_key.master` | `Argon2id(frase semilla, sal de dominio fichio/seed-kdf/v1)` | **Bootstrap / recovery**: primer login y wrap huérfano |
+| `.data_key` (legacy) | — | Hex en claro — se migra y **borra** en el primer login |
 
-**Orden de resolución** (`resolve_data_key`): wrap personal → semilla → generación (`SEED_REQUIRED` pide la frase al frontend, nunca falla perdiendo datos). Los tests de invariante garantizan que un cambio de contraseña o un reset **nunca alteran la DataKey** — solo se re-envuelve el wrap personal con la nueva master key, y **solo para roles staff**: el paciente no tiene wrap (ausencia estructural) y sus cambios de contraseña son solo del hash de login.
+**Orden de resolución** (`resolve_data_key`, en `unlock_vault`):
+
+1. Wrap personal existe → desenvuelve con master_key → listo.
+2. Master wrap existe + seed provista → desenvuelve, crea wrap personal → listo.
+3. Master wrap existe sin seed → error `SEED_REQUIRED` → frontend pide la frase del papel.
+4. Legacy hex existe → migra, borra legacy, crea wrap personal.
+5. Nada → genera DataKey nueva (primera instalación).
+
+Los tests de invariante garantizan que un cambio de contraseña o un reset **nunca alteran la DataKey** — solo se re-envuelve el wrap personal con la nueva master key, y **solo para roles staff**: el paciente no tiene wrap (ausencia estructural) y sus cambios de contraseña son solo del hash de login.
 
 ### 4.3 Aislamiento multi-usuario (qué protege y qué no)
 
@@ -110,10 +135,12 @@ Lo que el modelo Zero-Knowledge protege de verdad es el **disco**: sin la contra
 
 ### 4.5 Frase semilla (recovery, continuidad y break-glass)
 
-* 6 palabras generadas en el dispositivo, mostradas una sola vez, **jamás persistidas en disco ni en la base**.
-* Deriva únicamente `.data_key.master`; **no sustituye a la contraseña** en el login normal.
+* 6 palabras generadas en el dispositivo desde una wordlist curada (sin duplicados ni tildes, evita palabras ambiguas), mostradas una sola vez, **jamás persistidas en disco ni en la base**.
+* Deriva `.data_key.master` con **Argon2id** (salt de dominio `fichio/seed-kdf/v1` — constante por diseño: sin sal aleatoria por instalación para que el sync futuro no exija sincronizar sal). **No sustituye a la contraseña** en el login normal.
+* **UI de configuración** (`SeedPhraseSetup`, 4 pasos): Generar → Mostrar (anotar en papel) → Verificar (reescribir) → Confirmar (master wrap). El botón "Omitir" no marca la seed como configurada.
 * **Rotación** (tab del administrador): generar → anotar → re-escribir para verificar → recién entonces `admin_rotate_seed` reenvuelve `.data_key.master`. Hasta el último paso la frase anterior sigue siendo válida, y la acción queda registrada en `audit_log`.
 * **Break-glass** (`seed_recovery`, desde el enlace de login): sí permite recuperar el acceso cuando se olvidó **todas** las contraseñas. La frase se verifica contra `.data_key.master` (mismo `unwrap` del recovery de datos — poseer la frase ya es poder descifrar todo, así que este paso solo lo formaliza y audita). Se restablece la contraseña del administrador activo más antiguo con vault y keypair nuevos, se rota `signing_keys` (las firmas históricas siguen verificando por fecha) y la acción queda en `audit_log` con acción `seed_recovery`. La DataKey no cambia.
+* **No sirve** si el usuario olvidó la contraseña (el login falla antes de pedir la frase) — para eso existe el reset del administrador o el break-glass.
 
 ### 4.6 Custodia: roles y autorización en backend
 
@@ -127,6 +154,14 @@ Lo que el modelo Zero-Knowledge protege de verdad es el **disco**: sin la contra
 Y el acceso de paciente usa el gate intermedio `require_admin_or_assistant()` (operación de admisión, no de custodia): `grant_patient_access` y `get_entity_access`.
 
 El administrador **no gana lectura nueva de datos clínicos** (misma DataKey, mismo wrap que todos): su poder es sobre *cuentas y credenciales*, y cada uso queda auditado. El paciente, con sesión abierta, no gana lectura alguna: sin DataKey, ningún command clínico le responde.
+
+### 4.7 Límites de zeroize (honestidad sobre la limpieza de RAM)
+
+`zeroize` es un borrado de **best-effort**, no una garantía criptográfica:
+
+- **Sí hace:** poner a cero el buffer exacto que posee el `Zeroizing` (llaves de 32 bytes, contraseñas/frases `String`, buffers intermedios de desencriptación del vault y de unwrap de data_key) cuando se libera, de forma resistente a la optimización del compilador (writes volátiles).
+- **No puede garantizar:** copias que escape del `Zeroizing` — buffers de `serde_json` en el canal IPC (el IPC copia argumentos y resultados), registros/dump de pila del runtime, memoria de swap o de archivos de página si el OS intercambia el proceso, ni el heap de V8. En el frontend solo se limpian **referencias** (`setPassword("")`): V8 no permite borrado criptográfico de strings.
+- **Máximo práctico:** la ventana que se protege es la que va *después* de liberar la llave (`lock_vault`, fin de command, cierre de sesión). **Con la bóveda abierta, un volcado de memoria del proceso expone las llaves vivas** — esa es una limitación de cualquier app que necesite usar las llaves en RAM. No se usan `mlock`/`VirtualLock` ni se audita el swap.
 
 ---
 
