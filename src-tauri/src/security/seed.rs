@@ -1,7 +1,16 @@
+use argon2::Argon2;
 use rand::seq::SliceRandom;
 use sha2::{Digest, Sha256};
 use std::sync::Mutex;
 use zeroize::Zeroizing;
+
+/// Salt constante de separación de dominio del KDF de la seed.
+/// NO es una sal aleatoria por instalación: un valor fijo por diseño —
+/// la sal aleatoria por máquina rompería la sincronización del master
+/// wrap entre dispositivos (fase 4) y contradiría la regla de que no
+/// existe `.installation_salt`. La dureza la pone Argon2id + la entropía
+/// de la frase (6 palabras de 3073 ≈ 69.5 bits).
+const SEED_KDF_SALT: &[u8] = b"fichio/seed-kdf/v1";
 
 /// Word list para generación de mnemonic (3073 palabras únicas, sin duplicados ni tildes; la ñ se conserva)
 const WORD_LIST: &[&str] = &[
@@ -343,15 +352,16 @@ pub fn generate_mnemonic() -> Result<String, String> {
     Ok(phrase)
 }
 
-/// Deriva una clave de 32 bytes a partir de una frase semilla.
-/// El resultado es `Zeroizing`: se pone a cero al soltarse.
+/// Deriva una clave de 32 bytes a partir de una frase semilla con
+/// Argon2id (mismos params default que `auth.rs`). El resultado es
+/// `Zeroizing`: se pone a cero al soltarse.
 pub fn derive_key_from_seed(phrase: &str) -> Result<Zeroizing<[u8; 32]>, String> {
     let normalized = normalize_seed_phrase(phrase);
-    let mut hasher = Sha256::new();
-    hasher.update(normalized.as_bytes());
-    let result = hasher.finalize();
+    let argon2 = Argon2::default();
     let mut key = Zeroizing::new([0u8; 32]);
-    key.copy_from_slice(&result);
+    argon2
+        .hash_password_into(normalized.as_bytes(), SEED_KDF_SALT, &mut *key)
+        .map_err(|e| format!("Error derivando la clave de la seed: {}", e))?;
     Ok(key)
 }
 
@@ -435,8 +445,22 @@ mod tests {
     #[test]
     fn test_derive_key_different_phrases() {
         let key1 = derive_key_from_seed("abaco abrir acero acida actas acuna").unwrap();
-        let key2 = derive_key_from_seed("abrir abaco acero actas acida acuna").unwrap();
+        let key2 = derive_key_from_seed("abrir abaco acero actas acina acuna").unwrap();
         assert_ne!(key1, key2);
+    }
+
+    #[test]
+    fn test_derive_key_no_es_sha256_crudo() {
+        // Guard de regresión: la derivación debe ser Argon2id con el salt
+        // de dominio, no SHA-256 crudo de la frase.
+        let phrase = "abaco abrir acero acida actas acuna";
+        let key = derive_key_from_seed(phrase).unwrap();
+        let sha_crudo = {
+            let mut hasher = Sha256::new();
+            hasher.update(phrase.as_bytes());
+            hasher.finalize()
+        };
+        assert_ne!(&key[..], &sha_crudo[..]);
     }
 
     #[test]

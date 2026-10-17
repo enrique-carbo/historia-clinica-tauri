@@ -14,7 +14,8 @@ La arquitectura está dividida de forma estricta en dos capas de alto rendimient
 - **SQLite (`rusqlite`)**: Base de datos relacional embebida (acceso directo sin plugins de Tauri para mantener el patrón `with_conn`), garantizando autonomía total offline.
 - **AES-GCM-256**: Cifrado autenticado para texto médico (entries, nombres, perfil) y para envolver la DataKey en disco.
 - **Ed25519 (Dalek)**: Firma digital asimétrica para garantizar el No-Repudio y validez legal de las notas médicas.
-- **SHA-256**: Hashing determinista para Índices Ciegos, huellas digitales de documentos y derivación de Seed Phrase.
+- **SHA-256**: Hashing determinista para Índices Ciegos, huellas digitales de documentos y hash del export.
+- **Argon2id**: Passwords de usuario y derivación de la Seed Phrase (master wrap).
 - **Argon2id**: Hashing de contraseñas y derivación de claves (KDF) — incluye el envoltorio de la DataKey.
 - **Seed Phrase**: Frase mnemotécnica de 6 palabras en papel para bootstrap y recovery de la DataKey — y para el **break-glass** de recuperación de la contraseña del administrador (auditado). No se persiste en disco.
 - **Respaldos locales**: carpeta `respaldo-{timestamp}/` con `manifest.json` firmado (SHA-256 por archivo + firma Ed25519 del admin); todo el contenido ya va cifrado en reposo.
@@ -42,7 +43,7 @@ src-tauri/src/
  │   ├── backup.rs        # Respaldo/restore de la instalación (manifest SHA-256, validación de integridad y esquema).
  │   ├── crypto.rs        # Motor matemático puro (AES-GCM, Ed25519, Nonces OsRng, SHA-256 Blind Index).
  │   ├── data_key.rs      # Envoltorio AES-GCM de la DataKey (wrap por usuario + master wrap con seed) + migración legacy.
- │   ├── seed.rs          # Generación de mnemonic (6 palabras) y derivación de key con SHA-256.
+ │   ├── seed.rs          # Generación de mnemonic (6 palabras) y derivación de key con Argon2id.
  │   └── vault.rs         # Gestión de Bóvedas criptográficas por usuario (Cold Start + Llave Privada de Firma).
  │
  ├── db/                  # Capa de persistencia.
@@ -116,7 +117,7 @@ src/
 - **Entries Append-Only**: Las entries son inmutables una vez creadas. No existen operaciones de update ni delete, garantizando integridad y no-repudio. La corrección se hace con nuevas entries (ej: "Corrección de...").
 - **Flujo Unificado de EHR**: La interfaz `PatientEhrView` consolida búsqueda, ficha y evoluciones en una sola vista, eliminando el context-switching entre tabs.
 - **Limpieza de Datos Sensibles**: El frontend limpia las referencias de la contraseña y la frase en React apenas se usan (tras `unlock_vault` o `seed_recovery`). En Rust, las llaves viven en `Zeroizing<[u8; 32]>` y las contraseñas/frases en `Zeroizing<String>`: al liberarse (unlock, `lock_vault`, fin de cada command) los bytes se **ponen a cero con `zeroize`** en vez de quedar como residuo en el heap. `lock_vault` además descarta los `Option` de `CryptoState`, `SigningState` y `DataKey` y limpia la `SessionState`. Ver §"Límites de zeroize" abajo — esto es *best-effort*, no borrado criptográfico garantizado.
-- **DataKey Nunca en Claro**: La llave de cifrado de datos médicos no se persiste en texto plano. Se envuelve con Argon2id(password) por usuario (fast path) y con SHA-256(seed) en el master wrap (bootstrap/recovery). La seed vive en papel, no en disco.
+- **DataKey Nunca en Claro**: La llave de cifrado de datos médicos no se persiste en texto plano. Se envuelve con Argon2id(password) por usuario (fast path) y con Argon2id(seed, salt de dominio `fichio/seed-kdf/v1`) en el master wrap (bootstrap/recovery). La seed vive en papel, no en disco.
 - **Seed Phrase en Papel**: La frase semilla (6 palabras) no se persiste en `localStorage`. Solo el flag `isSeedConfigured` se guarda; la frase se muestra una vez en `SeedPhraseSetup` para anotarla. Se tipea únicamente en bootstrap de usuarios nuevos o recovery.
 
 ## 🔒 Especificación de Seguridad (Zero-Knowledge Parcial & Vault)
@@ -154,7 +155,7 @@ La DataKey (llave que cifra todos los datos médicos) **nunca se persiste en cla
 | Archivo | Llave de envoltorio | Propósito |
 |---|---|---|
 | `.data_key.{user_id}` | Argon2id(password) | Fast path — login normal sin seed |
-| `.data_key.master` | SHA-256(seed) | Bootstrap de usuarios nuevos + recovery |
+| `.data_key.master` | Argon2id(seed) | Bootstrap de usuarios nuevos + recovery |
 | `.data_key` (legacy) | — | Hex en claro — se migra y **borra** en el primer login |
 
 **Flujo `resolve_data_key`** (en `unlock_vault`):
@@ -303,12 +304,12 @@ El único command registrado es `export_history` (en `lib.rs`), la lógica vive 
 
 ## 🧪 Tests Automatizados
 
-El Core (Rust) cuenta con 135 tests unitarios que cubren:
+El Core (Rust) cuenta con 136 tests unitarios que cubren:
 | Módulo | Tests | Cobertura |
 |---|---|---|
 | `security/crypto.rs` | 14 | AES-GCM roundtrip, nonces únicos, clave incorrecta, manipulación, Blind Index (**HMAC con clave derivada de la DataKey**: determinismo, normalización, dependencia de la clave — sin ella no se enumera), Firma Ed25519, derivación de pública desde privada |
 | `security/vault.rs` | 12 | Creación, desbloqueo, contraseña incorrecta, sal única por usuario, `change_password` (vault re-cifrado, invariante data_key resolvable, wrap huérfano recupera con seed), `reset_user_vault` (keypair nuevo, contraseña vieja muerta, data_key preservada) |
-| `security/seed.rs` | 12 | Generación mnemonic, unicidad, derivación SHA-256, verificación, edge cases, word list sin duplicados ni tildes |
+| `security/seed.rs` | 13 | Generación mnemonic, unicidad, derivación Argon2id (guard anti-SHA-256-crudo), verificación, edge cases, word list sin duplicados ni tildes |
 | `security/data_key.rs` | 10 | Wrap/unwrap AES-GCM, prioridades de resolución, `SEED_REQUIRED`, migración legacy |
 | `security/backup.rs` | 11 | Creación de respaldo (manifest + copias idénticas), hash alterado rechazado, archivo faltante rechazado, schema más nuevo rechazado, path traversal rechazado, roundtrip restauración → DB con datos, **firma del manifest** (verificada con llave vigente, archivo alterado + hashes recalculados la delata, firma ilegible rechazada, firmante desconocido y manifest legítmo sin firma = no verificable, verificación tras rotación de llave) |
 | `db/migrations.rs` | 5 | DB nueva migra al latest, re-ejecución no-op con datos preservados, DB legacy sin versión migra idempotente, downgrade rechazado, migración fallida con rollback |
@@ -322,7 +323,7 @@ El Core (Rust) cuenta con 135 tests unitarios que cubren:
 | `export/render.rs` | 6 | Header con paciente/perfil, orden cronológico, orden/labels canónicos de campos, footer SHA-256 + aviso, filename sanitizado y fallback sin nombre |
 
 ```bash
-cargo test --lib  # 135 passed; 0 failed
+cargo test --lib  # 136 passed; 0 failed
 ```
 
 > Los tests de `entry_commands` usan `tauri::test` (feature habilitada solo en `[dev-dependencies]`; el binario de producción no la incluye).
@@ -424,7 +425,7 @@ unificado es "notificar + abrir enlace". Ver `docs/release.md`.
 
 ### 🟩 Fase 3.7: Cifrado de DataKey + Limpieza Legacy (✅ Completado)
 - [x] **Módulo `data_key.rs`**: wrap/unwrap AES-GCM + `resolve_data_key` con prioridades
-- [x] **DataKey cifrada en disco**: `.data_key.{user_id}` (Argon2id password) + `.data_key.master` (SHA-256 seed)
+- [x] **DataKey cifrada en disco**: `.data_key.{user_id}` (Argon2id password) + `.data_key.master` (SHA-256 seed — hoy Argon2id, 2026-10-17)
 - [x] **Migración automática**: `.data_key` legacy hex → wrap personal, archivo borrado
 - [x] **Bootstrap**: `unlock_vault` devuelve `SEED_REQUIRED`; `AuthBox` pide la frase
 - [x] **Master wrap**: `setup_seed_master_wrap` tras verificar la frase en `SeedPhraseSetup`
@@ -515,6 +516,6 @@ npx tsc --noEmit        # Verifica TypeScript sin generar archivos
 pnpm test               # Ejecuta los 73 tests unitarios del frontend (vitest)
 pnpm test:watch         # Vitest en modo watch
 cargo check             # Verifica compilación Rust
-cargo test --lib        # Ejecuta los 135 tests unitarios del Core
+cargo test --lib        # Ejecuta los 136 tests unitarios del Core
 cargo add <crate>       # Añade dependencias al backend (desde src-tauri)
 ```
