@@ -287,7 +287,8 @@ MedicoView (tab Entries) ─ "Exportar .md"
          3. firma Ed25519 del documento completo (clave de la sesión) +
             bloque "Firma digital" con fingerprint de la pública
          4. escritura en <app_local_data_dir>/exports/ + auditoría
-            export_emitted (solo metadata: subject_id, entries, sha256, file)
+            export_emitted (solo metadata: subject_id, entries, sha256 —
+            sin filename: correlación con el archivo por hash del contenido)
          → { path, filename, entries_count, sha256 } → banner "✓ firmado ·
            Revelar en carpeta"
 ```
@@ -301,7 +302,7 @@ MedicoView (tab Entries) ─ "Exportar .md"
 | Campos por categoría | Labels canónicos de `config/entry_templates/*.json` (orden y nombre) | El `.md` es espejo del formulario clínico |
 | Orden | Cronológico ascendente | Lectura continua de la evolución |
 | Firma | Check ✓/✗ por entry + **firma Ed25519 del documento completo** (bloque final con firma y fingerprint de la pública) | Integridad + atribución + no-repudio del archivo entregado; la firma cubre el contenido hasta el footer de hash |
-| Auditoría | Evento `export_emitted` en `audit_log` con subject_id, entries, sha256 y filename (solo metadata, nunca valores) | Constancia de emisión trazable al profesional de la sesión |
+| Auditoría | Evento `export_emitted` en `audit_log` con subject_id, entries y sha256 (solo metadata, **sin filename**: el nombre del archivo lleva apellido+nombre del paciente y el audit es texto plano; correlación = hash del contenido) | Constancia de emisión trazable al profesional, sin PHI en claro |
 | Integridad | SHA-256 del contenido en el footer + aviso de confidencialidad | Permite detectar alteraciones del archivo exportado |
 | "Revelar en carpeta" | `revealItemInDir` de `@tauri-apps/plugin-opener` | Ya instalado y concedido vía `opener:default` (sin cambios de capability) |
 

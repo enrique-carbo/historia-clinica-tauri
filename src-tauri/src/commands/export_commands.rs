@@ -119,8 +119,10 @@ pub fn export_history<R: tauri::Runtime>(
         private_key_bytes,
     )?;
 
-    // Auditoría solo en éxito: metadata pura (ids, hash, filename) — nunca
-    // valores clínicos (regla de record_audit).
+    // Auditoría solo en éxito: metadata pura (ids, hash) — nunca valores
+    // ni identificables: el filename lleva apellido+nombre del paciente en
+    // claro y está prohibido en audit_log; la correlación con el archivo
+    // se hace por sha256 (contenido sin el bloque de firma).
     {
         let guard = db_state.0.lock().map_err(|_| "Lock poisoned".to_string())?;
         let conn = guard
@@ -132,8 +134,8 @@ pub fn export_history<R: tauri::Runtime>(
             "export_emitted",
             None,
             &format!(
-                "subject_id={} entries={} sha256={} file={}",
-                subject_id, result.entries_count, result.sha256, result.filename
+                "subject_id={} entries={} sha256={}",
+                subject_id, result.entries_count, result.sha256
             ),
         )?;
     }
@@ -519,17 +521,21 @@ mod tests {
         let db_state = env.app.state::<DbState>();
         let guard = db_state.0.lock().unwrap();
         let conn = guard.as_ref().expect("conn");
-        let (action, detail): (String, String) = conn
+        let detail: String = conn
             .query_row(
-                "SELECT action, detail FROM audit_log WHERE action = 'export_emitted';",
+                "SELECT detail FROM audit_log WHERE action = 'export_emitted';",
                 [],
-                |r| Ok((r.get(0)?, r.get(1)?)),
+                |r| r.get(0),
             )
             .expect("fila export_emitted");
-        assert_eq!(action, "export_emitted");
         assert!(detail.contains(&format!("subject_id={}", env.entity_id)));
         assert!(detail.contains("entries=1"));
         assert!(detail.contains(&format!("sha256={}", result.sha256)));
+        // Invariante anti-PHI: el audit correlaciona por sha256, nunca
+        // registra el filename (lleva apellido+nombre del paciente) ni
+        // ningún identificable.
+        assert!(!detail.contains("Pérez"), "audit sin nombre del paciente: {}", detail);
+        assert!(!detail.contains(".md"), "audit sin filename: {}", detail);
     }
 
     #[test]
