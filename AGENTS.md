@@ -78,14 +78,14 @@ pnpm version:check            # tauri.conf.json = package.json = Cargo.toml
 
 - **Core mínimo**: funcional pero mínimo — nada de features "por si acaso"
   ni placeholders en el Core. Lo no-esencial (teleconsulta, métricas, FHIR,
-  terminología, OS, IA) va a **plugins** cuando haga falta. Ver
-  `docs/PLUGIN_ARCHITECTURE.md` (Principio Rector) para la lista
+  terminología, OS, IA) va a **módulos** cuando haga falta. Ver
+  `docs/module-contract.md` §1 (Principio Rector) para la lista
   Core/no-Core.
 - **Productos Med/Vet**: un core, dos perfiles de build mínimos
   (identifier + branding + `entity_schema.json` en `profiles/`); el Core
   es agnóstico de especie. Pedidos de clientes específicos → config o
-  plugin, nunca forks ni `#ifdefs` en Core (ver
-  `docs/PLUGIN_ARCHITECTURE.md`, "Perfiles de producto").
+  módulo, nunca forks ni `#ifdefs` en Core (ver
+  `docs/module-contract.md` §1, "Un perfil de producto").
 - **Mobile-aware** (futuro tras Fase 4, ver README §"Futuro: Mobile"):
   al usar APIs/UI de escritorio, verificar soporte mobile o dejar el
   fallback explícito. `dialog` ✅ y `opener.openUrl` ✅ funcionan en
@@ -142,6 +142,10 @@ pnpm version:check            # tauri.conf.json = package.json = Cargo.toml
 - `docs/release.md` — checklist de release, política de update manual y
   pendiente del auto-updater.
 - `docs/fase4-diseno-sync.md` — diseño de sync (fase 4) y deuda pendiente.
-- `docs/plugin-teleconsulta-v1.md` — diseño del plugin de teleconsulta (v4,
-  paciente como usuario `role: 'paciente'`; alcance mínimo: canal + pago +
-  SOAP como entry del Core).
+- `docs/module-contract.md` — **arquitectura de módulos vinculante**
+  (Ruta 1: compilados + feature flags, paywall build-time, trait `Module`
+  + `ModuleContext` + `module_execute`; reemplaza a
+  `PLUGIN_ARCHITECTURE.md`).
+- `docs/plugin-teleconsulta-v1.md` — diseño del módulo de teleconsulta
+  (v5, paciente como usuario `role: 'paciente'`; alcance: chat + pago P2;
+  SOAP la escribe el profesional en el Core; DB propia del módulo).

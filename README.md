@@ -489,7 +489,7 @@ unificado es "notificar + abrir enlace". Ver `docs/release.md`.
 - [x] `change_password`: verifica actual, re-cifra vault, re-envuelve `.data_key.{user_id}`, actualiza `password_hash` (no toca master wrap) + UI en Perfil & 6 tests
 
 ### 🟥 Fase 5: Teleconsulta Asíncrona (plugin)
-- [x] Diseño v4: `docs/plugin-teleconsulta-v1.md` — canal único async + pago QR/transferencia (confirmación manual) + cierre SOAP como `entry` del Core; paciente = usuario `role: 'paciente'` (previsto en v001) con DataKey ausente estructuralmente; datos del plugin en tablas namespaced de la DB del Core
+- [x] Diseño v4: `docs/plugin-teleconsulta-v1.md` — canal único async + pago QR/transferencia (confirmación manual) + cierre SOAP como `entry` del Core; paciente = usuario `role: 'paciente'` (previsto en v001) con DataKey ausente estructuralmente; datos del plugin en tablas namespaced de la DB del Core (superado por v5.0: DB propia del módulo según `docs/module-contract.md`)
 - [x] P0 Core: `unlock_vault` role-aware + `change_password` sin rewrap + `grant_patient_access` (`users.entity_id`, alta lazy desde la ficha) + reset de contraseña sin wrap para paciente + vista paciente = username/contraseña (sin entries/EHR; la deuda `require_session` de fase 4 M1 quedó resuelta) — 2026-10-11, 128 tests
 - [ ] Hitos P1–P5 del diseño (P4 — sync — depende de fase 4, M1–M3)
 
