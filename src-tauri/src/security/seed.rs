@@ -1,6 +1,5 @@
 use argon2::Argon2;
 use rand::seq::SliceRandom;
-use sha2::{Digest, Sha256};
 use std::sync::Mutex;
 use zeroize::Zeroizing;
 
@@ -390,14 +389,6 @@ fn normalize_seed_phrase(phrase: &str) -> String {
         .join(" ")
 }
 
-/// Calcula el hash SHA-256 de la frase para persistencia
-pub fn hash_seed_phrase(phrase: &str) -> String {
-    let normalized = normalize_seed_phrase(phrase);
-    let mut hasher = Sha256::new();
-    hasher.update(normalized.as_bytes());
-    hex::encode(hasher.finalize())
-}
-
 // =======================================================================
 // TESTS
 // =======================================================================
@@ -405,6 +396,7 @@ pub fn hash_seed_phrase(phrase: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sha2::{Digest, Sha256};
 
     #[test]
     fn test_generate_mnemonic_word_count() {
@@ -480,13 +472,6 @@ mod tests {
         let p1 = normalize_seed_phrase("Abaco Abrir ACERO");
         let p2 = normalize_seed_phrase("  abaco   abrir   acero  ");
         assert_eq!(p1, p2);
-    }
-
-    #[test]
-    fn test_hash_seed_phrase_deterministic() {
-        let hash1 = hash_seed_phrase("test phrase");
-        let hash2 = hash_seed_phrase("test phrase");
-        assert_eq!(hash1, hash2);
     }
 
     #[test]

@@ -1,6 +1,13 @@
 use crate::security::seed;
 use zeroize::Zeroizing;
 
+// Solo comandos sin path de persistencia: la frase se compara contra la
+// semilla en memoria. `hash_seed` y `derive_key_from_seed` (command) se
+// eliminaron (2026-10-17) — exponer el hash o la clave derivada al frontend
+// creaba un bypass dormido del KDF Argon2id (ataque barato por SHA-256 si
+// alguien lo persistiera); el proof-of-possession contra el master wrap ya
+// lo hace `seed_recovery`.
+
 /// Genera una nueva mnemonic de 6 palabras.
 /// Solo se puede llamar si no hay seed verificada.
 #[tauri::command]
@@ -20,20 +27,6 @@ pub fn verify_seed(phrase: Zeroizing<String>) -> Result<bool, String> {
         println!("⚠️ [Seed] Frase incorrecta");
     }
     Ok(is_valid)
-}
-
-/// Deriva una clave de cifrado a partir de una frase semilla.
-/// Esta clave puede usarse como capa adicional de protección.
-#[tauri::command]
-pub fn derive_key_from_seed(phrase: Zeroizing<String>) -> Result<String, String> {
-    let key = seed::derive_key_from_seed(&phrase)?;
-    Ok(hex::encode(key))
-}
-
-/// Calcula el hash de la frase semilla para persistencia.
-#[tauri::command]
-pub fn hash_seed(phrase: Zeroizing<String>) -> Result<String, String> {
-    Ok(seed::hash_seed_phrase(&phrase))
 }
 
 

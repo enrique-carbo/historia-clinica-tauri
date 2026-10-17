@@ -76,8 +76,6 @@ pub fn run() {
             commands::export_history,
             commands::generate_seed,
             commands::verify_seed,
-            commands::derive_key_from_seed,
-            commands::hash_seed,
             commands::create_backup,
             commands::validate_backup,
             commands::restore_backup,

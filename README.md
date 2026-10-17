@@ -64,7 +64,7 @@ src-tauri/src/
      ├── entry_commands.rs     # CRUD append-only de entries (inmutables, con firma + búsqueda + verificación histórica).
      ├── export_commands.rs    # `export_history`: descifrado + render + escritura en `exports/` (roundtrip único).
      ├── professional_profile_commands.rs # Endpoints de perfil profesional.
-     └── seed_commands.rs      # Generación, verificación y derivación de la frase semilla.
+     └── seed_commands.rs      # Generación y verificación de la frase semilla (sin hash/derivación al frontend: bypass del KDF).
 ```
 
 ### Frontend UI (React)
@@ -310,12 +310,12 @@ El único command registrado es `export_history` (en `lib.rs`), la lógica vive 
 
 ## 🧪 Tests Automatizados
 
-El Core (Rust) cuenta con 139 tests unitarios que cubren:
+El Core (Rust) cuenta con 138 tests unitarios que cubren:
 | Módulo | Tests | Cobertura |
 |---|---|---|
 | `security/crypto.rs` | 14 | AES-GCM roundtrip, nonces únicos, clave incorrecta, manipulación, Blind Index (**HMAC con clave derivada de la DataKey**: determinismo, normalización, dependencia de la clave — sin ella no se enumera), Firma Ed25519, derivación de pública desde privada |
 | `security/vault.rs` | 12 | Creación, desbloqueo, contraseña incorrecta, sal única por usuario, `change_password` (vault re-cifrado, invariante data_key resolvable, wrap huérfano recupera con seed), `reset_user_vault` (keypair nuevo, contraseña vieja muerta, data_key preservada) |
-| `security/seed.rs` | 13 | Generación mnemonic, unicidad, derivación Argon2id (guard anti-SHA-256-crudo), verificación, edge cases, word list sin duplicados ni tildes |
+| `security/seed.rs` | 12 | Generación mnemonic, unicidad, derivación Argon2id (guard anti-SHA-256-crudo), verificación, edge cases, word list sin duplicados ni tildes |
 | `security/data_key.rs` | 10 | Wrap/unwrap AES-GCM, prioridades de resolución, `SEED_REQUIRED`, migración legacy |
 | `security/backup.rs` | 11 | Creación de respaldo (manifest + copias idénticas), hash alterado rechazado, archivo faltante rechazado, schema más nuevo rechazado, path traversal rechazado, roundtrip restauración → DB con datos, **firma del manifest** (verificada con llave vigente, archivo alterado + hashes recalculados la delata, firma ilegible rechazada, firmante desconocido y manifest legítmo sin firma = no verificable, verificación tras rotación de llave) |
 | `db/migrations.rs` | 5 | DB nueva migra al latest, re-ejecución no-op con datos preservados, DB legacy sin versión migra idempotente, downgrade rechazado, migración fallida con rollback |
@@ -329,7 +329,7 @@ El Core (Rust) cuenta con 139 tests unitarios que cubren:
 | `export/render.rs` | 7 | Header con paciente/perfil, orden cronológico, orden/labels canónicos de campos, footer SHA-256 + aviso, filename sanitizado y fallback sin nombre, estructura del bloque de firma digital |
 
 ```bash
-cargo test --lib  # 139 passed; 0 failed
+cargo test --lib  # 138 passed; 0 failed
 ```
 
 > Los tests de `entry_commands` usan `tauri::test` (feature habilitada solo en `[dev-dependencies]`; el binario de producción no la incluye).
@@ -522,6 +522,6 @@ npx tsc --noEmit        # Verifica TypeScript sin generar archivos
 pnpm test               # Ejecuta los 73 tests unitarios del frontend (vitest)
 pnpm test:watch         # Vitest en modo watch
 cargo check             # Verifica compilación Rust
-cargo test --lib        # Ejecuta los 139 tests unitarios del Core
+cargo test --lib        # Ejecuta los 138 tests unitarios del Core
 cargo add <crate>       # Añade dependencias al backend (desde src-tauri)
 ```
