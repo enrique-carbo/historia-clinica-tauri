@@ -1,5 +1,7 @@
 # 🩺 Fichio Care — Historia Clínica Digital
 
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](./LICENSE)
+
 Aplicación de escritorio nativa orientada a la gestión de historias clínicas y telemedicina asíncrona con un enfoque **Local-First** y arquitectura de seguridad **Zero-Knowledge Parcial** (Cifrado de Extremo a Extremo).
 
 El sistema garantiza la máxima privacidad procesando y cifrando toda la información médica sensible directamente en la RAM del hardware local antes de persistirla en el disco o sincronizarla. El servidor remoto actuará en el futuro únicamente como un "tubo ciego" que almacena texto cifrado, sin capacidad de leer la información.
@@ -525,3 +527,16 @@ cargo check             # Verifica compilación Rust
 cargo test --lib        # Ejecuta los 138 tests unitarios del Core
 cargo add <crate>       # Añade dependencias al backend (desde src-tauri)
 ```
+
+## 📜 Licencia
+
+[AGPL-3.0-or-later](./LICENSE) — Copyright (C) 2026 Fichio Care contributors.
+
+- **Sin garantía** (sección "NO WARRANTY" de la AGPL): software clínico, úselo bajo
+  su responsabilidad profesional y con los respaldos correspondientes.
+- **Uso en red cubierto**: quien modifique este código y lo ofrezca como servicio
+  (ej. un SaaS de historias clínicas derivado de este Core) debe publicar sus
+  cambios bajo la misma licencia. Vender **soporte o hosting** del servicio
+  propio está permitido — el modelo es open source de verdad, no "source-available".
+- El copyright holder puede otorgar **licencias comerciales** aparte (dual
+  licensing) a quien necesite usar el código sin las obligaciones de la AGPL.

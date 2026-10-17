@@ -17,6 +17,8 @@ el checklist.
    cd .. && npx tsc --noEmit && pnpm test && pnpm version:check
    pnpm build && pnpm build:vet:frontend
    ```
+   - Licencia: SPDX `AGPL-3.0-or-later` presente en `package.json` y
+     `src-tauri/Cargo.toml`; `LICENSE` en la raíz.
 3. **Commit** con la versión (ej. `Release v0.2.0`) y tag
    `v0.2.0`.
 4. **Builds de bundle** por plataforma (cada perfil, en su SO):
