@@ -41,7 +41,7 @@ el checklist.
   aplicada); las claves de usuario (DataKey/seed) **nunca** rotan en un
   update.
 
-## Pendiente: auto-updater (fase futura)
+## Pendiente: auto-updater (fase futura, solo desktop)
 
 Cuando haya ~3+ instalaciones reales: `tauri-plugin-updater` con
 artefactos firmados y `latest.json` estático por perfil
@@ -49,3 +49,8 @@ artefactos firmados y `latest.json` estático por perfil
 secreto de CI + copia offline (perderla = sin updates; filtrarla =
 atacante pushea binarios a todos). Primer rollout: notificar y abrir la
 página de release, no auto-instalar en silencio.
+
+**Solo desktop**: iOS/Android prohíben el auto-update fuera de sus
+tiendas — en mobile el update lo gestiona Play Store / App Store (ver
+README §"Futuro: Mobile"). El patrón unificado es "notificar + abrir
+enlace" (`openUrl`), que corre en todos los targets.

@@ -10,6 +10,11 @@
 
 Requisito de producto: un policonsultorio con varios profesionales, **cada uno en su propio equipo**, viendo las mismas evoluciones de los pacientes, con atribución de autor intacta (cada entry firmada por quien la creó).
 
+> Nota estratégica (2026-10-17): la sync es además el **prerequisito del
+> mobile futuro** (README §"Futuro: Mobile") — multi-dispositivo es el
+> valor principal de tener app en el celular; diseñar sync con ese
+> horizonte evita decisiones que cierren el port.
+
 La v1 local (una estación de trabajo, uso por turnos) ya funciona y es la base. Este diseño la extiende a **múltiples dispositivos de la misma instalación**: cada equipo corre la app Tauri con su propia copia local de la base cifrada, y un servidor PocketBase actúa como relé de datos cifrados.
 
 Principios heredados que se mantienen:

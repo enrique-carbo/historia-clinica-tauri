@@ -373,7 +373,9 @@ Eso no toca los datos: la base vive en `app_local_data_dir` y el
 CI + copia offline) y endpoints **separados por perfil**
 (`med/latest.json` / `vet/latest.json` — son productos distintos).
 Primer rollout: notificar y abrir la página de release (ya existe
-`opener`), no auto-instalar en silencio. Ver `docs/release.md`.
+`opener`), no auto-instalar en silencio. **Solo desktop**: en mobile los
+updates los dan las tiendas (Play Store / App Store) — el patrón
+unificado es "notificar + abrir enlace". Ver `docs/release.md`.
 
 ## 🗺️ Mapa de Ruta del Desarrollo (Roadmap)
 
@@ -485,13 +487,32 @@ Primer rollout: notificar y abrir la página de release (ya existe
 ### ⬜ Fase 6: Interoperabilidad (Futuro)
 - [ ] Motor de exportación JSON y traducción a estándares FHIR (IA-Driven)
 
+### 📱 Futuro: Mobile (tras Fase 4)
+
+Decisión (2026-10-17): el producto debe poder correr en mobile **después
+de la sync** — un celular sin sync es una copla huérfana de la historia
+clínica, y el 90% del valor de mobile es justamente multi-dispositivo.
+
+- **Un core, N targets**: el mismo Rust compila a desktop y a
+  Android/iOS (Tauri 2); mobile = proyectos `mobile/` + adaptación fina
+  de UI. **Nunca fork** — la regla de perfiles Med/Vet se extiende:
+  perfiles por vertical, targets por plataforma.
+- **Deuda conocida de plugins**: `dialog` funciona en mobile (pickers
+  nativos) y `opener.openUrl` también; `revealItemInDir` es
+  **desktop-only** → fallback sharesheet/nativo. Respaldos mobile =
+  "guardar en Archivos" (SAF), no elegir carpetas de escritorio.
+- **Updates en mobile vía tiendas** (Play Store / App Store) — los SO
+  prohíben el auto-update fuera de la tienda; `tauri-plugin-updater` es
+  solo desktop. El patrón unificado es "notificar + abrir enlace"
+  (`openUrl`), que funciona en todos los targets.
+
 ## 🚀 Comandos Útiles de Desarrollo
 
 ```bash
 pnpm tauri dev          # Levanta el entorno (Rust + React HMR)
 pnpm tauri build        # Compila en modo release para producción
 npx tsc --noEmit        # Verifica TypeScript sin generar archivos
-pnpm test               # Ejecuta los 57 tests unitarios del frontend (vitest)
+pnpm test               # Ejecuta los 73 tests unitarios del frontend (vitest)
 pnpm test:watch         # Vitest en modo watch
 cargo check             # Verifica compilación Rust
 cargo test --lib        # Ejecuta los 135 tests unitarios del Core

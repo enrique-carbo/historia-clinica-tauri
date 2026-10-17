@@ -86,6 +86,12 @@ pnpm version:check            # tauri.conf.json = package.json = Cargo.toml
   es agnóstico de especie. Pedidos de clientes específicos → config o
   plugin, nunca forks ni `#ifdefs` en Core (ver
   `docs/PLUGIN_ARCHITECTURE.md`, "Perfiles de producto").
+- **Mobile-aware** (futuro tras Fase 4, ver README §"Futuro: Mobile"):
+  al usar APIs/UI de escritorio, verificar soporte mobile o dejar el
+  fallback explícito. `dialog` ✅ y `opener.openUrl` ✅ funcionan en
+  mobile; `revealItemInDir` ❌ es desktop-only → fallback sharesheet.
+  Existe el precedente: `export_history` (Fase 3.9) manda solo
+  `subject_id`, sin diálogo. Updates mobile = tiendas, nunca updater.
 - **Sesión**: el `user_id` nunca se confía en lo que manda el frontend.
   Derivar con `require_session()` / `require_admin()` /
   `require_admin_or_assistant()` (definidos en
