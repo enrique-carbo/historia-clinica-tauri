@@ -23,7 +23,7 @@ const CATEGORY_CONFIG: Record<
     color: "bg-danger-tint/30 text-danger-text border-danger-border/50",
   },
   CONDITION: {
-    label: "Condición",
+    label: "Diagnóstico",
     icon: "🏥",
     color: "bg-purple-900/30 text-purple-400 border-purple-800/50",
   },

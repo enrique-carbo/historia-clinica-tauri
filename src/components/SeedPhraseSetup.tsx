@@ -51,11 +51,6 @@ export function SeedPhraseSetup({ onComplete }: SeedPhraseSetupProps) {
     }
   };
 
-  const handleSkip = () => {
-    // No marca como configurada - permitir configurar después
-    setStep("generate");
-  };
-
   return (
     <div className="min-h-screen bg-canvas flex items-center justify-center p-4">
       <div className="w-full max-w-md">
@@ -75,12 +70,6 @@ export function SeedPhraseSetup({ onComplete }: SeedPhraseSetupProps) {
               className="w-full px-4 py-3 bg-action-primary hover:bg-action-primary-hover disabled:bg-border-strong text-text-inverse rounded-lg font-medium transition-colors"
             >
               {isLoading ? "Generando..." : "Generar Frase Semilla"}
-            </button>
-            <button
-              onClick={handleSkip}
-              className="w-full mt-3 px-4 py-2 text-text-muted hover:text-text-primary text-sm transition-colors"
-            >
-              Omitir por ahora
             </button>
           </div>
         )}

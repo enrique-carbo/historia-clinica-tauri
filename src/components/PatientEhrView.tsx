@@ -8,7 +8,7 @@ import { AllergyCard } from "./AllergyCard";
 import { Alert } from "./ui/Alert";
 import { EmptyState } from "./ui/EmptyState";
 import { calculateAge } from "../utils/dateUtils";
-import { FLAT_PATIENT_FIELDS } from "../utils/schema";
+import { FLAT_PATIENT_FIELDS, BLIND_INDEX_LABEL } from "../utils/schema";
 
 // Campos ya mostrados en el encabezado de la ficha (nombre/apellido como
 // título, dni como badge, fecha_nacimiento como edad). El resto de los
@@ -73,7 +73,7 @@ export function PatientEhrView() {
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Buscar por nombre, DNI o teléfono..."
+          placeholder={`Buscar por nombre, ${BLIND_INDEX_LABEL} o teléfono...`}
           aria-label="Buscar pacientes"
           className="w-full rounded-lg bg-field border border-border-strong px-4 py-2.5 text-sm text-text-primary focus:border-focus focus:ring-1 focus:ring-focus transition-colors outline-none"
         />
@@ -110,7 +110,7 @@ export function PatientEhrView() {
               </div>
               <div className="text-xs text-text-muted mt-1.5 flex flex-wrap items-center gap-2">
                 <span className="bg-surface-raised px-1.5 py-0.5 rounded text-text-secondary font-mono">
-                  DNI: {entity.data.dni}
+                  {BLIND_INDEX_LABEL}: {entity.data.dni}
                 </span>
                 <span className="truncate">{entity.data.telefono}</span>
               </div>
@@ -153,7 +153,7 @@ export function PatientEhrView() {
                   </div>
                   <div className="flex items-center gap-2 sm:gap-3 mt-0.5 text-xs sm:text-sm text-text-secondary flex-wrap">
                     <span className="font-mono bg-surface-raised px-1.5 py-0.5 rounded text-xs">
-                      DNI: {patient.data.dni}
+                      {BLIND_INDEX_LABEL}: {patient.data.dni}
                     </span>
                     <span>{calculateAge(patient.data.fecha_nacimiento)} años</span>
                   </div>

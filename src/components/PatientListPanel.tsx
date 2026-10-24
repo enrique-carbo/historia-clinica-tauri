@@ -1,6 +1,8 @@
-// Panel izquierdo del padrón: búsqueda por nombre/teléfono, búsqueda por DNI
-// y listado de pacientes. Presentacional: recibe estado y callbacks.
+// Panel izquierdo del padrón: búsqueda por nombre/teléfono, búsqueda exacta
+// por el documento (blind index) y listado de pacientes. Presentacional:
+// recibe estado y callbacks.
 import { EmptyState } from "./ui/EmptyState";
+import { BLIND_INDEX_LABEL } from "../utils/schema";
 
 export interface EntityRecord {
   id: number;
@@ -69,20 +71,20 @@ export function PatientListPanel({
           </button>
         </div>
 
-        {/* Búsqueda por DNI */}
+        {/* Búsqueda exacta por el documento (blind index) */}
         <div className="flex gap-2">
           <input
             type="text"
             value={searchDni}
             onChange={(e) => onSearchDniChange(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && onFind()}
-            placeholder="DNI exacto..."
+            placeholder={`${BLIND_INDEX_LABEL} exacto...`}
             className={`${INPUT_CLASSES} flex-1`}
           />
           <button
             onClick={onFind}
             disabled={loading}
-            aria-label="Buscar por DNI"
+            aria-label={`Buscar por ${BLIND_INDEX_LABEL}`}
             className={SEARCH_BUTTON_CLASSES}
           >
             <span aria-hidden="true">🔍</span>
@@ -137,7 +139,7 @@ export function PatientListPanel({
                 </div>
                 <div className="text-xs text-text-muted mt-1.5 flex flex-wrap items-center gap-2">
                   <span className="bg-surface-raised px-1.5 py-0.5 rounded text-text-secondary font-mono">
-                    DNI: {e.data.dni}
+                    {BLIND_INDEX_LABEL}: {e.data.dni}
                   </span>
                   <span className="truncate">{e.data.telefono}</span>
                 </div>

@@ -1,6 +1,6 @@
 {
   "category": "CONDITION",
-  "label": "Condición / Diagnóstico",
+  "label": "Diagnóstico",
   "description": "Registro de condición médica o diagnóstico",
   "fields": [
     {

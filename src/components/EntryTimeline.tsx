@@ -14,7 +14,7 @@ const CATEGORIES: { value: EntryCategory | "ALL"; label: string; icon: string }[
   { value: "SOAP_NOTE", label: "SOAP", icon: "📋" },
   { value: "ALLERGY", label: "Alergias", icon: "⚠️" },
   { value: "MEDICATION", label: "Medicación", icon: "💊" },
-  { value: "CONDITION", label: "Diagnósticos", icon: "🏥" },
+  { value: "CONDITION", label: "Diagnóstico", icon: "🏥" },
 ];
 
 export function EntryTimeline({ subjectId }: EntryTimelineProps) {

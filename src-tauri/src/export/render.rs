@@ -87,7 +87,7 @@ const CATEGORY_LABELS: &[(&str, &str)] = &[
     ("SOAP_NOTE", "Nota SOAP"),
     ("ALLERGY", "Alergia"),
     ("MEDICATION", "Medicación"),
-    ("CONDITION", "Condición / Diagnóstico"),
+    ("CONDITION", "Diagnóstico"),
 ];
 
 const STATUS_LABELS: &[(&str, &str)] = &[

@@ -27,6 +27,14 @@ const schemaConfig =
 export const PATIENT_LABEL: string = schemaConfig.entities.patient.label;
 export const PATIENT_FIELDS: FieldDef[] = schemaConfig.entities.patient.fields;
 
+/** Label del campo de blind index del paciente: "DNI / Documento" en Care,
+ *  "N° Registro / Microchip" en Vet. Lo usan los buscadores y los badges
+ *  para no hardcodear "DNI" en perfiles que no lo tienen. */
+export const BLIND_INDEX_LABEL: string =
+  PATIENT_FIELDS.find(
+    (f) => f.name === schemaConfig.entities.patient.blind_index_field,
+  )?.label ?? "DNI";
+
 /** Aplana groups con prefijo `{group}_{campo}`, preservando el orden. */
 export function flattenFields(
   fields: FieldDef[],
