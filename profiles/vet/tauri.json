@@ -1,6 +1,10 @@
 {
   "productName": "Fichio Vet",
   "identifier": "ar.com.fichio.vet",
+  "mainBinaryName": "fichio-vet",
+  "bundle": {
+    "shortDescription": "Fichio Vet — historia clínica veterinaria offline-first"
+  },
   "build": {
     "beforeDevCommand": "pnpm dev:vet:frontend",
     "beforeBuildCommand": "pnpm build:vet:frontend"
