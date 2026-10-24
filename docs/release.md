@@ -35,6 +35,14 @@ el checklist.
    - med y vet son **coinstalables**: cada perfil fija su
      `mainBinaryName` (`fichio-care` / `fichio-vet`) en su config, así
      que los `.deb` no compiten por `/usr/bin` ni por los iconos.
+   - **Windows se buildea en Actions** (no hay cross desde Linux):
+     `.github/workflows/release.yml` corre por tag `v*` o
+     `workflow_dispatch`, compila Care y Vet con `--bundles nsis` en
+     `windows-latest` y sube los `.exe` como artifact (y al release si
+     ya existe). Orden recomendado para tags nuevos: **publicá el
+     release en la web primero** (con el tag nuevo) — cuando Actions
+     termine, adjunta los `.exe` solo; si no, se bajan del artifact
+     `installers-windows` y se suben a mano.
 5. **Smoke test del instalador en una máquina/entorno limpio**: instalar,
    abrir, login con un usuario existente (la base debe sobrevivir la
    reinstalación), crear 1 entry, exportar.

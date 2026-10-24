@@ -1,0 +1,86 @@
+name: Release
+
+# Builds de release por tag (los binarios se adjuntan al release si ya
+# existe) o manuales con workflow_dispatch (validación sin tag).
+# Linux se buildea local (docs/release.md paso 4); este workflow solo
+# compila Windows, que exige Windows nativo (no hay cross desde Linux).
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write # subir los .exe al release (GH_TOKEN)
+
+jobs:
+  windows:
+    name: "Windows (NSIS: Fichio Care + Fichio Vet)"
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Instalar dependencias
+        run: pnpm install --frozen-lockfile
+
+      # Ojo: FICHIO_PROFILE va en bloque `env:` — los prefijos bash del
+      # package.json (build:med/build:vet) no corren en Windows.
+      # `--bundles nsis` pisa los targets Linux de tauri.conf.json.
+      - name: "Build Fichio Care (med → NSIS)"
+        run: pnpm exec tauri build --bundles nsis
+        env:
+          FICHIO_PROFILE: med
+
+      # Copiamos a un staging entre builds: el bundler de AppImage en
+      # Linux limpia su dir de salida por perfil, así que no confiamos
+      # en que el dir de nsis conserve el binario del build anterior.
+      - name: Guardar instalador de Care
+        shell: bash
+        run: |
+          mkdir -p dist-windows
+          cp src-tauri/target/release/bundle/nsis/*.exe dist-windows/
+
+      - name: "Build Fichio Vet (vet → NSIS)"
+        run: pnpm exec tauri build --config profiles/vet/tauri.json --bundles nsis
+        env:
+          FICHIO_PROFILE: vet
+
+      - name: Guardar instalador de Vet
+        shell: bash
+        run: cp src-tauri/target/release/bundle/nsis/*.exe dist-windows/
+
+      - name: Subir artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: installers-windows
+          path: dist-windows/*.exe
+          if-no-files-found: error
+
+      - name: Adjuntar .exe al release (solo tags)
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist-windows/*.exe --clobber
+          else
+            echo "El release $TAG no existe todavía."
+            echo "Crealo en la web y subí los .exe desde el artifact 'installers-windows',"
+            echo "o volvé a correr este workflow con el release publicado."
+          fi
