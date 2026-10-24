@@ -55,7 +55,7 @@ export function Navbar({
               );
             })}
           </nav>
-          <ThemeToggle />
+          <ThemeToggle className="hidden md:inline" />
         </div>
       </div>
 

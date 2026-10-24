@@ -7,10 +7,10 @@ interface AllergyCardProps {
 }
 
 const SEVERITY_STYLES: Record<string, { label: string; chip: string; dot: string }> = {
-  Leve: { label: "Leve", chip: "bg-yellow-900/30 text-yellow-400 border-yellow-800/50", dot: "bg-yellow-500" },
-  Moderada: { label: "Moderada", chip: "bg-amber-900/30 text-amber-400 border-amber-800/50", dot: "bg-amber-500" },
-  Severa: { label: "Severa", chip: "bg-red-900/40 text-red-400 border-red-800/50", dot: "bg-red-500" },
-  Anafilaxia: { label: "Anafilaxia", chip: "bg-red-950/60 text-red-300 border-red-700/60", dot: "bg-red-600 animate-pulse" },
+  Leve: { label: "Leve", chip: "bg-yellow-900/80 text-yellow-200 border-yellow-800/50", dot: "bg-yellow-500" },
+  Moderada: { label: "Moderada", chip: "bg-amber-900/80 text-amber-200 border-amber-800/50", dot: "bg-amber-500" },
+  Severa: { label: "Severa", chip: "bg-red-900/80 text-red-200 border-red-800/50", dot: "bg-red-500" },
+  Anafilaxia: { label: "Anafilaxia", chip: "bg-red-950/70 text-red-200 border-red-700/60", dot: "bg-red-600 animate-pulse" },
 };
 
 const DEFAULT_SEVERITY = { label: "Sin datos", chip: "bg-surface-raised text-text-secondary border-border-strong", dot: "bg-text-muted" };

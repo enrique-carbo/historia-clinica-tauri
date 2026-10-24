@@ -77,10 +77,6 @@ export function MedicoView() {
       {activeMedicoTab === "paciente" && (
         <div className="flex flex-col mx-auto w-full p-2">
           <div>
-            <h2 className="text-lg font-semibold mb-4 text-text-primary flex items-center gap-2">
-              <span className="p-1.5 rounded bg-blue-900/20 text-blue-400" aria-hidden="true">👤</span>
-              Gestión Pacientes
-            </h2>
             <Entity/>
           </div>
         </div>

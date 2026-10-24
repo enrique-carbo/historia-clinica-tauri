@@ -74,6 +74,20 @@
           "encrypted": true
         },
         {
+          "name": "seguro_salud",
+          "label": "Seguro Salud",
+          "type": "text",
+          "required": false,
+          "encrypted": true
+        },
+        {
+          "name": "afiliado",
+          "label": "Afiliado",
+          "type": "text",
+          "required": false,
+          "encrypted": true
+        },
+        {
           "name": "responsable",
           "label": "Responsable - Tutor",
           "type": "group",
