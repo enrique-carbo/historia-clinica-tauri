@@ -62,20 +62,6 @@
           "encrypted": true
         },
         {
-          "name": "telefono",
-          "label": "Teléfono del Tutor",
-          "type": "tel",
-          "required": false,
-          "encrypted": true
-        },
-        {
-          "name": "email",
-          "label": "Correo Electrónico",
-          "type": "email",
-          "required": false,
-          "encrypted": true
-        },
-        {
           "name": "direccion",
           "label": "Dirección",
           "type": "text",
@@ -113,6 +99,13 @@
               "name": "telefono",
               "label": "Teléfono Responsable",
               "type": "tel",
+              "required": false,
+              "encrypted": true
+            },
+            {
+              "name": "email",
+              "label": "Correo Electrónico",
+              "type": "email",
               "required": false,
               "encrypted": true
             }
