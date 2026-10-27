@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Stethoscope (Twemoji, CC-BY 4.0) via SVG Repo — attribution per Twemoji license -->
+<!-- Uploaded to: SVG Repo, www.svgrepo.com, Generator: SVG Repo Mixer Tools -->
+
+<svg
+   width="800px"
+   height="800px"
+   viewBox="0 0 36 36"
+   aria-hidden="true"
+   role="img"
+   class="iconify iconify--twemoji"
+   preserveAspectRatio="xMidYMid meet"
+   version="1.1"
+   id="svg2"
+   sodipodi:docname="fichio.svg"
+   inkscape:version="1.4.4 (1:1.4.4+202605061436+dcaf3e7d9e)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs2">
+    <filter
+       inkscape:collect="always"
+       style="color-interpolation-filters:sRGB"
+       id="filter3"
+       x="-0.017606283"
+       y="-0.02938428"
+       width="1.0352126"
+       height="1.0587686">
+      <feGaussianBlur
+         inkscape:collect="always"
+         stdDeviation="0.21911161"
+         id="feGaussianBlur3" />
+    </filter>
+    <filter
+       inkscape:collect="always"
+       style="color-interpolation-filters:sRGB"
+       id="filter4"
+       x="-0.025049542"
+       y="-0.041806822"
+       width="1.0500991"
+       height="1.0836136">
+      <feGaussianBlur
+         inkscape:collect="always"
+         stdDeviation="0.31174356"
+         id="feGaussianBlur4" />
+    </filter>
+  </defs>
+  <sodipodi:namedview
+     id="namedview2"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="0.72920387"
+     inkscape:cx="260.55814"
+     inkscape:cy="398.37967"
+     inkscape:window-width="1920"
+     inkscape:window-height="1027"
+     inkscape:window-x="0"
+     inkscape:window-y="25"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="g3" />
+  <g
+     id="g3"
+     transform="translate(0.02697814,-2.6443301)">
+    <path
+       fill="#55acee"
+       d="m 7.7560062,8.0033153 h 6.3722128 c 5.28072,0 4.734974,4.6914437 8.193953,4.6914437 h 8.739698 c 2.145245,0 3.88431,1.680345 3.88431,3.753156 v 9.382889 c -2.89e-4,1.251331 0.203091,3.753155 -1.942155,3.753155 H 7.7560062 c -2.1452454,0 -3.8843104,-1.680345 -3.8843104,-3.753155 V 11.756471 c 0,-2.0728108 1.739065,-3.7531557 3.8843104,-3.7531557 z"
+       id="path2"
+       sodipodi:nodetypes="ssssscsssss"
+       style="fill:#3981b8;fill-opacity:1;stroke-width:0.954542" />
+    <g
+       id="g4"
+       style="opacity:1;mix-blend-mode:lighten"
+       transform="matrix(1.0002428,0,0,0.99014037,-0.00404484,1.0582258)">
+      <rect
+         style="display:inline;fill:#87c0eb;fill-opacity:0.812238;fill-rule:evenodd;stroke-width:0.170055;stroke-linecap:square;paint-order:fill markers stroke;filter:url(#filter3)"
+         id="rect2"
+         width="29.868193"
+         height="17.896231"
+         x="1.7279119"
+         y="13.885006"
+         ry="3.3406296"
+         inkscape:label="inferior" />
+      <rect
+         style="display:inline;opacity:0.634807;mix-blend-mode:normal;fill:#87c0eb;fill-opacity:0.804592;fill-rule:evenodd;stroke-width:0.170055;stroke-linecap:square;paint-order:fill markers stroke;filter:url(#filter4)"
+         id="rect3"
+         width="29.868193"
+         height="17.896231"
+         x="1.7279119"
+         y="13.885006"
+         ry="3.3406296"
+         inkscape:label="superior" />
+    </g>
+  </g>
+</svg>

@@ -279,7 +279,7 @@ export function AdminUsersPanel() {
                     <td className="px-4 py-3">
                       <span
                         className={`text-xs font-semibold ${
-                          u.is_active ? "text-emerald-400" : "text-red-400"
+                          u.is_active ? "text-emerald-600" : "text-red-600"
                         }`}
                       >
                         ● {u.is_active ? "Activo" : "Desactivado"}
@@ -316,7 +316,7 @@ export function AdminUsersPanel() {
                               ? "Usá «Cambiar contraseña» desde tu perfil"
                               : "Resetear contraseña (vault regenerado)"
                           }
-                          className="px-2.5 py-1 text-xs font-semibold rounded border border-amber-800/60 text-amber-400 hover:bg-amber-950/40 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                          className="px-2.5 py-1 text-xs font-semibold rounded border border-amber-800 text-amber-600 hover:bg-amber-950/40 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                         >
                           Reset contraseña
                         </button>

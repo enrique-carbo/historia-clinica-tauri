@@ -160,14 +160,15 @@ export function EntryTimeline({ subjectId }: EntryTimelineProps) {
           {/* Timeline */}
           <div className="relative">
             {/* Línea vertical conectora */}
-            <div className="absolute left-4 top-0 bottom-0 w-px bg-surface-raised" />
+            <div className="absolute left-4 top-0 bottom-0 w-px bg-zinc-400 dark:bg-surface-raised hidden sm:inline" />
+
 
             {/* Entries */}
             <div className="space-y-4">
               {entries.map((entry) => (
-                <div key={entry.id} className="relative pl-10">
+                <div key={entry.id} className="relative pl-0 sm:pl-10">
                   {/* Punto en la línea de tiempo */}
-                  <div className="absolute left-2.5 top-4 w-3 h-3 rounded-full bg-border-strong border-2 border-text-muted" />
+                  <div className="absolute left-2.5 top-4 w-3 h-3 rounded-full bg-border-strong border-2 border-text-muted hidden sm:inline" />
 
                   <EntryCard entry={entry} onClick={() => selectEntry(entry)} />
                 </div>

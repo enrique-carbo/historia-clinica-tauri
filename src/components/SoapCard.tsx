@@ -66,7 +66,7 @@ export function SoapCard({ entry, onClick }: SoapCardProps) {
 
       {/* Autor y firma */}
       <div className="flex flex-wrap gap-2 items-center justify-between text-xs mb-2 px-2 py-1.5 bg-canvas/50 rounded">
-        <SignedBy name={entry.author_name} />
+        <SignedBy name={entry.author_name} profession={entry.author_profession}/>
         <div className="flex items-center gap-1 shrink-0">
           <SignatureStatus isVerified={entry.is_verified} signature={entry.signature} />
         </div>

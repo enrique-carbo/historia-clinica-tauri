@@ -94,7 +94,6 @@ export function MedicoView() {
         <div className="flex flex-col gap-6 mx-auto w-full p-6">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-lg font-semibold text-text-primary flex items-center gap-2">
-              <span className="p-1.5 rounded bg-purple-900/20 text-purple-400" aria-hidden="true">⏱️</span>
               Entries <span className="hidden md:inline">(Append-Only)</span>
               {selectedPatient && (
                 <span className="text-text-muted font-normal text-sm">
@@ -112,7 +111,7 @@ export function MedicoView() {
                   {exporting ? "Exportando…" : "Exportar .md"}
                 </Button>
                 <Button onClick={() => setShowEntryForm(!showEntryForm)}>
-                  {showEntryForm ? "Ver Timeline" : "+ Nueva Entry"}
+                  {showEntryForm ? "Ver Timeline" : "Nueva Entry"}
                 </Button>
               </div>
             )}

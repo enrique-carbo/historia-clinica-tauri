@@ -69,7 +69,7 @@ export function AdminSeedPanel() {
       </div>
 
       <Alert variant="error">
-        <strong className="text-red-300">⚠️ Rotar la frase invalida la anterior.</strong>{" "}
+        <strong>⚠️ Rotar la frase invalida la anterior.</strong>{" "}
         Si no anotás la nueva en papel, la frase vieja deja de servir y no habrá
         forma de recuperar los datos si se pierden todas las contraseñas. La
         rotación recién se aplica cuando confirmás re-escribiéndola.

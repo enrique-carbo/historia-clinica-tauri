@@ -165,8 +165,8 @@ export function AuthBox() {
       {/* Recuperación break-glass con frase semilla */}
       {!bootstrap && recovering ? (
         <form onSubmit={handleRecoverSubmit} className="flex flex-col gap-4">
-          <div className="p-3 bg-purple-950/30 border border-purple-800/50 rounded-lg">
-            <p className="text-xs text-purple-300">
+          <div className="p-3 bg-purple-900/80 border border-purple-950 rounded-lg">
+            <p className="text-xs text-purple-200">
               🚨 Esto <strong>restablece la contraseña del administrador</strong> y entra
               directamente al sistema. Requiere la <strong>frase semilla</strong> (6 palabras del
               papel) y queda registrado en la auditoría. Si solo olvidaste tu contraseña personal,
@@ -207,8 +207,8 @@ export function AuthBox() {
         </form>
       ) : !bootstrap && needsSeed ? (
         <form onSubmit={handleSeedSubmit} className="flex flex-col gap-4">
-          <div className="p-3 bg-yellow-950/30 border border-yellow-800/50 rounded-lg">
-            <p className="text-xs text-yellow-400">
+          <div className="p-3 bg-yellow-900/80 border border-yellow-950 rounded-lg">
+            <p className="text-xs text-yellow-200">
               🌱 Este usuario necesita la <strong>frase semilla</strong> (6 palabras del papel) para
               acceder a los datos cifrados de esta instalación.
             </p>
@@ -266,8 +266,8 @@ export function AuthBox() {
         </div>
 
         {bootstrap && (
-          <div className="p-3 bg-blue-950/30 border border-blue-800/50 rounded-lg">
-            <p className="text-xs text-blue-400">
+          <div className="p-3 bg-blue-900/80 border border-blue-950 rounded-lg">
+            <p className="text-xs text-blue-200">
               Esta cuenta quedará con rol <strong>Administrador</strong>: podrá dar de
               alta al resto de los usuarios, resetear contraseñas y rotar la frase
               semilla. Después de crearla no habrá más registro libre.

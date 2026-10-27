@@ -97,7 +97,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
           <div>
             <h1 className="text-lg sm:text-xl font-bold text-text-primary m-0">
-              <span aria-hidden="true">🩺</span> {APP_NAME}
+              {APP_NAME}
             </h1>
             <p className="text-xs text-text-muted mt-0.5 hidden sm:block">
               Historia Clínica — Rol:{" "}

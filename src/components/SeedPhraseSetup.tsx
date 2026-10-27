@@ -99,8 +99,8 @@ export function SeedPhraseSetup({ onComplete }: SeedPhraseSetupProps) {
             </div>
 
             {/* Advertencia */}
-            <div className="p-3 bg-yellow-950/30 border border-yellow-800/50 rounded-lg mb-4">
-              <p className="text-xs text-yellow-400">
+            <div className="p-3 bg-yellow-900/80 border border-yellow-950 rounded-lg mb-4">
+              <p className="text-xs text-yellow-200">
                 <span aria-hidden="true">⚠️</span> <strong>Importante:</strong> Si perdés esta frase y tu computadora se daña, los datos son irrecuperables.
               </p>
             </div>

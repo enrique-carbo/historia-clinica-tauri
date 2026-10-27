@@ -28,6 +28,19 @@ el checklist.
    ```
    Targets Linux: `.deb` + AppImage (evitar `targets: "all"` en CI —
    compila cross sin probar).
+   - ⚠️ **Piso de glibc = versión de SO donde se buildea**: los assets
+     Linux se compilan en la máquina de dev (Ubuntu 24.04 → glibc
+     2.39), así que corren en **Debian 13 / Ubuntu 24.04 / LMDE 7 o
+     superiores** (y derivados recientes: Fedora, Arch…). En Debian 12
+     / LMDE 6 / Ubuntu 22.04 no arrancan — ni el `.deb` ni el
+     AppImage, es el mismo binario — con
+     `GLIBC_2.39 not found: fichio-care` / `libgdk-3: GLIBC_2.38 not
+     found`. **Siempre declarar el mínimo en las notas de la release.**
+     - Si algún día un tester necesita un piso más viejo: buildear en
+       un contenedor **`ubuntu:22.04`** (glibc 2.35 → piso Debian 12 /
+       LMDE 6 / Ubuntu 22.04+). No se puede bajar más: Tauri 2 exige
+       `libwebkit2gtk-4.1`, inexistente en Ubuntu 20.04 / Debian 11 —
+       22.04 es la base más vieja posible.
    - ⚠️ **El bundler de AppImage limpia `bundle/appimage/` en cada
      run** — el build del segundo perfil borra el AppImage del primero.
      Copiá el primero a un lado antes de buildear el segundo y volvé a
@@ -52,8 +65,9 @@ el checklist.
      (Tauri respeta `XDG_DATA_HOME`; ahí arranca vacío → bootstrap del
      primer admin).
 6. **Publicar**: release con instaladores + notas de versión (qué cambió
-   para el usuario, si hay migración avisarlo explícitamente) + aviso de
-   **respaldar antes de actualizar**.
+   para el usuario, si hay migración avisarlo explícitamente;
+   **requisitos mínimos de SO** según el entorno de build — ver nota de
+   glibc en el paso 4) + aviso de **respaldar antes de actualizar**.
 
 ## Después del release
 

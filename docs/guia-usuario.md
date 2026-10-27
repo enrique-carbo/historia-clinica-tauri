@@ -133,7 +133,7 @@ forma de recuperar los datos.
 
 **Arriba (header)**:
 
-- **🩺 Fichio Care / Fichio Vet** + tu rol.
+- **Fichio Care / Fichio Vet** + tu rol.
 - **🌙 / ☀️**: tema oscuro / claro (se esconde en pantallas chicas).
 - **"Usuario: …"** y el botón **"🔒 Cerrar"** (cierra la bóveda: borra las
   claves de la memoria — siempre cerrá al terminar).
@@ -234,7 +234,7 @@ Se crean desde la pestaña **Entries** (con un paciente seleccionado).
 
 <!-- CAPTURA: 10-nueva-entry — Formulario de Nueva Entry con las 4 categorías -->
 
-1. Pestaña **Entries** → botón **"➕ Nueva Entry"**.
+1. Pestaña **Entries** → botón **"Nueva Entry"**.
 2. Elegí la categoría:
 
    | Botón | Para qué sirve |
@@ -425,10 +425,11 @@ cambio de contraseña. **No ve entries ni fichas** — ni siquiera las suyas
 
 Fichio Vet es el **mismo producto** con:
 
-- Otro nombre: el header dice **🩺 Fichio Vet**, y tiene base de datos
+- Otro nombre: el header dice **Fichio Vet**, y tiene base de datos
   propia (podés tener Care y Vet en la misma PC).
-- **Campos distintos en la ficha del paciente**: en vez de DNI / Seguro
-  Salud / Afiliado / Teléfono, la ficha de Vet trae:
+- **Campos distintos en la ficha del paciente**: en Vet no hay DNI,
+  Seguro Salud ni Afiliado, y **el teléfono y el correo van dentro del
+  grupo del tutor** (no tienen campos propios):
 
   | Campo Vet | Detalle |
   |---|---|
@@ -436,8 +437,7 @@ Fichio Vet es el **mismo producto** con:
   | Especie | Perro, Gato, Ave, Roedor, Conejo, Reptil, Otro |
   | Raza · Sexo | — |
   | **N° Registro / Microchip** | el "documento" del paciente |
-  | Teléfono del Tutor | en vez de teléfono del paciente |
-  | Responsable - Tutor | grupo igual que Care (nombre + teléfono) |
+  | Responsable - Tutor | grupo con **nombre, teléfono y correo** del tutor |
 
 - La búsqueda de documentos en Vet usa el label del perfil:
   **"N° Registro / Microchip exacto..."**.
