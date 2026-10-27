@@ -63,6 +63,18 @@ jobs:
         shell: bash
         run: cp src-tauri/target/release/bundle/nsis/*.exe dist-windows/
 
+      # NSIS nombra con el productName ("Fichio Care_…", con espacio).
+      # Renombramos a punto para coincidir con los assets de v0.1.0, la
+      # guía de usuario y las notas (además de URLs sin %20).
+      - name: Renombrar instaladores (espacio → punto)
+        shell: bash
+        run: |
+          cd dist-windows
+          for f in *.exe; do
+            mv "$f" "${f// /.}"
+          done
+          ls -1
+
       - name: Subir artifacts
         uses: actions/upload-artifact@v4
         with:
