@@ -12,15 +12,18 @@
 :root {
   color-scheme: light;
 
-  --canvas: #fafafa; /* zinc-50 */
+  /* Capas con separación visible (paleta "B": página gris, cards blancas,
+     inputs con cajita propia). El canvas más oscuro obliga a bajar
+     --text-muted para mantener AA sobre él. */
+  --canvas: #e9e9ec; /* entre zinc-150 y zinc-200 */
   --surface: #ffffff; /* white */
   --surface-raised: #f4f4f5; /* zinc-100 */
-  --field: #ffffff; /* white */
-  --border: #e4e4e7; /* zinc-200 */
-  --border-strong: #d4d4d8; /* zinc-300 */
+  --field: #fafafa; /* zinc-50 — el input se separa de la card blanca */
+  --border: #d4d4d8; /* zinc-300 */
+  --border-strong: #a1a1aa; /* zinc-400 */
   --text-primary: #18181b; /* zinc-900 */
   --text-secondary: #52525b; /* zinc-600 */
-  --text-muted: #71717a; /* zinc-500 */
+  --text-muted: #67676f; /* entre zinc-500 y 600: AA sobre canvas #e9e9ec */
   --text-placeholder: #71717a; /* zinc-500 (zinc-400 no llega a AA: 2.56) */
   --text-inverse: #ffffff;
   --action-primary: #2563eb; /* blue-600 */

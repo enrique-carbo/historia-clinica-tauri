@@ -64,7 +64,7 @@ export function PatientEhrView() {
   return (
   <div className="grid grid-cols-1 md:grid-cols-12 gap-6 h-auto md:h-[calc(100vh-180px)]">
     {/* PANEL IZQUIERDO: PADRÓN DE PACIENTES */}
-    <div className="col-span-1 md:col-span-4 flex flex-col border border-border rounded-xl bg-surface/50 backdrop-blur-sm overflow-hidden shadow-lg min-h-87.5 md:min-h-0">
+    <div className="col-span-1 md:col-span-4 flex flex-col border border-border rounded-xl bg-surface overflow-hidden shadow-lg min-h-87.5 md:min-h-0">
       <div className="p-4 border-b border-border space-y-3 bg-surface">
         <h3 className="text-xs font-bold text-text-muted uppercase tracking-widest">
           Padrón de Pacientes
@@ -124,7 +124,7 @@ export function PatientEhrView() {
       {patient && (
         <>
           {/* FICHA COLAPSABLE */}
-          <div className="border border-border rounded-xl bg-surface/50 shadow-lg overflow-hidden transition-colors duration-300">
+          <div className="border border-border rounded-xl bg-surface shadow-lg overflow-hidden transition-colors duration-300">
             <div
               role="button"
               tabIndex={0}
@@ -193,7 +193,7 @@ export function PatientEhrView() {
           </div>
 
           {/* HISTORIAL: ENTRADAS SOAP */}
-          <div className="border border-border rounded-xl bg-surface/50 backdrop-blur-sm shadow-lg flex-1 flex flex-col overflow-hidden min-h-0">
+          <div className="border border-border rounded-xl bg-surface shadow-lg flex-1 flex flex-col overflow-hidden min-h-0">
             <div className="p-4 border-b border-border bg-surface flex items-center justify-between gap-3">
               <h3 className="text-xs font-bold text-text-muted uppercase tracking-widest">
                 Historial — Notas SOAP

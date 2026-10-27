@@ -170,7 +170,7 @@ export function PatientForm({
       className={`flex-1 overflow-y-auto p-4 sm:p-6 border rounded-xl shadow-lg transition-colors custom-scrollbar ${
         editingId
           ? "border-amber-700/50 bg-amber-900/10"
-          : "border-border bg-surface/50"
+          : "border-border bg-surface"
       }`}
     >
       <div className="flex justify-between items-center mb-6">

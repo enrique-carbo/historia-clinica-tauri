@@ -41,7 +41,7 @@ export function Navbar({
                     ${
                       isActive
                         ? "text-text-primary bg-surface border-b-2 border-focus"
-                        : "text-text-secondary hover:text-text-primary bg-surface/40 hover:bg-surface/60 border-b-2 border-transparent"
+                        : "text-text-secondary hover:text-text-primary bg-surface/40 hover:bg-surface border-b-2 border-transparent"
                     }
                   `}
                 >

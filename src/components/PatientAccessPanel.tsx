@@ -86,7 +86,7 @@ export function PatientAccessPanel({
   if (!editingId || !canManageAccess) return null;
 
   return (
-    <div className="shrink-0 rounded-xl border border-border bg-surface/50 p-4 sm:p-6">
+    <div className="shrink-0 rounded-xl border border-border bg-surface p-4 sm:p-6">
       <div className="flex items-center justify-between gap-3 mb-4">
         <h3 className="font-semibold text-text-primary uppercase tracking-wider text-sm">
           <span aria-hidden="true">🎟️</span> Acceso del paciente

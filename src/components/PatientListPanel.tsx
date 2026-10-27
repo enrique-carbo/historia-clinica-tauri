@@ -45,7 +45,7 @@ export function PatientListPanel({
   onEdit,
 }: PatientListPanelProps) {
   return (
-    <div className="col-span-1 md:col-span-5 lg:col-span-4 flex flex-col border border-border rounded-xl bg-surface/50 backdrop-blur-sm overflow-hidden shadow-lg min-h-100 md:min-h-0">
+    <div className="col-span-1 md:col-span-5 lg:col-span-4 flex flex-col border border-border rounded-xl bg-surface overflow-hidden shadow-lg min-h-100 md:min-h-0">
       <div className="p-4 border-b border-border space-y-3 bg-surface">
         <h3 className="text-xs font-bold text-text-muted uppercase tracking-widest">
           Padrón de Pacientes
