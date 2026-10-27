@@ -112,7 +112,6 @@ export function PatientEhrView() {
                 <span className="bg-surface-raised px-1.5 py-0.5 rounded text-text-secondary font-mono">
                   {BLIND_INDEX_LABEL}: {entity.data.dni}
                 </span>
-                <span className="truncate">{entity.data.telefono}</span>
               </div>
             </button>
           ))

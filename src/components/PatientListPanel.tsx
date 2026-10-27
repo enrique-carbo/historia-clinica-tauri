@@ -141,7 +141,6 @@ export function PatientListPanel({
                   <span className="bg-surface-raised px-1.5 py-0.5 rounded text-text-secondary font-mono">
                     {BLIND_INDEX_LABEL}: {e.data.dni}
                   </span>
-                  <span className="truncate">{e.data.telefono}</span>
                 </div>
               </button>
 
