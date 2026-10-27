@@ -352,8 +352,8 @@ export function AdminUsersPanel() {
               Usuario: <span className="text-text-primary font-semibold">{resetTarget.username}</span>
             </p>
 
-            <div className="bg-amber-950/30 border border-amber-800/50 rounded-lg p-3 mb-4">
-              <p className="text-xs text-amber-400">
+            <div className="bg-warning-tint border border-warning-border rounded-lg p-3 mb-4">
+              <p className="text-xs text-warning-text">
                 Se regenerará la llave de firma de este usuario: sus entries
                 firmadas <strong>anteriores a este momento</strong> quedarán con la
                 clave vieja (siguen verificándose), y las nuevas usarán la clave

@@ -45,7 +45,7 @@ export function ChangePasswordForm() {
 
   return (
     <div>
-      <h3 className="text-xs font-bold text-amber-400 uppercase tracking-widest mb-4">
+      <h3 className="text-xs font-bold text-warning-text uppercase tracking-widest mb-4">
         <span aria-hidden="true">🔒</span> Seguridad — Cambiar contraseña
       </h3>
 
@@ -114,7 +114,7 @@ export function ChangePasswordForm() {
         {pwdMsg && (
           <span
             className={`text-sm font-medium ${
-              pwdMsg.type === "ok" ? "text-emerald-400" : "text-red-400"
+              pwdMsg.type === "ok" ? "text-success-text" : "text-danger-text"
             }`}
           >
             {pwdMsg.type === "ok" ? "✓ " : "✕ "}

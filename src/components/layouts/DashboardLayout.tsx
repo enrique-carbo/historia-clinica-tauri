@@ -111,7 +111,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           {!isSeedConfigured && (
             <button
               onClick={() => setShowSeedSetup(true)}
-              className="px-3 py-1.5 bg-yellow-900/30 border border-yellow-700/50 text-yellow-400 rounded text-xs hover:bg-yellow-900/50 transition-colors cursor-pointer"
+              className="px-3 py-1.5 bg-warning-tint border border-warning-border text-warning-text rounded text-xs hover:border-warning-text transition-colors cursor-pointer"
               title="Configurar frase semilla"
             >
               <span aria-hidden="true">🔐</span>{" "}
@@ -124,7 +124,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           </span>
           <button
             onClick={handleLogout}
-            className="px-3 py-1.5 bg-surface-raised border border-border-strong text-text-primary rounded text-xs hover:bg-red-900/50 hover:border-red-800 hover:text-red-300 transition-colors cursor-pointer"
+            className="px-3 py-1.5 bg-surface-raised border border-border-strong text-text-primary rounded text-xs hover:bg-danger-tint/60 hover:border-danger-border hover:text-danger-text transition-colors cursor-pointer"
           >
             <span aria-hidden="true">🔒</span> Cerrar
           </button>

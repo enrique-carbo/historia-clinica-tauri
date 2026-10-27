@@ -21,25 +21,28 @@
   --text-primary: #18181b; /* zinc-900 */
   --text-secondary: #52525b; /* zinc-600 */
   --text-muted: #71717a; /* zinc-500 */
-  --text-placeholder: #a1a1aa; /* zinc-400 */
+  --text-placeholder: #71717a; /* zinc-500 (zinc-400 no llega a AA: 2.56) */
   --text-inverse: #ffffff;
   --action-primary: #2563eb; /* blue-600 */
   --action-primary-hover: #1d4ed8; /* blue-700 */
   --focus: #3b82f6; /* blue-500 */
 
   /* Semánticos de estado (§9): fórmula texto + tint + borde */
-  --danger-text: #dc2626; /* red-600 */
+  --danger-text: #b91c1c; /* red-700 (AA sobre tint: red-600 daba 4.41) */
   --danger-tint: #fef2f2; /* red-50 */
   --danger-border: #fecaca; /* red-200 */
-  --success-text: #16a34a; /* green-600 */
+  --success-text: #15803d; /* green-700 (AA: green-600 daba 3.15 sobre tint) */
   --success-tint: #f0fdf4; /* green-50 */
   --success-border: #bbf7d0; /* green-200 */
-  --warning-text: #d97706; /* amber-600 */
+  --warning-text: #b45309; /* amber-700 (AA: amber-600 daba 3.07 sobre tint) */
   --warning-tint: #fffbeb; /* amber-50 */
   --warning-border: #fde68a; /* amber-200 */
   --info-text: #2563eb; /* blue-600 */
   --info-tint: #eff6ff; /* blue-50 */
   --info-border: #bfdbfe; /* blue-200 */
+  --violet-text: #7c3aed; /* violet-600 */
+  --violet-tint: #f5f3ff; /* violet-50 */
+  --violet-border: #ddd6fe; /* violet-200 */
   /* Seleccionado/activo (§8) */
   --selected-text: #1d4ed8; /* blue-700 */
   --selected-tint: #dbeafe; /* blue-100 */
@@ -77,6 +80,9 @@
   --info-text: #60a5fa; /* blue-400 */
   --info-tint: #172554; /* blue-950 */
   --info-border: #1e40af; /* blue-800 */
+  --violet-text: #a78bfa; /* violet-400 */
+  --violet-tint: #2e1065; /* violet-950 */
+  --violet-border: #6d28d9; /* violet-800 */
   /* Seleccionado/activo (§8) */
   --selected-text: #60a5fa; /* blue-400 */
   --selected-tint: #1e3a8a; /* blue-900 */
@@ -113,6 +119,9 @@
   --color-info-text: var(--info-text);
   --color-info-tint: var(--info-tint);
   --color-info-border: var(--info-border);
+  --color-violet-text: var(--violet-text);
+  --color-violet-tint: var(--violet-tint);
+  --color-violet-border: var(--violet-border);
   --color-selected-text: var(--selected-text);
   --color-selected-tint: var(--selected-tint);
   --color-selected-border: var(--selected-border);

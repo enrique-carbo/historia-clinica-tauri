@@ -151,7 +151,7 @@ export function ProfileView() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         {/* Columna Izquierda: Datos Clínicos */}
         <div className="space-y-5">
-          <h3 className="text-xs font-bold text-blue-400 uppercase tracking-widest mb-4">
+          <h3 className="text-xs font-bold text-info-text uppercase tracking-widest mb-4">
             Identidad Clínica
           </h3>
 
@@ -309,7 +309,7 @@ export function ProfileView() {
 
         {/* Columna Derecha: Contacto Profesional */}
         <div className="space-y-5">
-          <h3 className="text-xs font-bold text-emerald-400 uppercase tracking-widest mb-4">
+          <h3 className="text-xs font-bold text-success-text uppercase tracking-widest mb-4">
             Datos de Contacto
           </h3>
 

@@ -101,7 +101,7 @@ export function AdminSeedPanel() {
       {phase === "shown" && (
         <form onSubmit={handleConfirmRotate} className="bg-surface border border-border rounded-xl p-6 flex flex-col gap-5">
           <div>
-            <p className="text-xs font-bold text-amber-400 uppercase tracking-wider mb-3">
+            <p className="text-xs font-bold text-warning-text uppercase tracking-wider mb-3">
               1. Anotá esta frase en papel — no está aplicada todavía
             </p>
             <div className="bg-field border border-amber-800/50 rounded-lg p-4 grid grid-cols-2 md:grid-cols-3 gap-2">
@@ -115,7 +115,7 @@ export function AdminSeedPanel() {
           </div>
 
           <div>
-            <p className="text-xs font-bold text-amber-400 uppercase tracking-wider mb-2">
+            <p className="text-xs font-bold text-warning-text uppercase tracking-wider mb-2">
               2. Re-escribí la frase para confirmar que la anotaste
             </p>
             <Input

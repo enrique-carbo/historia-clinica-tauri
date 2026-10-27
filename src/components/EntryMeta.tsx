@@ -25,7 +25,7 @@ const CATEGORY_CONFIG: Record<
   CONDITION: {
     label: "Diagnóstico",
     icon: "🏥",
-    color: "bg-purple-900/30 text-purple-400 border-purple-800/50",
+    color: "bg-violet-tint/30 text-violet-text border-violet-border/50",
   },
 };
 

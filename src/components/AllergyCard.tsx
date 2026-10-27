@@ -66,9 +66,9 @@ export function AllergyCard({ subjectId }: AllergyCardProps) {
         {isLoading ? (
           <span className="text-xs text-text-muted">Cargando…</span>
         ) : error ? (
-          <span className="text-xs text-red-400 truncate">{error}</span>
+          <span className="text-xs text-danger-text truncate">{error}</span>
         ) : !hasAllergies ? (
-          <span className="inline-flex items-center gap-1.5 text-xs text-green-400">
+          <span className="inline-flex items-center gap-1.5 text-xs text-success-text">
             <span className="h-1.5 w-1.5 rounded-full bg-green-500"></span>
             Ninguna registrada
           </span>

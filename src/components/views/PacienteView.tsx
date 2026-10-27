@@ -41,7 +41,7 @@ export function PacienteView() {
         </div>
       </div>
 
-      <div className="p-4 bg-blue-950/30 border border-blue-900 rounded-lg text-xs text-blue-400 text-center">
+      <div className="p-4 bg-info-tint border border-info-border rounded-lg text-xs text-info-text text-center">
         <span aria-hidden="true">🔒</span> <strong>Privacidad Garantizada:</strong> Tus datos clínicos se
         guardan cifrados de extremo a extremo. Ni siquiera los servidores de{" "}
         {APP_NAME} pueden leerlos.

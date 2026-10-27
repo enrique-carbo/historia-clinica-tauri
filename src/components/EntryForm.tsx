@@ -165,7 +165,7 @@ export function EntryForm({ onSuccess }: EntryFormProps) {
 
   if (profileBlocked) {
     return (
-      <div className="p-4 rounded-lg bg-amber-950/40 border border-amber-800 text-amber-200 text-sm flex flex-col gap-3">
+      <div className="p-4 rounded-lg bg-warning-tint border border-warning-border text-warning-text text-sm flex flex-col gap-3">
         <p>
           Para crear entries necesitás completar tu perfil profesional:
           <strong> nombre, profesión y matrícula</strong>.
@@ -220,7 +220,7 @@ export function EntryForm({ onSuccess }: EntryFormProps) {
               onClick={() => handleCategoryChange(category)}
               className={`p-3 rounded-lg border text-sm font-medium transition-colors ${
                 selectedCategory === category
-                  ? "bg-blue-900/20 border-blue-800 text-blue-500"
+                  ? "bg-selected-tint border-selected-border text-selected-text"
                   : "bg-field border-border text-text-secondary hover:border-border-strong"
               }`}
             >
