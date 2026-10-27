@@ -1,5 +1,6 @@
 // Panel derecho: formulario dinámico de paciente (alta/edición) generado
 // desde entity_schema.json. Presentacional: recibe form y callbacks.
+import { useEffect, useState } from "react";
 import { PATIENT_FIELDS, PATIENT_LABEL } from "../utils/schema";
 import { Button } from "./ui/Button";
 
@@ -26,6 +27,130 @@ type SchemaField = {
 
 const FIELD_INPUT_CLASSES =
   "w-full rounded-lg bg-field border border-border-strong px-3 py-2.5 text-sm text-text-primary focus:border-focus focus:ring-1 focus:ring-focus outline-none transition-colors appearance-none";
+
+// ── Fecha de nacimiento ────────────────────────────────────────────────
+// Compuesto Día / Mes / Año, sin calendario nativo (el picker se abre en
+// "hoy" y retroceder décadas es insoportable). Se compone a ISO
+// YYYY-MM-DD — el único formato que consumen backend, calculateAge y
+// export — solo cuando los tres componentes forman una fecha real y no
+// futura; incompleto o inválido emite "" (Entity filtra vacíos al guardar).
+
+type DateParts = { day: string; month: string; year: string };
+
+const MONTHS_ES = [
+  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+];
+
+const onlyDigits = (s: string) => s.replace(/\D/g, "");
+
+// Exportados para tests (fixtures propios, sin acoplar al schema).
+export function splitIsoDate(iso: string): DateParts {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  return m
+    ? { year: m[1], month: m[2], day: m[3] }
+    : { day: "", month: "", year: "" };
+}
+
+export function composeIso(parts: DateParts): { iso: string; error: string | null } {
+  const { day, month, year } = parts;
+  // Incompleto: sin valor y sin error (el usuario sigue tipeando).
+  if (!day || !month || year.length !== 4) return { iso: "", error: null };
+  const y = Number(year);
+  const m = Number(month);
+  const d = Number(day);
+  if (y < 1900 || m < 1 || m > 12 || d < 1) {
+    return { iso: "", error: "Fecha inválida" };
+  }
+  // new Date(y, m, 0) = último día del mes m (base 1).
+  if (d > new Date(y, m, 0).getDate()) {
+    return { iso: "", error: "Fecha inválida" };
+  }
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  if (new Date(y, m - 1, d) > today) {
+    return { iso: "", error: "No puede ser futura" };
+  }
+  return {
+    iso: `${year}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`,
+    error: null,
+  };
+}
+
+export function DatePartsInput({
+  field,
+  value,
+  onChange,
+}: {
+  field: SchemaField;
+  value: string;
+  onChange: (field: string, value: string) => void;
+}) {
+  const [parts, setParts] = useState<DateParts>(() => splitIsoDate(value));
+  const { iso, error } = composeIso(parts);
+
+  // Adopta cambios externos del form (p. ej. la re-sincronización desde la
+  // store con el mismo editingId): solo si el valor difiere de lo que
+  // componemos — así nunca pisa lo que el usuario está tipeando.
+  useEffect(() => {
+    if (value !== iso) setParts(splitIsoDate(value));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+
+  const update = (patch: Partial<DateParts>) => {
+    const next = { ...parts, ...patch };
+    setParts(next);
+    onChange(field.name, composeIso(next).iso);
+  };
+
+  return (
+    <div>
+      <div className="grid grid-cols-[3.5rem_1fr_4.5rem] gap-2">
+        <input
+          id={`${field.name}-day`}
+          value={parts.day}
+          onChange={(e) => update({ day: onlyDigits(e.target.value).slice(0, 2) })}
+          className={FIELD_INPUT_CLASSES}
+          placeholder="DD"
+          inputMode="numeric"
+          autoComplete="bday-day"
+          aria-label={`${field.label}: día`}
+        />
+        <div className="relative">
+          <select
+            value={parts.month}
+            onChange={(e) => update({ month: e.target.value })}
+            className={`${FIELD_INPUT_CLASSES} pr-8 cursor-pointer`}
+            aria-label={`${field.label}: mes`}
+          >
+            <option value="">Mes</option>
+            {MONTHS_ES.map((m, i) => (
+              <option key={m} value={String(i + 1).padStart(2, "0")}>
+                {m}
+              </option>
+            ))}
+          </select>
+          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-text-secondary">
+            <svg aria-hidden="true" className="fill-current h-4 w-4" viewBox="0 0 20 20">
+              <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
+            </svg>
+          </div>
+        </div>
+        <input
+          id={`${field.name}-year`}
+          value={parts.year}
+          onChange={(e) => update({ year: onlyDigits(e.target.value).slice(0, 4) })}
+          className={FIELD_INPUT_CLASSES}
+          placeholder="AAAA"
+          inputMode="numeric"
+          autoComplete="bday-year"
+          aria-label={`${field.label}: año`}
+        />
+      </div>
+      {error && <p className="text-xs text-danger-text mt-1">{error}</p>}
+    </div>
+  );
+}
 
 function FieldInput({
   field,
@@ -72,11 +197,13 @@ function FieldInput({
           </div>
         </div>
       );
+    case "date":
+      return <DatePartsInput field={field} value={value} onChange={onChange} />;
     default:
       return (
         <input
           id={field.name}
-          type={field.type === "date" ? "date" : "text"}
+          type="text"
           value={value}
           onChange={(e) => onChange(field.name, e.target.value)}
           className={FIELD_INPUT_CLASSES}
@@ -89,10 +216,12 @@ function FieldInput({
 function FieldBlock({
   field,
   form,
+  editingId,
   onChange,
 }: {
   field: SchemaField;
   form: EntityData;
+  editingId: number | null;
   onChange: (field: string, value: string) => void;
 }) {
   if (field.type === "group") {
@@ -120,13 +249,18 @@ function FieldBlock({
                 }
               >
                 <label
-                  htmlFor={prefixed.name}
+                  htmlFor={
+                    prefixed.type === "date"
+                      ? `${prefixed.name}-day`
+                      : prefixed.name
+                  }
                   className="block text-xs font-bold text-text-muted mb-1.5 uppercase tracking-wide"
                 >
                   {prefixed.label}{" "}
                   {prefixed.required && <span className="text-danger-text">*</span>}
                 </label>
                 <FieldInput
+                  key={`${prefixed.name}-${editingId ?? "new"}`}
                   field={prefixed}
                   value={form[prefixed.name] || ""}
                   onChange={onChange}
@@ -146,13 +280,18 @@ function FieldBlock({
       }
     >
       <label
-        htmlFor={field.name}
+        htmlFor={field.type === "date" ? `${field.name}-day` : field.name}
         className="block text-xs font-bold text-text-muted mb-1.5 uppercase tracking-wide"
       >
         {field.label}{" "}
         {field.required && <span className="text-danger-text">*</span>}
       </label>
-      <FieldInput field={field} value={form[field.name] || ""} onChange={onChange} />
+      <FieldInput
+        key={`${field.name}-${editingId ?? "new"}`}
+        field={field}
+        value={form[field.name] || ""}
+        onChange={onChange}
+      />
     </div>
   );
 }
@@ -195,6 +334,7 @@ export function PatientForm({
             key={field.name}
             field={field as SchemaField}
             form={form}
+            editingId={editingId}
             onChange={onChange}
           />
         ))}

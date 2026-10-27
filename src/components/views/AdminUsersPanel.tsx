@@ -316,7 +316,7 @@ export function AdminUsersPanel() {
                               ? "Usá «Cambiar contraseña» desde tu perfil"
                               : "Resetear contraseña (vault regenerado)"
                           }
-                          className="px-2.5 py-1 text-xs font-semibold rounded border border-amber-800 text-amber-600 hover:bg-amber-950/40 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                          className="px-2.5 py-1 text-xs font-semibold rounded border border-amber-800 text-amber-600 hover:bg-amber-900/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                         >
                           Reset contraseña
                         </button>
