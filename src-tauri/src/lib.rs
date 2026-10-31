@@ -3,6 +3,7 @@ use tauri::Manager;
 
 mod commands;
 mod db;
+mod error;
 mod export;
 mod security;
 mod types;

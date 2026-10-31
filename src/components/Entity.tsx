@@ -3,6 +3,7 @@
 // PatientListPanel (izq.), PatientForm y PatientAccessPanel (der.).
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { formatError } from "../utils/errors";
 import { useAuthStore } from "../stores/useAuthStore";
 import { usePatientStore } from "../stores/usePatientStore";
 import { PATIENT_FIELDS, flattenFields } from "../utils/schema";
@@ -107,7 +108,7 @@ export function Entity() {
       resetForm();
       handleList();
     } catch (err) {
-      setResult(`❌ Error: ${err}`);
+      setResult(`❌ Error: ${formatError(err)}`);
     } finally {
       setLoading(false);
     }
@@ -128,7 +129,7 @@ export function Entity() {
         setResult("🔍 No encontrado");
       }
     } catch (err) {
-      setResult(`❌ Error: ${err}`);
+      setResult(`❌ Error: ${formatError(err)}`);
     } finally {
       setLoading(false);
     }
@@ -153,7 +154,7 @@ export function Entity() {
         );
       }
     } catch (err) {
-      setResult(`❌ Error: ${err}`);
+      setResult(`❌ Error: ${formatError(err)}`);
     } finally {
       setLoading(false);
     }
@@ -178,7 +179,7 @@ export function Entity() {
       setEntities(res);
       setResult(`📋 Listado: ${res.length} pacientes`);
     } catch (err) {
-      setResult(`❌ Error: ${err}`);
+      setResult(`❌ Error: ${formatError(err)}`);
     } finally {
       setLoading(false);
     }
@@ -195,7 +196,7 @@ export function Entity() {
       setEntities(res);
       setResult(`🔍 Búsqueda: ${res.length} coincidencias`);
     } catch (err) {
-      setResult(`❌ Error: ${err}`);
+      setResult(`❌ Error: ${formatError(err)}`);
     } finally {
       setLoading(false);
     }

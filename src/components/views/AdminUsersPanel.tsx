@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { formatError } from "../../utils/errors";
 import { Button } from "../ui/Button";
 import { Alert } from "../ui/Alert";
 import { Input } from "../ui/Input";
@@ -51,7 +52,7 @@ export function AdminUsersPanel() {
       setUsers(await invoke<UserRow[]>("list_users"));
       setError(null);
     } catch (e) {
-      setError(String(e));
+      setError(formatError(e));
     } finally {
       setLoading(false);
     }
@@ -79,7 +80,7 @@ export function AdminUsersPanel() {
       setShowCreate(false);
       await load();
     } catch (err) {
-      setError(String(err));
+      setError(formatError(err));
     } finally {
       setCreating(false);
     }
@@ -95,7 +96,7 @@ export function AdminUsersPanel() {
       );
       await load();
     } catch (err) {
-      setError(String(err));
+      setError(formatError(err));
     }
   };
 
@@ -116,7 +117,7 @@ export function AdminUsersPanel() {
       setResetPassword("");
       await load();
     } catch (err) {
-      setError(String(err));
+      setError(formatError(err));
     } finally {
       setResetting(false);
     }

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { formatError } from "../../utils/errors";
 import { Button } from "../ui/Button";
 import { Alert } from "../ui/Alert";
 import { Input } from "../ui/Input";
@@ -22,7 +23,7 @@ export function AdminSeedPanel() {
       setConfirmInput("");
       setPhase("shown");
     } catch (e) {
-      setError(String(e));
+      setError(formatError(e));
     } finally {
       setLoading(false);
     }
@@ -45,7 +46,7 @@ export function AdminSeedPanel() {
       setConfirmInput("");
       setPhase("done");
     } catch (err) {
-      setError(String(err));
+      setError(formatError(err));
     } finally {
       setLoading(false);
     }

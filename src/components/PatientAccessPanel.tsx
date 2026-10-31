@@ -4,6 +4,7 @@
 // edición o seleccionada en el padrón).
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { formatError } from "../utils/errors";
 import { Button } from "./ui/Button";
 
 interface PatientAccess {
@@ -45,7 +46,7 @@ export function PatientAccessPanel({
         if (!cancelled) setAccess(res);
       })
       .catch((e) => {
-        if (!cancelled) setAccessMsg({ type: "err", text: String(e) });
+        if (!cancelled) setAccessMsg({ type: "err", text: formatError(e) });
       })
       .finally(() => {
         if (!cancelled) setAccessLoading(false);
@@ -78,7 +79,7 @@ export function PatientAccessPanel({
       setAccessPassword("");
       setAccessMsg({ type: "ok", text: `Acceso otorgado: @${res.username}` });
     } catch (e) {
-      setAccessMsg({ type: "err", text: String(e) });
+      setAccessMsg({ type: "err", text: formatError(e) });
     } finally {
       setAccessLoading(false);
     }

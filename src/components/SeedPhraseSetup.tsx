@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { formatError } from "../utils/errors";
 import { Alert } from "./ui/Alert";
 
 interface SeedPhraseSetupProps {
@@ -23,7 +24,7 @@ export function SeedPhraseSetup({ onComplete }: SeedPhraseSetupProps) {
       setPhrase(generated);
       setStep("display");
     } catch (err) {
-      setError(String(err));
+      setError(formatError(err));
     } finally {
       setIsLoading(false);
     }
@@ -45,7 +46,7 @@ export function SeedPhraseSetup({ onComplete }: SeedPhraseSetupProps) {
         setError("La frase no coincide. Verificá las palabras.");
       }
     } catch (err) {
-      setError(String(err));
+      setError(formatError(err));
     } finally {
       setIsLoading(false);
     }

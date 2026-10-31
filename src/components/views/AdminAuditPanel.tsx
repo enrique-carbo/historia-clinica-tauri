@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { formatError } from "../../utils/errors";
 import { formatDateTime } from "../../utils/dateUtils";
 import { Alert } from "../ui/Alert";
 import { Button } from "../ui/Button";
@@ -31,7 +32,7 @@ export function AdminAuditPanel() {
   useEffect(() => {
     invoke<AuditRow[]>("list_audit_log")
       .then(setEntries)
-      .catch((e) => setError(String(e)))
+      .catch((e) => setError(formatError(e)))
       .finally(() => setLoading(false));
   }, []);
 

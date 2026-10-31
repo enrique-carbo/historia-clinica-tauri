@@ -1,3 +1,4 @@
+use crate::error::CommandError;
 use crate::security::seed;
 use zeroize::Zeroizing;
 
@@ -11,7 +12,7 @@ use zeroize::Zeroizing;
 /// Genera una nueva mnemonic de 6 palabras.
 /// Solo se puede llamar si no hay seed verificada.
 #[tauri::command]
-pub fn generate_seed() -> Result<String, String> {
+pub fn generate_seed() -> Result<String, CommandError> {
     let phrase = seed::generate_mnemonic()?;
     println!("🌱 [Seed] Nueva mnemonic generada");
     Ok(phrase)
@@ -19,7 +20,7 @@ pub fn generate_seed() -> Result<String, String> {
 
 /// Verifica si una frase semilla coincide con la generada.
 #[tauri::command]
-pub fn verify_seed(phrase: Zeroizing<String>) -> Result<bool, String> {
+pub fn verify_seed(phrase: Zeroizing<String>) -> Result<bool, CommandError> {
     let is_valid = seed::verify_seed_phrase(&phrase)?;
     if is_valid {
         println!("🌱 [Seed] Frase verificada correctamente");

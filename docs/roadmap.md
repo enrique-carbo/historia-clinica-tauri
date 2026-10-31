@@ -123,8 +123,11 @@ haya un mercado/idioma concreto. Diseño completo: `docs/i18n.md`.
       nuevos del backend como códigos estables, no frases
 - [ ] Fase 1: `src/i18n/` tipado + `useT()` + locale en settings; fechas
       vía `Intl` (hoy `es-AR` aislado en `dateUtils`)
-- [ ] Fase 2: `commands/*.rs` → códigos `ERR_...` (rinde solo: mensajes
-      consistentes y testeables); export con labels por locale
+- [x] Fase 2a: `commands/*.rs` → códigos `ERR_...` (rinde solo: mensajes
+      consistentes y testeables; los `map_err` pass-through no se tocaron;
+      `CommandError` en `error.rs` + `formatError()` en el frontend)
+- [ ] Fase 2b: export con labels por locale — **depende de Fase 1 + 3**
+      (no hacerla antes: trabajo tirado)
 - [ ] Fase 3: labels del schema por locale (`profiles/*/entity_schema.json`
       ya es data-driven → extensión, no refactor)
 - [ ] Fase 4: guía por idioma solo si hay mercado; texto legal con

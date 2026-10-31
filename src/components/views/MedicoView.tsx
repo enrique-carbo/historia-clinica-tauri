@@ -1,6 +1,7 @@
 // src/components/views/MedicoView.tsx
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { formatError } from "../../utils/errors";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { Navbar, Tab } from "../../components/ui/Navbar";
 import { Button } from "../../components/ui/Button";
@@ -55,7 +56,7 @@ export function MedicoView() {
       });
       setExportResult(result);
     } catch (e) {
-      setExportError(typeof e === "string" ? e : "Error al exportar la historia clínica.");
+      setExportError(formatError(e));
     } finally {
       setExporting(false);
     }
@@ -66,7 +67,7 @@ export function MedicoView() {
     try {
       await revealItemInDir(exportResult.path);
     } catch (e) {
-      setExportError(typeof e === "string" ? e : "No se pudo revelar el archivo.");
+      setExportError(formatError(e));
     }
   };
 

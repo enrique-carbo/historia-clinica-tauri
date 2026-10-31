@@ -1,3 +1,9 @@
+use crate::error::{
+    CommandError, ERR_NO_ACTIVE_ADMIN, ERR_PASSWORD_SAME_AS_CURRENT, ERR_PASSWORD_TOO_SHORT,
+    ERR_REGISTRATION_CLOSED, ERR_SEED_EMPTY, ERR_SEED_INVALID, ERR_SEED_NOT_CONFIGURED,
+    ERR_STORAGE_PATH, ERR_USERNAME_TAKEN,
+    ERR_USER_DISABLED, ERR_USER_NOT_FOUND, ERR_VAULT_LOCKED, ERR_WRONG_PASSWORD,
+};
 use crate::security::{auth, seed};
 use crate::security::data_key;
 use crate::types::{CryptoState, DataKey, DbState, SessionState, SessionUser};
@@ -31,7 +37,10 @@ pub struct AuthResponse {
 /// y siempre con rol `administrador`. A partir de ahí, las altas las hace el
 /// administrador desde su panel (`admin_create_user`).
 #[tauri::command]
-pub fn register_user(form: RegisterInput, db_state: State<'_, DbState>) -> Result<String, String> {
+pub fn register_user(
+    form: RegisterInput,
+    db_state: State<'_, DbState>,
+) -> Result<String, CommandError> {
     let hashed = auth::hash_password(&form.password_plain)?;
     let user_id = Uuid::new_v4().to_string();
     let now = chrono::Utc::now().to_rfc3339();
@@ -42,10 +51,7 @@ pub fn register_user(form: RegisterInput, db_state: State<'_, DbState>) -> Resul
             .map_err(|e| e.to_string())?;
 
         if existing > 0 {
-            return Err(
-                "El registro está cerrado. Un administrador debe darte de alta desde el panel."
-                    .to_string(),
-            );
+            return Err(CommandError::new(ERR_REGISTRATION_CLOSED));
         }
 
         // 1. Insertamos el PRIMER usuario como administrador
@@ -54,9 +60,9 @@ pub fn register_user(form: RegisterInput, db_state: State<'_, DbState>) -> Resul
             rusqlite::params![&user_id, &form.username, &hashed, &now],
         ).map_err(|e| {
             if e.to_string().contains("UNIQUE") {
-                "Ya existe un usuario con ese nombre.".to_string()
+                CommandError::new(ERR_USERNAME_TAKEN)
             } else {
-                format!("Error al registrar usuario: {}", e)
+                CommandError::internal(format!("Error al registrar usuario: {}", e))
             }
         })?;
 
@@ -65,7 +71,7 @@ pub fn register_user(form: RegisterInput, db_state: State<'_, DbState>) -> Resul
             "INSERT INTO professional_profiles (user_id, full_name_ciphertext, full_name_nonce, specialty_ciphertext, specialty_nonce, public_key, updated_at)
              VALUES (?1, '', '', '', '', '', ?2);",
             rusqlite::params![&user_id, &now],
-        ).map_err(|e| format!("Error al crear el perfil: {}", e))?;
+        ).map_err(|e| CommandError::internal(format!("Error al crear el perfil: {}", e)))?;
 
         println!("🌱 [Auth] Primer usuario (administrador) creado: {}", form.username);
         Ok(user_id)
@@ -77,7 +83,7 @@ pub fn login_user(
     form: LoginInput,
     db_state: State<'_, DbState>,
     session_state: State<'_, SessionState>,
-) -> Result<AuthResponse, String> {
+) -> Result<AuthResponse, CommandError> {
     super::with_conn(&db_state, |conn| {
         let mut stmt = conn
             .prepare("SELECT id, password_hash, role, is_active FROM users WHERE username = ?1;")
@@ -92,7 +98,7 @@ pub fn login_user(
             let is_active: i64 = row.get(3).map_err(|e| e.to_string())?;
 
             if is_active == 0 {
-                return Err("Usuario desactivado. Contactá al administrador.".to_string());
+                return Err(CommandError::new(ERR_USER_DISABLED));
             }
 
             let is_valid = auth::verify_password(&form.password_plain, &hash_guardado)?;
@@ -121,10 +127,10 @@ pub fn login_user(
                     role,
                 })
             } else {
-                Err("Contraseña incorrecta".to_string())
+                Err(CommandError::new(ERR_WRONG_PASSWORD))
             }
         } else {
-            Err("El usuario no existe".to_string())
+            Err(CommandError::new(ERR_USER_NOT_FOUND))
         }
     })
 }
@@ -146,11 +152,11 @@ pub fn unlock_vault(
     crypto_state: State<'_, CryptoState>,
     signing_state: State<'_, crate::types::SigningState>,
     data_key_state: State<'_, DataKey>,
-) -> Result<bool, String> {
+) -> Result<bool, CommandError> {
     let app_dir = app_handle
         .path()
         .app_local_data_dir()
-        .map_err(|e| format!("Error al obtener ruta del sistema: {}", e))?;
+        .map_err(|_| CommandError::new(ERR_STORAGE_PATH))?;
 
     let (master_key, private_signing_key, data_key_opt) = super::with_conn(
         &db_state,
@@ -193,7 +199,7 @@ fn unlock_vault_core(
     password: &str,
     seed_phrase: Option<&str>,
     conn: &rusqlite::Connection,
-) -> Result<UnlockedKeys, String> {
+) -> Result<UnlockedKeys, CommandError> {
     // El vault devuelve: llave maestra, llave privada de firma y pública opcional
     // (la pública solo viene en `Some` cuando el vault se crea en ESTA llamada).
     let (master_key, private_signing_key, public_key_opt) =
@@ -272,12 +278,18 @@ fn unlock_vault_core(
     let data_key_opt = if role == "paciente" {
         None
     } else {
-        Some(data_key::resolve_data_key(
-            &app_dir,
-            user_id,
-            &master_key,
-            seed_phrase,
-        )?)
+        Some(
+            data_key::resolve_data_key(&app_dir, user_id, &master_key, seed_phrase).map_err(
+                |e| {
+                    // Marcador de contrato con el frontend: pedir la frase semilla.
+                    if CommandError::is_seed_required(&e) {
+                        CommandError::new(data_key::SEED_REQUIRED)
+                    } else {
+                        CommandError::from(e)
+                    }
+                },
+            )?,
+        )
     };
 
     Ok((master_key, private_signing_key, data_key_opt))
@@ -305,12 +317,12 @@ pub fn change_password(
     db_state: State<'_, DbState>,
     crypto_state: State<'_, CryptoState>,
     data_key_state: State<'_, DataKey>,
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     if new_password.len() < 8 {
-        return Err("La nueva contraseña debe tener al menos 8 caracteres".to_string());
+        return Err(CommandError::new(ERR_PASSWORD_TOO_SHORT).with_param("min", "8"));
     }
     if new_password == current_password {
-        return Err("La nueva contraseña debe ser distinta a la actual".to_string());
+        return Err(CommandError::new(ERR_PASSWORD_SAME_AS_CURRENT));
     }
 
     // Identidad desde la sesión: el user_id nunca se confía en el frontend.
@@ -319,7 +331,7 @@ pub fn change_password(
     let app_dir = app_handle
         .path()
         .app_local_data_dir()
-        .map_err(|e| format!("Error al obtener ruta del sistema: {}", e))?;
+        .map_err(|_| CommandError::new(ERR_STORAGE_PATH))?;
 
     // Data_key de RAM sin exigirla: el rol decide si es obligatoria
     // (staff) o se ignora (paciente — no existe por diseño).
@@ -357,7 +369,7 @@ fn change_password_core(
     new_password: &str,
     data_key_ram: Option<Zeroizing<[u8; 32]>>,
     conn: &rusqlite::Connection,
-) -> Result<Zeroizing<[u8; 32]>, String> {
+) -> Result<Zeroizing<[u8; 32]>, CommandError> {
     let role: String = conn
         .query_row(
             "SELECT role FROM users WHERE id = ?1",
@@ -371,9 +383,7 @@ fn change_password_core(
     let data_key = if role == "paciente" {
         None
     } else {
-        Some(data_key_ram.ok_or(
-            "La bóveda está cerrada. Abrila antes de cambiar la contraseña.".to_string(),
-        )?)
+        Some(data_key_ram.ok_or_else(|| CommandError::new(ERR_VAULT_LOCKED))?)
     };
 
     // 2. Verifica contraseña actual + re-cifra vault → nueva master
@@ -402,7 +412,7 @@ pub fn lock_vault(
     signing_state: State<'_, crate::types::SigningState>,
     data_key_state: State<'_, DataKey>,
     session_state: State<'_, SessionState>,
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     // Limpiamos la llave de cifrado
     let mut crypto_guard = crypto_state.0.lock().unwrap();
     *crypto_guard = None;
@@ -431,17 +441,20 @@ pub fn setup_seed_master_wrap(
     phrase: Zeroizing<String>,
     app_handle: tauri::AppHandle,
     data_key_state: State<'_, DataKey>,
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     let app_dir = app_handle
         .path()
         .app_local_data_dir()
-        .map_err(|e| format!("Error al obtener ruta del sistema: {}", e))?;
+        .map_err(|_| CommandError::new(ERR_STORAGE_PATH))?;
 
-    let dk_guard = data_key_state.0.lock().map_err(|_| "Lock poisoned")?;
+    let dk_guard = data_key_state
+        .0
+        .lock()
+        .map_err(|_| CommandError::internal("Lock poisoned"))?;
     let data_key = dk_guard
         .as_ref()
         .cloned()
-        .ok_or("Data key no disponible. Abrí la bóveda primero.".to_string())?;
+        .ok_or_else(|| CommandError::new(ERR_VAULT_LOCKED))?;
 
     data_key::save_master_wrap(&app_dir, &data_key, &phrase)?;
     println!("🌱 [Seed] Master wrap creado (.data_key.master)");
@@ -452,7 +465,7 @@ pub fn setup_seed_master_wrap(
 pub fn test_crypto_flow(
     text: String,
     crypto_state: State<'_, CryptoState>,
-) -> Result<String, String> {
+) -> Result<String, CommandError> {
     let master_key = super::get_key(&crypto_state)?;
     let encrypted = crate::security::crypto::encrypt_text(&text, &master_key)?;
     let decrypted = crate::security::crypto::decrypt_text(&encrypted, &master_key)?;
@@ -504,30 +517,27 @@ pub fn seed_recovery_core(
     conn: &rusqlite::Connection,
     seed_phrase: &str,
     new_password: &str,
-) -> Result<RecoveryOutcome, String> {
+) -> Result<RecoveryOutcome, CommandError> {
     if new_password.len() < 8 {
-        return Err("La nueva contraseña debe tener al menos 8 caracteres".to_string());
+        return Err(CommandError::new(ERR_PASSWORD_TOO_SHORT).with_param("min", "8"));
     }
     let phrase = seed_phrase.trim();
     if phrase.is_empty() {
-        return Err("Ingresá la frase semilla.".to_string());
+        return Err(CommandError::new(ERR_SEED_EMPTY));
     }
 
     // 1. Proof-of-possession de la frase contra el master wrap
     let master_path = app_dir.join(".data_key.master");
     if !master_path.exists() {
-        return Err(
-            "Esta instalación no tiene una frase semilla configurada. Recuperá con un respaldo o con una contraseña válida."
-                .to_string(),
-        );
+        return Err(CommandError::new(ERR_SEED_NOT_CONFIGURED));
     }
-    let blob =
-        std::fs::read(&master_path).map_err(|e| format!("No se pudo leer el master wrap: {}", e))?;
+    let blob = std::fs::read(&master_path)
+        .map_err(|e| CommandError::internal(format!("No se pudo leer el master wrap: {}", e)))?;
     let data_key = {
-        let seed_key =
-            seed::derive_key_from_seed(phrase).map_err(|_| "Frase semilla incorrecta.".to_string())?;
+        let seed_key = seed::derive_key_from_seed(phrase)
+            .map_err(|_| CommandError::new(ERR_SEED_INVALID))?;
         data_key::unwrap_key(&blob, &seed_key)
-            .map_err(|_| "Frase semilla incorrecta.".to_string())?
+            .map_err(|_| CommandError::new(ERR_SEED_INVALID))?
     };
 
     // 2. Administrador activo más antiguo (el de bootstrap)
@@ -539,9 +549,7 @@ pub fn seed_recovery_core(
             [],
             |r| Ok((r.get(0)?, r.get(1)?)),
         )
-        .map_err(|_| {
-            "No hay usuarios administradores activos en esta instalación.".to_string()
-        })?;
+        .map_err(|_| CommandError::new(ERR_NO_ACTIVE_ADMIN))?;
 
     // 3. Vault regenerado (keypair nuevo) con la contraseña nueva
     let (new_master, new_priv, new_pub) =
@@ -631,11 +639,11 @@ pub fn seed_recovery(
     crypto_state: State<'_, CryptoState>,
     signing_state: State<'_, crate::types::SigningState>,
     data_key_state: State<'_, DataKey>,
-) -> Result<AuthResponse, String> {
+) -> Result<AuthResponse, CommandError> {
     let app_dir = app_handle
         .path()
         .app_local_data_dir()
-        .map_err(|e| format!("Error al obtener ruta del sistema: {}", e))?;
+        .map_err(|_| CommandError::new(ERR_STORAGE_PATH))?;
 
     let outcome = super::with_conn(&db_state, |conn| {
         seed_recovery_core(&app_dir, conn, &seed_phrase, &new_password)
@@ -644,7 +652,7 @@ pub fn seed_recovery(
     *session_state
         .0
         .lock()
-        .map_err(|_| "Lock poisoned".to_string())? = Some(SessionUser {
+        .map_err(|_| CommandError::internal("Lock poisoned"))? = Some(SessionUser {
         user_id: outcome.user_id.clone(),
         username: outcome.username.clone(),
         role: outcome.role.clone(),
@@ -652,15 +660,15 @@ pub fn seed_recovery(
     *crypto_state
         .0
         .lock()
-        .map_err(|_| "Lock poisoned".to_string())? = Some(outcome.master_key);
+        .map_err(|_| CommandError::internal("Lock poisoned"))? = Some(outcome.master_key);
     *signing_state
         .0
         .lock()
-        .map_err(|_| "Lock poisoned".to_string())? = Some(outcome.private_signing_key);
+        .map_err(|_| CommandError::internal("Lock poisoned"))? = Some(outcome.private_signing_key);
     *data_key_state
         .0
         .lock()
-        .map_err(|_| "Lock poisoned".to_string())? = Some(outcome.data_key);
+        .map_err(|_| CommandError::internal("Lock poisoned"))? = Some(outcome.data_key);
 
     Ok(AuthResponse {
         user_id: outcome.user_id,
@@ -685,7 +693,7 @@ mod tests {
 
     /// `unwrap_err` exige `Debug` en el Ok; RecoveryOutcome contiene material
     /// de clave que no queremos derivar/imprimir, así que lo extraemos a mano.
-    fn expect_err<T>(result: Result<T, String>) -> String {
+    fn expect_err<T>(result: Result<T, CommandError>) -> CommandError {
         match result {
             Ok(_) => panic!("se esperaba un error"),
             Err(e) => e,
@@ -810,7 +818,7 @@ mod tests {
             None,
             &conn,
         ));
-        assert!(err.contains("SEED_REQUIRED"), "err: {}", err);
+        assert_eq!(err.code, data_key::SEED_REQUIRED, "err: {}", err);
     }
 
     #[test]
@@ -876,7 +884,7 @@ mod tests {
             None,
             &conn,
         ));
-        assert!(err.contains("bóveda está cerrada"), "err: {}", err);
+        assert_eq!(err.code, ERR_VAULT_LOCKED, "err: {}", err);
         let hash_after: String = conn
             .query_row(
                 "SELECT password_hash FROM users WHERE id = ?1",
@@ -1015,7 +1023,7 @@ mod tests {
             "palabras que no son la frase correcta",
             NEW_PASSWORD,
         ));
-        assert!(err.contains("Frase semilla incorrecta"), "error: {}", err);
+        assert_eq!(err.code, ERR_SEED_INVALID, "error: {}", err);
 
         // Nada cambió: hash y vault intactos
         let hash_now: String = conn
@@ -1040,7 +1048,8 @@ mod tests {
     fn test_seed_recovery_weak_password_rejected() {
         let (dir, conn, _, _) = setup_installation();
         let err = expect_err(seed_recovery_core(dir.path(), &conn, PHRASE, "corta"));
-        assert!(err.contains("8 caracteres"), "error: {}", err);
+        assert_eq!(err.code, ERR_PASSWORD_TOO_SHORT, "error: {}", err);
+        assert_eq!(err.params.get("min").map(String::as_str), Some("8"));
     }
 
     #[test]
@@ -1053,7 +1062,7 @@ mod tests {
         .unwrap();
 
         let err = expect_err(seed_recovery_core(dir.path(), &conn, PHRASE, NEW_PASSWORD));
-        assert!(err.contains("administradores"), "error: {}", err);
+        assert_eq!(err.code, ERR_NO_ACTIVE_ADMIN, "error: {}", err);
     }
 
     #[test]
@@ -1062,7 +1071,7 @@ mod tests {
         std::fs::remove_file(dir.path().join(".data_key.master")).unwrap();
 
         let err = expect_err(seed_recovery_core(dir.path(), &conn, PHRASE, NEW_PASSWORD));
-        assert!(err.contains("no tiene una frase semilla"), "error: {}", err);
+        assert_eq!(err.code, ERR_SEED_NOT_CONFIGURED, "error: {}", err);
     }
 
     #[test]
@@ -1097,9 +1106,9 @@ mod tests {
 
         // Tras lock_vault ninguna llave es extraíble y la sesión está limpia
         let err = crate::commands::get_key(&app.state::<CryptoState>()).unwrap_err();
-        assert!(err.contains("no está en memoria"), "err: {}", err);
+        assert_eq!(err.code, ERR_VAULT_LOCKED, "err: {}", err);
         let err = crate::commands::get_data_key(&app.state::<DataKey>()).unwrap_err();
-        assert!(err.contains("no inicializada"), "err: {}", err);
+        assert_eq!(err.code, ERR_VAULT_LOCKED, "err: {}", err);
         assert!(!is_vault_unlocked(app.state::<CryptoState>()));
         assert!(app.state::<SessionState>().0.lock().unwrap().is_none());
         assert!(app

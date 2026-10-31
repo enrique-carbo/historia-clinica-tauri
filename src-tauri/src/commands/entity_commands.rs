@@ -1,4 +1,9 @@
 use crate::db::config_schema::SchemaConfig;
+use crate::error::{
+    CommandError, ERR_BLIND_INDEX_FIELD_MISSING,
+    ERR_ENTITY_NOT_FOUND, ERR_NOT_PATIENT_ENTITY, ERR_PATIENT_ACCESS_EXISTS,
+    ERR_PASSWORD_TOO_SHORT, ERR_USERNAME_EMPTY, ERR_USERNAME_TAKEN,
+};
 use crate::security::crypto;
 use crate::types::{DataKey, DbState, SessionState}; // ← Cambiar CryptoState por DataKey
 use rusqlite::params;
@@ -40,7 +45,7 @@ pub fn create_entity(
     db_state: State<'_, DbState>,
     data_key_state: State<'_, DataKey>, // ← Cambiar CryptoState por DataKey
     schema: State<'_, SchemaConfig>,
-) -> Result<EntityCreated, String> {
+) -> Result<EntityCreated, CommandError> {
     let data_key = get_data_key(&data_key_state)?; // ← Usar data_key
     // Identidad desde la sesión: el user_id nunca se confía en el frontend.
     let created_by = require_session(&session_state)?.user_id;
@@ -49,7 +54,10 @@ pub fn create_entity(
     let blind_index_field = schema.get_blind_index_field(&entity_type)?;
     let dni: String = data
         .get(&blind_index_field)
-        .ok_or_else(|| format!("Campo de blind index faltante: {}", blind_index_field))?
+        .ok_or_else(|| {
+            CommandError::new(ERR_BLIND_INDEX_FIELD_MISSING)
+                .with_param("field", &blind_index_field)
+        })?
         .chars()
         .filter(|c| c.is_alphanumeric())
         .collect::<String>()
@@ -93,7 +101,7 @@ pub fn get_entity(
     id: i64,
     db_state: State<'_, DbState>,
     data_key_state: State<'_, DataKey>, // ← Cambiar
-) -> Result<EntityRecord, String> {
+) -> Result<EntityRecord, CommandError> {
     let data_key = get_data_key(&data_key_state)?; // ← Usar data_key
 
     let record = with_conn(&db_state, |conn| {
@@ -123,7 +131,10 @@ pub fn get_entity(
     for (field_name, combined) in encrypted_fields {
         let parts: Vec<&str> = combined.split(':').collect();
         if parts.len() != 2 {
-            return Err(format!("Formato inválido en campo {}", field_name));
+            return Err(CommandError::internal(format!(
+                "Formato inválido en campo {}",
+                field_name
+            )));
         }
 
         let enc = crypto::EncryptedData {
@@ -153,7 +164,7 @@ pub fn find_entity_by_blind_index(
     dni: String,
     db_state: State<'_, DbState>,
     data_key_state: State<'_, DataKey>,
-) -> Result<Option<i64>, String> {
+) -> Result<Option<i64>, CommandError> {
     // El índice es HMAC con clave derivada de la DataKey: sin bóveda
     // abierta no hay clave con que calcularlo (mismo requisito que
     // `search_entities` y `create_entity`).
@@ -189,7 +200,7 @@ pub fn list_entities(
     offset: i64,
     db_state: State<'_, DbState>,
     data_key_state: State<'_, DataKey>, // ← Cambiar
-) -> Result<Vec<EntityRecord>, String> {
+) -> Result<Vec<EntityRecord>, CommandError> {
     let data_key = get_data_key(&data_key_state)?; // ← Usar data_key
 
     let rows = with_conn(&db_state, |conn| {
@@ -245,7 +256,7 @@ pub fn search_entities(
     query: String,
     db_state: State<'_, DbState>,
     data_key_state: State<'_, DataKey>, // ← Cambiar
-) -> Result<Vec<EntityRecord>, String> {
+) -> Result<Vec<EntityRecord>, CommandError> {
     let data_key = get_data_key(&data_key_state)?; // ← Usar data_key
 
     let rows = with_conn(&db_state, |conn| {
@@ -305,15 +316,21 @@ pub fn search_entities(
     Ok(matches)
 }
 
-fn decrypt_entity_blob(enc_data_blob: &[u8], data_key: &[u8; 32]) -> Result<EntityData, String> {
+fn decrypt_entity_blob(
+    enc_data_blob: &[u8],
+    data_key: &[u8; 32],
+) -> Result<EntityData, CommandError> {
     let encrypted_fields: HashMap<String, String> = serde_json::from_slice(enc_data_blob)
-        .map_err(|e| format!("Error parseando blob: {}", e))?;
+        .map_err(|e| CommandError::internal(format!("Error parseando blob: {}", e)))?;
 
     let mut data: EntityData = HashMap::new();
     for (field_name, combined) in encrypted_fields {
         let parts: Vec<&str> = combined.split(':').collect();
         if parts.len() != 2 {
-            return Err(format!("Formato inválido en campo {}", field_name));
+            return Err(CommandError::internal(format!(
+                "Formato inválido en campo {}",
+                field_name
+            )));
         }
 
         let enc = crypto::EncryptedData {
@@ -322,7 +339,9 @@ fn decrypt_entity_blob(enc_data_blob: &[u8], data_key: &[u8; 32]) -> Result<Enti
         };
 
         let decrypted = crypto::decrypt_text(&enc, data_key)
-            .map_err(|e| format!("Error descifrando campo {}: {}", field_name, e))?;
+            .map_err(|e| {
+                CommandError::internal(format!("Error descifrando campo {}: {}", field_name, e))
+            })?;
 
         data.insert(field_name, decrypted);
     }
@@ -338,7 +357,7 @@ pub fn update_entity(
     db_state: State<'_, DbState>,
     data_key_state: State<'_, DataKey>,
     schema: State<'_, SchemaConfig>,
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     let data_key = get_data_key(&data_key_state)?;
     // Solo autenticación: created_by_user_id conserva al creador original.
     require_session(&session_state)?;
@@ -350,7 +369,13 @@ pub fn update_entity(
             params![id],
             |row| row.get::<_, String>(0),
         )
-        .map_err(|e| format!("Entidad no encontrada o error de DB: {}", e))
+        .map_err(|e| {
+            if e.to_string().contains("QueryReturnedNoRows") {
+                CommandError::new(ERR_ENTITY_NOT_FOUND)
+            } else {
+                CommandError::internal(format!("Error leyendo la entidad: {}", e))
+            }
+        })
     })?;
 
     // 2. Validar los datos contra el schema (opcional pero recomendado)
@@ -399,15 +424,15 @@ pub fn grant_patient_access(
     password_plain: Zeroizing<String>,
     session_state: State<'_, SessionState>,
     db_state: State<'_, DbState>,
-) -> Result<PatientAccess, String> {
+) -> Result<PatientAccess, CommandError> {
     let actor = require_admin_or_assistant(&session_state)?;
 
     let username = username.trim().to_string();
     if username.is_empty() {
-        return Err("El nombre de usuario no puede estar vacío.".to_string());
+        return Err(CommandError::new(ERR_USERNAME_EMPTY));
     }
     if password_plain.len() < 8 {
-        return Err("La contraseña debe tener al menos 8 caracteres.".to_string());
+        return Err(CommandError::new(ERR_PASSWORD_TOO_SHORT).with_param("min", "8"));
     }
     let hashed = crate::security::auth::hash_password(&password_plain)?;
     let user_id = Uuid::new_v4().to_string();
@@ -420,11 +445,9 @@ pub fn grant_patient_access(
                 params![entity_id],
                 |r| r.get(0),
             )
-            .map_err(|_| "Ficha no encontrada.".to_string())?;
+            .map_err(|_| CommandError::new(ERR_ENTITY_NOT_FOUND))?;
         if entity_type != "patient" {
-            return Err(
-                "El acceso de paciente solo aplica a fichas de tipo paciente.".to_string(),
-            );
+            return Err(CommandError::new(ERR_NOT_PATIENT_ENTITY));
         }
 
         let active: Option<String> = conn
@@ -436,10 +459,7 @@ pub fn grant_patient_access(
             .optional()
             .map_err(|e| e.to_string())?;
         if let Some(existing) = active {
-            return Err(format!(
-                "La ficha ya tiene un acceso activo: @{}",
-                existing
-            ));
+            return Err(CommandError::new(ERR_PATIENT_ACCESS_EXISTS).with_param("username", existing));
         }
 
         conn.execute(
@@ -449,9 +469,9 @@ pub fn grant_patient_access(
         )
         .map_err(|e| {
             if e.to_string().contains("UNIQUE") {
-                "Ya existe un usuario con ese nombre.".to_string()
+                CommandError::new(ERR_USERNAME_TAKEN)
             } else {
-                format!("Error creando el acceso: {}", e)
+                CommandError::internal(format!("Error creando el acceso: {}", e))
             }
         })?;
 
@@ -481,7 +501,7 @@ pub fn get_entity_access(
     entity_id: i64,
     session_state: State<'_, SessionState>,
     db_state: State<'_, DbState>,
-) -> Result<Option<PatientAccess>, String> {
+) -> Result<Option<PatientAccess>, CommandError> {
     require_admin_or_assistant(&session_state)?;
 
     with_conn(&db_state, |conn| {
@@ -502,7 +522,7 @@ pub fn get_entity_access(
             })
         })
         .optional()
-        .map_err(|e| e.to_string())
+        .map_err(|e| CommandError::internal(e.to_string()))
     })
 }
 
@@ -514,6 +534,7 @@ pub fn get_entity_access(
 mod tests {
     use super::*;
     use crate::db::database::init_db;
+    use crate::error::{ERR_ADMIN_OR_ASSISTANT_REQUIRED, ERR_VAULT_LOCKED};
     use crate::types::SessionUser;
     use std::sync::Mutex;
     use tauri::Manager;
@@ -560,7 +581,7 @@ mod tests {
         }
     }
 
-    fn grant(env: &AccessEnv, username: &str) -> Result<PatientAccess, String> {
+    fn grant(env: &AccessEnv, username: &str) -> Result<PatientAccess, CommandError> {
         grant_patient_access(
             env.entity_id,
             username.to_string(),
@@ -620,11 +641,10 @@ mod tests {
         for role in ["profesional", "paciente"] {
             let env = setup(role);
             let err = grant(&env, "paciente.tres").expect_err("debe rechazar");
-            assert!(
-                err.contains("administrador o asistente"),
+            assert_eq!(
+                err.code, ERR_ADMIN_OR_ASSISTANT_REQUIRED,
                 "role {}: {}",
-                role,
-                err
+                role, err
             );
         }
     }
@@ -634,7 +654,7 @@ mod tests {
         let env = setup("administrador");
         grant(&env, "paciente.uno").unwrap();
         let err = grant(&env, "paciente.otro").expect_err("segundo grant");
-        assert!(err.contains("acceso activo"), "err: {}", err);
+        assert_eq!(err.code, ERR_PATIENT_ACCESS_EXISTS, "err: {}", err);
     }
 
     #[test]
@@ -657,7 +677,7 @@ mod tests {
             env.app.state::<DbState>(),
         )
         .expect_err("tipo incorrecto");
-        assert!(wrong.contains("tipo paciente"), "err: {}", wrong);
+        assert_eq!(wrong.code, ERR_NOT_PATIENT_ENTITY, "err: {}", wrong);
     }
 
     #[test]
@@ -682,7 +702,7 @@ mod tests {
             env.app.state::<DbState>(),
         )
         .expect_err("username duplicado");
-        assert!(err.contains("Ya existe"), "err: {}", err);
+        assert_eq!(err.code, ERR_USERNAME_TAKEN, "err: {}", err);
     }
 
     #[test]
@@ -696,11 +716,7 @@ mod tests {
             env.app.state::<DbState>(),
         )
         .expect_err("debe rechazar");
-        assert!(
-            err.contains("administrador o asistente"),
-            "err: {}",
-            err
-        );
+        assert_eq!(err.code, ERR_ADMIN_OR_ASSISTANT_REQUIRED, "err: {}", err);
     }
 
     #[test]
@@ -727,7 +743,7 @@ mod tests {
             env.app.state::<DataKey>(),
         )
         .expect_err("debe exigir bóveda abierta");
-        assert!(err.contains("Data key"), "err: {}", err);
+        assert_eq!(err.code, ERR_VAULT_LOCKED, "err: {}", err);
 
         // Bóveda abierta con la clave correcta → lo encuentra
         // (la normalización "12.345.678" → "12345678" se mantiene).

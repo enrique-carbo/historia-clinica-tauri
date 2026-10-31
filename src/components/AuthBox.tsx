@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { formatError, isErrorCode } from "../utils/errors";
 import { Button } from "./ui/Button";
 import { Alert } from "./ui/Alert";
 import { Input } from "./ui/Input";
@@ -74,7 +75,7 @@ export function AuthBox() {
         try {
           await doLogin();
         } catch (err) {
-          if (String(err).includes("SEED_REQUIRED")) {
+          if (isErrorCode(err, "SEED_REQUIRED")) {
             setNeedsSeed(true);
             setError(null);
             return;
@@ -83,7 +84,7 @@ export function AuthBox() {
         }
       }
     } catch (err) {
-      setError(String(err));
+      setError(formatError(err));
     } finally {
       setLoading(false);
     }
@@ -98,7 +99,7 @@ export function AuthBox() {
       await doLogin(seedPhrase.trim());
       setNeedsSeed(false);
     } catch (err) {
-      setError(String(err));
+      setError(formatError(err));
     } finally {
       setLoading(false);
     }
@@ -122,7 +123,7 @@ export function AuthBox() {
       setRecoverSeed("");
       setRecoverPassword("");
     } catch (err) {
-      setError(String(err));
+      setError(formatError(err));
     } finally {
       setLoading(false);
     }

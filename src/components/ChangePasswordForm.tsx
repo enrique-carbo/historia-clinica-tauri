@@ -1,6 +1,7 @@
 // src/components/ChangePasswordForm.tsx
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { formatError } from "../utils/errors";
 
 export function ChangePasswordForm() {
   const [pwdForm, setPwdForm] = useState({
@@ -37,7 +38,7 @@ export function ChangePasswordForm() {
       setPwdMsg({ type: "ok", text: "Contraseña cambiada correctamente." });
       setPwdForm({ current: "", new: "", confirm: "" });
     } catch (e) {
-      setPwdMsg({ type: "err", text: String(e) });
+      setPwdMsg({ type: "err", text: formatError(e) });
     } finally {
       setPwdLoading(false);
     }

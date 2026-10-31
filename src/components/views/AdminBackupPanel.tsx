@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { formatError } from "../../utils/errors";
 import { open } from "@tauri-apps/plugin-dialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { Button } from "../ui/Button";
@@ -76,7 +77,7 @@ export function AdminBackupPanel() {
       const info = await invoke<BackupInfo>("create_backup", { destParent: dest });
       setCreated(info);
     } catch (e) {
-      setError(String(e));
+      setError(formatError(e));
     } finally {
       setCreating(false);
     }
@@ -99,7 +100,7 @@ export function AdminBackupPanel() {
         signatureWarning: validation.signature_warning,
       });
     } catch (e) {
-      setError(String(e));
+      setError(formatError(e));
     }
   };
 
@@ -117,7 +118,7 @@ export function AdminBackupPanel() {
       // El backend ya cerró sesión, llaves y conexión: volver al login
       lockVault();
     } catch (e) {
-      setError(String(e));
+      setError(formatError(e));
       setRestoring(false);
       setPending(null);
     }

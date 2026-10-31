@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { formatError } from "../utils/errors";
 import type { Entry } from "../stores/useEntryStore";
 
 interface AllergyCardProps {
@@ -41,7 +42,7 @@ export function AllergyCard({ subjectId }: AllergyCardProps) {
         });
         if (!cancelled) setAllergies(res);
       } catch (err) {
-        if (!cancelled) setError(String(err));
+        if (!cancelled) setError(formatError(err));
       } finally {
         if (!cancelled) setIsLoading(false);
       }

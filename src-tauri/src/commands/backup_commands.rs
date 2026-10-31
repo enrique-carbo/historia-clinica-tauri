@@ -4,6 +4,10 @@ use tauri::{AppHandle, Manager, State};
 
 use super::{record_audit, require_admin};
 use crate::db;
+use crate::error::{
+    CommandError, ERR_BACKUP_SIGNATURE_INVALID, ERR_BACKUP_UNVERIFIED, ERR_DB_NOT_INITIALIZED,
+    ERR_SIGNING_KEY_MISSING, ERR_STORAGE_PATH,
+};
 use crate::security::backup;
 use crate::types::{CryptoState, DataKey, DbState, SessionState, SigningState};
 
@@ -31,10 +35,10 @@ impl From<(std::path::PathBuf, backup::Manifest)> for BackupInfo {
     }
 }
 
-fn app_data_dir(app: &AppHandle) -> Result<std::path::PathBuf, String> {
+fn app_data_dir(app: &AppHandle) -> Result<std::path::PathBuf, CommandError> {
     app.path()
         .app_local_data_dir()
-        .map_err(|_| "No se pudo determinar la ruta de almacenamiento".to_string())
+        .map_err(|_| CommandError::new(ERR_STORAGE_PATH))
 }
 
 /// Genera un respaldo completo (DB + wraps + vaults) en
@@ -47,7 +51,7 @@ pub fn create_backup(
     session: State<'_, SessionState>,
     signing_state: State<'_, SigningState>,
     dest_parent: String,
-) -> Result<BackupInfo, String> {
+) -> Result<BackupInfo, CommandError> {
     let actor = require_admin(&session)?;
     let app_dir = app_data_dir(&app)?;
 
@@ -55,18 +59,18 @@ pub fn create_backup(
         let sign_guard = signing_state
             .0
             .lock()
-            .map_err(|_| "Lock poisoned".to_string())?;
+            .map_err(|_| CommandError::internal("Lock poisoned"))?;
         let private_key_bytes = sign_guard
             .as_ref()
-            .ok_or("No hay llave de firma en RAM. ¿Bóveda cerrada?".to_string())?;
+            .ok_or_else(|| CommandError::new(ERR_SIGNING_KEY_MISSING))?;
 
         let guard = db_state
             .0
             .lock()
-            .map_err(|_| "Lock poisoned".to_string())?;
+            .map_err(|_| CommandError::internal("Lock poisoned"))?;
         let conn = guard
             .as_ref()
-            .ok_or("Base de datos no inicializada".to_string())?;
+            .ok_or_else(|| CommandError::new(ERR_DB_NOT_INITIALIZED))?;
 
         backup::create_backup(
             conn,
@@ -82,10 +86,10 @@ pub fn create_backup(
         let guard = db_state
             .0
             .lock()
-            .map_err(|_| "Lock poisoned".to_string())?;
+            .map_err(|_| CommandError::internal("Lock poisoned"))?;
         let conn = guard
             .as_ref()
-            .ok_or("Base de datos no inicializada".to_string())?;
+            .ok_or_else(|| CommandError::new(ERR_DB_NOT_INITIALIZED))?;
         record_audit(
             conn,
             &actor.user_id,
@@ -115,7 +119,7 @@ pub struct BackupValidation {
 fn validate_with_signature(
     conn: &rusqlite::Connection,
     src: &Path,
-) -> Result<BackupValidation, String> {
+) -> Result<BackupValidation, CommandError> {
     let manifest = backup::validate_backup(src)?;
     match backup::verify_manifest_signature(&manifest, conn) {
         backup::SignatureStatus::Verified => Ok(BackupValidation {
@@ -128,10 +132,9 @@ fn validate_with_signature(
             signature_status: "unverifiable".to_string(),
             signature_warning: Some(w),
         }),
-        backup::SignatureStatus::Forged(w) => Err(format!(
-            "Firma del manifest inválida: {}. El respaldo fue alterado o no corresponde a esta instalación; no se puede restaurar.",
-            w
-        )),
+        backup::SignatureStatus::Forged(w) => {
+            Err(CommandError::new(ERR_BACKUP_SIGNATURE_INVALID).with_param("reason", w))
+        }
     }
 }
 
@@ -143,15 +146,15 @@ pub fn validate_backup(
     session: State<'_, SessionState>,
     db_state: State<'_, DbState>,
     src_path: String,
-) -> Result<BackupValidation, String> {
+) -> Result<BackupValidation, CommandError> {
     require_admin(&session)?;
     let guard = db_state
         .0
         .lock()
-        .map_err(|_| "Lock poisoned".to_string())?;
+        .map_err(|_| CommandError::internal("Lock poisoned"))?;
     let conn = guard
         .as_ref()
-        .ok_or("Base de datos no inicializada".to_string())?;
+        .ok_or_else(|| CommandError::new(ERR_DB_NOT_INITIALIZED))?;
     validate_with_signature(conn, Path::new(&src_path))
 }
 
@@ -186,7 +189,7 @@ pub fn restore_backup(
     data_key_state: State<'_, DataKey>,
     session: State<'_, SessionState>,
     request: RestoreRequest,
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     let actor = require_admin(&session)?;
     let app_dir = app_data_dir(&app)?;
     let src = Path::new(&request.src_path);
@@ -197,10 +200,10 @@ pub fn restore_backup(
         let guard = db_state
             .0
             .lock()
-            .map_err(|_| "Lock poisoned".to_string())?;
+            .map_err(|_| CommandError::internal("Lock poisoned"))?;
         let conn = guard
             .as_ref()
-            .ok_or("Base de datos no inicializada".to_string())?;
+            .ok_or_else(|| CommandError::new(ERR_DB_NOT_INITIALIZED))?;
         validate_with_signature(conn, src)?
     };
 
@@ -209,10 +212,7 @@ pub fn restore_backup(
             .signature_warning
             .as_deref()
             .unwrap_or("firma no verificada");
-        return Err(format!(
-            "El respaldo no tiene una firma verificable por esta instalación ({}). Verificá el origen y confirmá la restauración de todos modos.",
-            reason
-        ));
+        return Err(CommandError::new(ERR_BACKUP_UNVERIFIED).with_param("reason", reason));
     }
 
     let manifest = validation.manifest;
@@ -227,10 +227,10 @@ pub fn restore_backup(
         let guard = db_state
             .0
             .lock()
-            .map_err(|_| "Lock poisoned".to_string())?;
+            .map_err(|_| CommandError::internal("Lock poisoned"))?;
         let conn = guard
             .as_ref()
-            .ok_or("Base de datos no inicializada".to_string())?;
+            .ok_or_else(|| CommandError::new(ERR_DB_NOT_INITIALIZED))?;
         record_audit(
             conn,
             &actor.user_id,
@@ -250,27 +250,27 @@ pub fn restore_backup(
     *crypto_state
         .0
         .lock()
-        .map_err(|_| "Lock poisoned".to_string())? = None;
+        .map_err(|_| CommandError::internal("Lock poisoned"))? = None;
     *signing_state
         .0
         .lock()
-        .map_err(|_| "Lock poisoned".to_string())? = None;
+        .map_err(|_| CommandError::internal("Lock poisoned"))? = None;
     *data_key_state
         .0
         .lock()
-        .map_err(|_| "Lock poisoned".to_string())? = None;
+        .map_err(|_| CommandError::internal("Lock poisoned"))? = None;
     *session
         .0
         .lock()
-        .map_err(|_| "Lock poisoned".to_string())? = None;
+        .map_err(|_| CommandError::internal("Lock poisoned"))? = None;
 
     // 4. Cerrar la conexión (SQLite no puede quedar abierto sobre archivos reemplazados)
     let old_conn = db_state
         .0
         .lock()
-        .map_err(|_| "Lock poisoned".to_string())?
+        .map_err(|_| CommandError::internal("Lock poisoned"))?
         .take()
-        .ok_or("Base de datos no inicializada".to_string())?;
+        .ok_or_else(|| CommandError::new(ERR_DB_NOT_INITIALIZED))?;
     drop(old_conn);
 
     // 5. Restaurar
@@ -285,18 +285,25 @@ pub fn restore_backup(
                 *db_state
                     .0
                     .lock()
-                    .map_err(|_| "Lock poisoned".to_string())? = Some(conn);
+                    .map_err(|_| CommandError::internal("Lock poisoned"))? = Some(conn);
             }
-            Err(format!("La restauración falló: {}", e))
+            Err(CommandError::internal(format!(
+                "La restauración falló: {}",
+                e
+            )))
         }
         Ok(_) => {
-            let conn = reopened
-                .map_err(|e| format!("Respaldo restaurado, pero no se pudo reabrir la base: {}", e))?;
+            let conn = reopened.map_err(|e| {
+                CommandError::internal(format!(
+                    "Respaldo restaurado, pero no se pudo reabrir la base: {}",
+                    e
+                ))
+            })?;
 
             *db_state
                 .0
                 .lock()
-                .map_err(|_| "Lock poisoned".to_string())? = Some(conn);
+                .map_err(|_| CommandError::internal("Lock poisoned"))? = Some(conn);
 
             Ok(())
         }

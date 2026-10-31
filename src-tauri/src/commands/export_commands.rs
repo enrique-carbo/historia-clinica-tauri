@@ -1,4 +1,8 @@
 use crate::db::config_schema::SchemaConfig;
+use crate::error::{
+    CommandError, ERR_DB_NOT_INITIALIZED, ERR_EXPORT_EMPTY, ERR_SIGNING_KEY_MISSING,
+    ERR_STORAGE_PATH,
+};
 use crate::export::render::{
     append_signature_section, export_filename, render_markdown, ExportEntry, ExportPatient,
     ExportProfessional, ExportSnapshot,
@@ -34,7 +38,7 @@ fn build_export_snapshot(
     session_state: State<'_, SessionState>,
     db_state: State<'_, DbState>,
     data_key_state: State<'_, DataKey>,
-) -> Result<ExportSnapshot, String> {
+) -> Result<ExportSnapshot, CommandError> {
     let session = require_session(&session_state)?;
     let entity = get_entity(subject_id, db_state.clone(), data_key_state.clone())?;
 
@@ -97,20 +101,23 @@ pub fn export_history<R: tauri::Runtime>(
     data_key_state: State<'_, DataKey>,
     schema_state: State<'_, SchemaConfig>,
     signing_state: State<'_, SigningState>,
-) -> Result<ExportResult, String> {
+) -> Result<ExportResult, CommandError> {
     let session = require_session(&session_state)?;
     let snapshot =
         build_export_snapshot(subject_id, session_state, db_state.clone(), data_key_state)?;
 
-    let sign_guard = signing_state.0.lock().map_err(|_| "Lock poisoned".to_string())?;
+    let sign_guard = signing_state
+        .0
+        .lock()
+        .map_err(|_| CommandError::internal("Lock poisoned"))?;
     let private_key_bytes = sign_guard
         .as_ref()
-        .ok_or("Error de Seguridad: No hay llave de firma en RAM. ¿Bóveda cerrada?")?;
+        .ok_or_else(|| CommandError::new(ERR_SIGNING_KEY_MISSING))?;
 
     let base_dir = app
         .path()
         .app_local_data_dir()
-        .map_err(|_| "No se pudo determinar la ruta de almacenamiento".to_string())?;
+        .map_err(|_| CommandError::new(ERR_STORAGE_PATH))?;
 
     let result = write_export(
         &base_dir.join("exports"),
@@ -124,10 +131,13 @@ pub fn export_history<R: tauri::Runtime>(
     // claro y está prohibido en audit_log; la correlación con el archivo
     // se hace por sha256 (contenido sin el bloque de firma).
     {
-        let guard = db_state.0.lock().map_err(|_| "Lock poisoned".to_string())?;
+        let guard = db_state
+            .0
+            .lock()
+            .map_err(|_| CommandError::internal("Lock poisoned"))?;
         let conn = guard
             .as_ref()
-            .ok_or("Base de datos no inicializada".to_string())?;
+            .ok_or_else(|| CommandError::new(ERR_DB_NOT_INITIALIZED))?;
         record_audit(
             conn,
             &session.user_id,
@@ -148,9 +158,9 @@ fn write_export(
     snapshot: &ExportSnapshot,
     schema: &SchemaConfig,
     private_key_bytes: &[u8; 32],
-) -> Result<ExportResult, String> {
+) -> Result<ExportResult, CommandError> {
     if snapshot.entries.is_empty() {
-        return Err("El paciente no tiene entries para exportar.".to_string());
+        return Err(CommandError::new(ERR_EXPORT_EMPTY));
     }
 
     let markdown = render_markdown(snapshot, schema)?;
@@ -163,7 +173,7 @@ fn write_export(
     let filename = export_filename(snapshot);
 
     std::fs::create_dir_all(dir)
-        .map_err(|e| format!("Error creando carpeta de exports: {}", e))?;
+        .map_err(|e| CommandError::internal(format!("Error creando carpeta de exports: {}", e)))?;
 
     let mut path = dir.join(&filename);
     if path.exists() {
@@ -178,7 +188,7 @@ fn write_export(
     }
 
     std::fs::write(&path, &final_doc)
-        .map_err(|e| format!("Error escribiendo el archivo: {}", e))?;
+        .map_err(|e| CommandError::internal(format!("Error escribiendo el archivo: {}", e)))?;
 
     println!("✅ [Export] Historia clínica exportada (firmada): {:?}", path);
 
@@ -197,6 +207,7 @@ fn write_export(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::ERR_VAULT_LOCKED;
     use crate::security::crypto;
     use crate::db::config_schema::from_embedded;
     use crate::db::database::init_db;
@@ -315,7 +326,7 @@ mod tests {
         }
     }
 
-    fn snapshot_of(env: &TestEnv) -> Result<ExportSnapshot, String> {
+    fn snapshot_of(env: &TestEnv) -> Result<ExportSnapshot, CommandError> {
         build_export_snapshot(
             env.entity_id,
             env.app.state::<SessionState>(),
@@ -364,7 +375,7 @@ mod tests {
     fn snapshot_fails_when_vault_locked() {
         let env = setup(false);
         let err = snapshot_of(&env).expect_err("debe fallar sin data key");
-        assert!(err.contains("Data key"), "error claro de bóveda: {}", err);
+        assert_eq!(err.code, ERR_VAULT_LOCKED, "error claro de bóveda: {}", err);
     }
 
     #[test]
@@ -464,7 +475,7 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let err = write_export(dir.path(), &snapshot, &from_embedded().expect("schema"), &key)
             .expect_err("debe rechazar 0 entries");
-        assert!(err.contains("no tiene entries"));
+        assert_eq!(err.code, ERR_EXPORT_EMPTY);
     }
 
     #[test]
@@ -556,7 +567,7 @@ mod tests {
             env.app.state::<SigningState>(),
         )
         .expect_err("0 entries");
-        assert!(err.contains("no tiene entries"), "err: {}", err);
+        assert_eq!(err.code, ERR_EXPORT_EMPTY, "err: {}", err);
     }
 
     #[test]
@@ -572,6 +583,6 @@ mod tests {
             env.app.state::<SigningState>(),
         )
         .expect_err("bóveda cerrada");
-        assert!(err.contains("Data key"), "err: {}", err);
+        assert_eq!(err.code, ERR_VAULT_LOCKED, "err: {}", err);
     }
 }

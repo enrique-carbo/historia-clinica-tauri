@@ -1,5 +1,6 @@
 import { ReactNode, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { formatError } from "../../utils/errors";
 import { useAuthStore } from "../../stores/useAuthStore";
 import { usePatientStore } from "../../stores/usePatientStore";
 import { useEntityStore } from "../../stores/useEntityStore";
@@ -51,7 +52,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         error: null,
       });
     } catch (err) {
-      setLogoutError(String(err));
+      setLogoutError(formatError(err));
     }
   };
 

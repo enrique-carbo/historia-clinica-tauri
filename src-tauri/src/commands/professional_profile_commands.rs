@@ -1,5 +1,6 @@
 // src/commands/professional_profile_commands.rs
 
+use crate::error::{CommandError, ERR_FOREIGN_PROFILE};
 use crate::security::crypto;
 use crate::types::{DataKey, DbState, SessionState};
 use rusqlite::params;
@@ -64,7 +65,7 @@ pub(super) fn load_profile(
     user_id: &str,
     db_state: &State<'_, DbState>,
     data_key_state: &State<'_, DataKey>,
-) -> Result<ProfessionalProfile, String> {
+) -> Result<ProfessionalProfile, CommandError> {
     let data_key = get_data_key(data_key_state)?;
 
     // Un par ciphertext/nonce vacío = campo nunca cargado → String vacío.
@@ -103,18 +104,18 @@ pub(super) fn load_profile(
                     .collect::<rusqlite::Result<Vec<String>>>()
             },
         )
-        .map_err(|e| e.to_string())
+        .map_err(|e| CommandError::internal(e.to_string()))
     })?;
 
     let [
         fn_ct, fn_n, sp_ct, sp_n, pr_ct, pr_n, li_ct, li_n, ci_ct, ci_n, co_ct, co_n, pk,
         ad_ct, ad_n, ph_ct, ph_n, em_ct, em_n, we_ct, we_n,
     ]: [String; PROFILE_COLUMNS] = cols.try_into().map_err(|v: Vec<String>| {
-        format!(
+        CommandError::internal(format!(
             "Perfil profesional corrupto: {} columnas (se esperaban {}).",
             v.len(),
             PROFILE_COLUMNS
-        )
+        ))
     })?;
 
     let licenses_json = decrypt(li_ct, li_n);
@@ -122,8 +123,12 @@ pub(super) fn load_profile(
         Vec::new()
     } else {
         // Decrypt OK pero JSON inválido = corrupción real: no se esconde.
-        serde_json::from_str(&licenses_json)
-            .map_err(|e| format!("No se pudieron leer las matrículas del perfil: {}", e))?
+        serde_json::from_str(&licenses_json).map_err(|e| {
+            CommandError::internal(format!(
+                "No se pudieron leer las matrículas del perfil: {}",
+                e
+            ))
+        })?
     };
 
     Ok(ProfessionalProfile {
@@ -153,7 +158,7 @@ pub fn get_my_profile(
     session_state: State<'_, SessionState>,
     db_state: State<'_, DbState>,
     data_key_state: State<'_, DataKey>,
-) -> Result<ProfessionalProfile, String> {
+) -> Result<ProfessionalProfile, CommandError> {
     let session = require_session(&session_state)?;
     load_profile(&session.user_id, &db_state, &data_key_state)
 }
@@ -166,10 +171,10 @@ pub fn update_my_profile(
     session_state: State<'_, SessionState>,
     db_state: State<'_, DbState>,
     data_key_state: State<'_, DataKey>,
-) -> Result<bool, String> {
+) -> Result<bool, CommandError> {
     let session = require_session(&session_state)?;
     if input.user_id != session.user_id {
-        return Err("No podés editar el perfil de otro usuario.".to_string());
+        return Err(CommandError::new(ERR_FOREIGN_PROFILE));
     }
 
     let data_key = get_data_key(&data_key_state)?;
@@ -186,8 +191,12 @@ pub fn update_my_profile(
         .filter(|l| !l.number.trim().is_empty())
         .cloned()
         .collect();
-    let licenses_json = serde_json::to_string(&licenses)
-        .map_err(|e| format!("No se pudieron serializar las matrículas: {}", e))?;
+    let licenses_json = serde_json::to_string(&licenses).map_err(|e| {
+        CommandError::internal(format!(
+            "No se pudieron serializar las matrículas: {}",
+            e
+        ))
+    })?;
 
     let (fn_ct, fn_n) = encrypt(&input.full_name)?;
     let (sp_ct, sp_n) = encrypt(&input.specialty)?;
@@ -285,6 +294,7 @@ pub fn update_my_profile(
 mod tests {
     use super::*;
     use crate::db::database::init_db;
+    use crate::error::ERR_SESSION_REQUIRED;
     use crate::types::SessionUser;
     use std::sync::Mutex;
     use tauri::Manager;
@@ -365,7 +375,7 @@ mod tests {
         }
     }
 
-    fn update(env: &TestEnv, input: UpdateProfileInput) -> Result<bool, String> {
+    fn update(env: &TestEnv, input: UpdateProfileInput) -> Result<bool, CommandError> {
         update_my_profile(
             input,
             env.app.state::<SessionState>(),
@@ -374,7 +384,7 @@ mod tests {
         )
     }
 
-    fn get(env: &TestEnv) -> Result<ProfessionalProfile, String> {
+    fn get(env: &TestEnv) -> Result<ProfessionalProfile, CommandError> {
         get_my_profile(
             env.app.state::<SessionState>(),
             env.app.state::<DbState>(),
@@ -439,7 +449,7 @@ mod tests {
         let env = setup(Some(session_of("user-a")));
 
         let err = update(&env, sample_input("user-b")).expect_err("debe rechazar");
-        assert!(err.contains("otro usuario"), "error: {}", err);
+        assert_eq!(err.code, ERR_FOREIGN_PROFILE, "error: {}", err);
 
         // El perfil de user-b no fue tocado.
         let db = env.app.state::<DbState>();
@@ -460,11 +470,11 @@ mod tests {
         let env = setup(None);
 
         let err = get(&env).expect_err("get sin sesión debe fallar");
-        assert!(err.contains("Sesión no iniciada"), "error: {}", err);
+        assert_eq!(err.code, ERR_SESSION_REQUIRED, "error: {}", err);
 
         let err = update(&env, sample_input("user-a"))
             .expect_err("update sin sesión debe fallar");
-        assert!(err.contains("Sesión no iniciada"), "error: {}", err);
+        assert_eq!(err.code, ERR_SESSION_REQUIRED, "error: {}", err);
     }
 
     #[test]

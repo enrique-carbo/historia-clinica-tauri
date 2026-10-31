@@ -1,6 +1,7 @@
 // src/stores/useEntityStore.ts
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
+import { formatError } from "../utils/errors";
 import { useAuthStore } from "./useAuthStore";
 
 export interface Entity {
@@ -44,7 +45,7 @@ export const useEntityStore = create<EntityState>((set, get) => ({
       });
       set({ entities: res, isLoading: false });
     } catch (err) {
-      set({ error: String(err), isLoading: false });
+      set({ error: formatError(err), isLoading: false });
     }
   },
 
@@ -63,7 +64,7 @@ export const useEntityStore = create<EntityState>((set, get) => ({
       });
       set({ entities: res, isLoading: false });
     } catch (err) {
-      set({ error: String(err), isLoading: false });
+      set({ error: formatError(err), isLoading: false });
     }
   },
 
@@ -92,7 +93,7 @@ export const useEntityStore = create<EntityState>((set, get) => ({
       }));
       return res;
     } catch (err) {
-      set({ error: String(err), isLoading: false });
+      set({ error: formatError(err), isLoading: false });
       return null;
     }
   },
@@ -104,7 +105,7 @@ export const useEntityStore = create<EntityState>((set, get) => ({
         dni
       });
     } catch (err) {
-      set({ error: String(err) });
+      set({ error: formatError(err) });
       return null;
     }
   },

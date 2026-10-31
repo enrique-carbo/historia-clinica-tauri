@@ -1,3 +1,7 @@
+use crate::error::{
+    CommandError, ERR_INVALID_CATEGORY, ERR_INVALID_STATUS, ERR_PROFILE_INCOMPLETE,
+    ERR_SIGNING_KEY_MISSING,
+};
 use crate::security::crypto;
 use crate::types::{DataKey, DbState, SessionState, SigningState};
 use rusqlite::params;
@@ -27,9 +31,7 @@ fn require_complete_profile(
     conn: &rusqlite::Connection,
     author_id: &str,
     data_key: &[u8; 32],
-) -> Result<(), String> {
-    const INCOMPLETO: &str = "Perfil profesional incompleto: completá nombre, profesión y matrícula antes de crear entries.";
-
+) -> Result<(), CommandError> {
     #[derive(serde::Deserialize)]
     struct LicenseNum {
         number: String,
@@ -57,7 +59,7 @@ fn require_complete_profile(
         .ok();
 
     let Some((fn_ct, fn_n, pr_ct, pr_n, li_ct, li_n)) = row else {
-        return Err(INCOMPLETO.to_string());
+        return Err(CommandError::new(ERR_PROFILE_INCOMPLETE));
     };
 
     let full_name = decrypt_profile_field(fn_ct, fn_n, data_key);
@@ -66,13 +68,14 @@ fn require_complete_profile(
     let licenses: Vec<LicenseNum> = if licenses_json.trim().is_empty() {
         Vec::new()
     } else {
-        serde_json::from_str(&licenses_json)
-            .map_err(|_| "No se pudieron leer las matrículas del perfil.".to_string())?
+        serde_json::from_str(&licenses_json).map_err(|e| {
+            CommandError::internal(format!("No se pudieron leer las matrículas del perfil: {}", e))
+        })?
     };
     let has_license = licenses.iter().any(|l| !l.number.trim().is_empty());
 
     if full_name.trim().is_empty() || profession.trim().is_empty() || !has_license {
-        return Err(INCOMPLETO.to_string());
+        return Err(CommandError::new(ERR_PROFILE_INCOMPLETE));
     }
     Ok(())
 }
@@ -107,7 +110,7 @@ pub fn create_entry(
     db_state: State<'_, DbState>,
     data_key_state: State<'_, DataKey>,
     signing_state: State<'_, SigningState>,
-) -> Result<String, String> {
+) -> Result<String, CommandError> {
     let data_key = get_data_key(&data_key_state)?;
     // Autor desde la sesión: mantiene author_id y llave de firma del mismo
     // usuario por construcción (el parámetro no existe para suplantar).
@@ -116,19 +119,17 @@ pub fn create_entry(
     // Validar categoría
     let valid_categories = ["SOAP_NOTE", "MEDICATION", "ALLERGY", "CONDITION"];
     if !valid_categories.contains(&category.as_str()) {
-        return Err(format!(
-            "Categoría inválida: {}. Válidas: {:?}",
-            category, valid_categories
-        ));
+        return Err(CommandError::new(ERR_INVALID_CATEGORY)
+            .with_param("category", &category)
+            .with_param("valid", valid_categories.join(", ")));
     }
 
     // Validar status
     let valid_statuses = ["ACTIVE", "RESOLVED", "COMPLETED"];
     if !valid_statuses.contains(&status.as_str()) {
-        return Err(format!(
-            "Status inválido: {}. Válidos: {:?}",
-            status, valid_statuses
-        ));
+        return Err(CommandError::new(ERR_INVALID_STATUS)
+            .with_param("status", &status)
+            .with_param("valid", valid_statuses.join(", ")));
     }
 
     // Perfil profesional completo: identidad del firmante en cards/export.
@@ -149,7 +150,7 @@ pub fn create_entry(
     let sign_guard = signing_state.0.lock().unwrap();
     let private_key_bytes = sign_guard
         .as_ref()
-        .ok_or("Error de Seguridad: No hay llave de firma en RAM. ¿Bóveda cerrada?".to_string())?;
+        .ok_or_else(|| CommandError::new(ERR_SIGNING_KEY_MISSING))?;
 
     // id y created_at se generan ANTES de firmar: ambos entran en el material.
     let entry_id = Uuid::new_v4().to_string();
@@ -204,7 +205,7 @@ pub fn get_entry(
     id: String,
     db_state: State<'_, DbState>,
     data_key_state: State<'_, DataKey>,
-) -> Result<EntryRecord, String> {
+) -> Result<EntryRecord, CommandError> {
     let data_key = get_data_key(&data_key_state)?;
 
     let row = with_conn(&db_state, |conn| {
@@ -293,7 +294,7 @@ pub fn get_entry(
 
     // Obtener la llave pública del autor vigente en la fecha de la entry
     let pub_key_result = with_conn(&db_state, |conn| {
-        public_key_at(conn, &author_id, &timestamp)
+        Ok(public_key_at(conn, &author_id, &timestamp)?)
     });
 
     let is_verified = match pub_key_result {
@@ -326,7 +327,7 @@ pub fn get_entries_by_subject(
     offset: i64,
     db_state: State<'_, DbState>,
     data_key_state: State<'_, DataKey>,
-) -> Result<Vec<EntryRecord>, String> {
+) -> Result<Vec<EntryRecord>, CommandError> {
     let data_key = get_data_key(&data_key_state)?;
 
     let rows = with_conn(&db_state, |conn| {
@@ -419,7 +420,7 @@ pub fn get_entries_by_subject(
         );
 
         let pub_key_result = with_conn(&db_state, |conn| {
-            public_key_at(conn, &author_id, &timestamp)
+            Ok(public_key_at(conn, &author_id, &timestamp)?)
         });
 
         let is_verified = match pub_key_result {
@@ -456,7 +457,7 @@ pub fn get_entries_by_category(
     offset: i64,
     db_state: State<'_, DbState>,
     data_key_state: State<'_, DataKey>,
-) -> Result<Vec<EntryRecord>, String> {
+) -> Result<Vec<EntryRecord>, CommandError> {
     let data_key = get_data_key(&data_key_state)?;
 
     let rows = with_conn(&db_state, |conn| {
@@ -549,7 +550,7 @@ pub fn get_entries_by_category(
         );
 
         let pub_key_result = with_conn(&db_state, |conn| {
-            public_key_at(conn, &author_id, &timestamp)
+            Ok(public_key_at(conn, &author_id, &timestamp)?)
         });
 
         let is_verified = match pub_key_result {
@@ -587,7 +588,7 @@ pub fn search_entries(
     offset: i64,
     db_state: State<'_, DbState>,
     data_key_state: State<'_, DataKey>,
-) -> Result<Vec<EntryRecord>, String> {
+) -> Result<Vec<EntryRecord>, CommandError> {
     let data_key = get_data_key(&data_key_state)?;
     let search_pattern = format!("%{}%", query.trim().to_lowercase());
 
@@ -728,7 +729,7 @@ pub fn search_entries(
         );
 
         let pub_key_result = with_conn(&db_state, |conn| {
-            public_key_at(conn, &author_id, &timestamp)
+            Ok(public_key_at(conn, &author_id, &timestamp)?)
         });
 
         let is_verified = match pub_key_result {
@@ -886,6 +887,7 @@ fn decrypt_payload(
 mod tests {
     use super::*;
     use crate::db::database::init_db;
+    use crate::error::{ERR_INTERNAL, ERR_VAULT_LOCKED};
     use crate::types::SessionUser;
     use std::sync::Mutex;
     use std::thread;
@@ -1002,7 +1004,7 @@ mod tests {
         status: &str,
         subject_id: i64,
         title: &str,
-    ) -> Result<String, String> {
+    ) -> Result<String, CommandError> {
         create_entry(
             category.to_string(),
             subject_id,
@@ -1016,11 +1018,11 @@ mod tests {
         )
     }
 
-    fn create(env: &TestEnv, subject_id: i64, title: &str) -> Result<String, String> {
+    fn create(env: &TestEnv, subject_id: i64, title: &str) -> Result<String, CommandError> {
         create_with(env, "SOAP_NOTE", "ACTIVE", subject_id, title)
     }
 
-    fn get(env: &TestEnv, id: &str) -> Result<EntryRecord, String> {
+    fn get(env: &TestEnv, id: &str) -> Result<EntryRecord, CommandError> {
         get_entry(id.to_string(), env.app.state::<DbState>(), env.app.state::<DataKey>())
     }
 
@@ -1029,7 +1031,7 @@ mod tests {
         subject_id: i64,
         limit: i64,
         offset: i64,
-    ) -> Result<Vec<EntryRecord>, String> {
+    ) -> Result<Vec<EntryRecord>, CommandError> {
         get_entries_by_subject(
             subject_id,
             limit,
@@ -1043,7 +1045,7 @@ mod tests {
         env: &TestEnv,
         subject_id: i64,
         category: &str,
-    ) -> Result<Vec<EntryRecord>, String> {
+    ) -> Result<Vec<EntryRecord>, CommandError> {
         get_entries_by_category(
             subject_id,
             category.to_string(),
@@ -1059,7 +1061,7 @@ mod tests {
         subject_id: i64,
         query: &str,
         category: Option<&str>,
-    ) -> Result<Vec<EntryRecord>, String> {
+    ) -> Result<Vec<EntryRecord>, CommandError> {
         search_entries(
             subject_id,
             query.to_string(),
@@ -1126,7 +1128,7 @@ mod tests {
                     params![id],
                     |r| r.get::<_, Vec<u8>>(0),
                 )
-                .map_err(|e| e.to_string())
+                .map_err(|e| CommandError::internal(e.to_string()))
             })
             .expect("select payload")
         };
@@ -1151,28 +1153,28 @@ mod tests {
     fn test_create_entry_rejects_invalid_category() {
         let env = setup();
         let err = create_with(&env, "NOTES", "ACTIVE", env.entity_id, "x").unwrap_err();
-        assert!(err.contains("Categoría inválida"), "err: {}", err);
+        assert_eq!(err.code, ERR_INVALID_CATEGORY, "err: {}", err);
     }
 
     #[test]
     fn test_create_entry_rejects_invalid_status() {
         let env = setup();
         let err = create_with(&env, "SOAP_NOTE", "BORRADOR", env.entity_id, "x").unwrap_err();
-        assert!(err.contains("Status inválido"), "err: {}", err);
+        assert_eq!(err.code, ERR_INVALID_STATUS, "err: {}", err);
     }
 
     #[test]
     fn test_create_entry_requires_data_key() {
         let env = setup_with(false, true);
         let err = create(&env, env.entity_id, "x").unwrap_err();
-        assert!(err.contains("Data key no inicializada"), "err: {}", err);
+        assert_eq!(err.code, ERR_VAULT_LOCKED, "err: {}", err);
     }
 
     #[test]
     fn test_create_entry_requires_signing_key() {
         let env = setup_with(true, false);
         let err = create(&env, env.entity_id, "x").unwrap_err();
-        assert!(err.contains("llave de firma"), "err: {}", err);
+        assert_eq!(err.code, ERR_SIGNING_KEY_MISSING, "err: {}", err);
     }
 
     // --- get_entry ---
@@ -1194,7 +1196,7 @@ mod tests {
                 "UPDATE entries SET title = 'Manipulado' WHERE id = ?1",
                 params![id],
             )
-            .map_err(|e| e.to_string())
+            .map_err(|e| CommandError::internal(e.to_string()))
         })
         .expect("update title");
 
@@ -1227,7 +1229,7 @@ mod tests {
                 "UPDATE entries SET payload = ?1 WHERE id = ?2",
                 params![blob, id],
             )
-            .map_err(|e| e.to_string())
+            .map_err(|e| CommandError::internal(e.to_string()))
         })
         .expect("update payload");
 
@@ -1253,7 +1255,7 @@ mod tests {
                 "UPDATE entries SET created_at = '1999-01-01 00:00:00' WHERE id = ?1",
                 params![id],
             )
-            .map_err(|e| e.to_string())
+            .map_err(|e| CommandError::internal(e.to_string()))
         })
         .expect("update created_at");
 
@@ -1279,7 +1281,7 @@ mod tests {
                 "UPDATE entries SET id = 'id-reidentificado' WHERE id = ?1",
                 params![id],
             )
-            .map_err(|e| e.to_string())
+            .map_err(|e| CommandError::internal(e.to_string()))
         })
         .expect("update id");
 
@@ -1339,7 +1341,12 @@ mod tests {
         }
 
         let err = get(&env, &id).unwrap_err();
-        assert!(err.contains("descifrando"), "err: {}", err);
+        assert_eq!(err.code, ERR_INTERNAL, "err: {}", err);
+        assert!(
+            err.params.get("detail").map(String::as_str).unwrap_or_default().contains("descifrando"),
+            "err: {}",
+            err
+        );
     }
 
     #[test]
@@ -1368,7 +1375,7 @@ mod tests {
                  VALUES ('entry-orphan-1', 'SOAP_NOTE', ?1, 'author-2', 'Nota sin perfil', 'ACTIVE', ?2, ?3, 'ff', ?2)",
                 params![env.entity_id, chrono::Utc::now().to_rfc3339(), payload_json],
             )
-            .map_err(|e| e.to_string())
+            .map_err(|e| CommandError::internal(e.to_string()))
         })
         .expect("insert orphan entry");
 
@@ -1403,7 +1410,7 @@ mod tests {
                     chrono::Utc::now().to_rfc3339()
                 ],
             )
-            .map_err(|e| e.to_string())
+            .map_err(|e| CommandError::internal(e.to_string()))
         })
         .expect("setup perfil incompleto");
 
@@ -1430,7 +1437,7 @@ mod tests {
             env.app.state::<SigningState>(),
         )
         .expect_err("debe rechazar perfil incompleto");
-        assert!(err.contains("Perfil profesional"), "err: {}", err);
+        assert_eq!(err.code, ERR_PROFILE_INCOMPLETE, "err: {}", err);
     }
 
     // --- listados y paginación ---

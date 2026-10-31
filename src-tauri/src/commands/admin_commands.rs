@@ -1,4 +1,10 @@
 use super::with_conn;
+use crate::error::{
+    CommandError, ERR_ADMIN_OR_ASSISTANT_REQUIRED, ERR_ADMIN_REQUIRED, ERR_INVALID_ROLE,
+    ERR_LAST_ADMIN, ERR_OWN_PASSWORD_RESET, ERR_PASSWORD_TOO_SHORT, ERR_SESSION_REQUIRED,
+    ERR_SELF_DEACTIVATE, ERR_STORAGE_PATH, ERR_USERNAME_EMPTY, ERR_USERNAME_TAKEN,
+    ERR_USER_NOT_FOUND, ERR_VAULT_LOCKED,
+};
 use crate::security::{auth, data_key, vault};
 use crate::types::{DbState, DataKey, SessionState, SessionUser};
 use tauri::{Manager, State};
@@ -8,11 +14,16 @@ use zeroize::Zeroizing;
 /// Exige una sesión activa con rol `administrador`.
 /// Toda gestión sensible (usuarios, contraseñas, semilla, respaldos) pasa por
 /// aquí — el rol nunca se confía en el frontend.
-pub fn require_admin(session_state: &State<'_, SessionState>) -> Result<SessionUser, String> {
-    let guard = session_state.0.lock().map_err(|_| "Lock poisoned")?;
-    let session = guard.as_ref().ok_or("Sesión no iniciada. Ingresá de nuevo.")?;
+pub fn require_admin(session_state: &State<'_, SessionState>) -> Result<SessionUser, CommandError> {
+    let guard = session_state
+        .0
+        .lock()
+        .map_err(|_| CommandError::internal("Lock poisoned"))?;
+    let session = guard
+        .as_ref()
+        .ok_or_else(|| CommandError::new(ERR_SESSION_REQUIRED))?;
     if session.role != "administrador" {
-        return Err("Esta acción requiere rol administrador.".to_string());
+        return Err(CommandError::new(ERR_ADMIN_REQUIRED));
     }
     Ok(session.clone())
 }
@@ -20,23 +31,33 @@ pub fn require_admin(session_state: &State<'_, SessionState>) -> Result<SessionU
 /// Exige una sesión activa (cualquier rol). Para operaciones que todo
 /// usuario autenticado puede hacer sobre **su propio** recurso — el
 /// `user_id` nunca se confía en lo que manda el frontend.
-pub fn require_session(session_state: &State<'_, SessionState>) -> Result<SessionUser, String> {
-    let guard = session_state.0.lock().map_err(|_| "Lock poisoned")?;
+pub fn require_session(
+    session_state: &State<'_, SessionState>,
+) -> Result<SessionUser, CommandError> {
+    let guard = session_state
+        .0
+        .lock()
+        .map_err(|_| CommandError::internal("Lock poisoned"))?;
     guard
         .as_ref()
         .cloned()
-        .ok_or_else(|| "Sesión no iniciada. Ingresá de nuevo.".to_string())
+        .ok_or_else(|| CommandError::new(ERR_SESSION_REQUIRED))
 }
 
 /// Exige rol administrador o asistente — operaciones de admisión
 /// (otorgar acceso de paciente) que no son clínicas ni requieren DataKey.
 pub fn require_admin_or_assistant(
     session_state: &State<'_, SessionState>,
-) -> Result<SessionUser, String> {
-    let guard = session_state.0.lock().map_err(|_| "Lock poisoned")?;
-    let session = guard.as_ref().ok_or("Sesión no iniciada. Ingresá de nuevo.")?;
+) -> Result<SessionUser, CommandError> {
+    let guard = session_state
+        .0
+        .lock()
+        .map_err(|_| CommandError::internal("Lock poisoned"))?;
+    let session = guard
+        .as_ref()
+        .ok_or_else(|| CommandError::new(ERR_SESSION_REQUIRED))?;
     if session.role != "administrador" && session.role != "asistente" {
-        return Err("Esta acción requiere rol administrador o asistente.".to_string());
+        return Err(CommandError::new(ERR_ADMIN_OR_ASSISTANT_REQUIRED));
     }
     Ok(session.clone())
 }
@@ -79,10 +100,11 @@ pub struct UserAdminRow {
 /// Cantidad total de usuarios — decide si AuthBox muestra el bootstrap
 /// del primer administrador (0) o solo login (>0). Público a propósito.
 #[tauri::command]
-pub fn count_users(db_state: State<'_, DbState>) -> Result<i64, String> {
+pub fn count_users(db_state: State<'_, DbState>) -> Result<i64, CommandError> {
     with_conn(&db_state, |conn| {
-        conn.query_row("SELECT COUNT(*) FROM users", [], |r| r.get(0))
-            .map_err(|e| e.to_string())
+        Ok(conn
+            .query_row("SELECT COUNT(*) FROM users", [], |r| r.get(0))
+            .map_err(|e| e.to_string())?)
     })
 }
 
@@ -96,17 +118,17 @@ pub fn admin_create_user(
     role: String,
     session_state: State<'_, SessionState>,
     db_state: State<'_, DbState>,
-) -> Result<String, String> {
+) -> Result<String, CommandError> {
     let actor = require_admin(&session_state)?;
 
     if username.trim().is_empty() {
-        return Err("El nombre de usuario no puede estar vacío.".to_string());
+        return Err(CommandError::new(ERR_USERNAME_EMPTY));
     }
     if password_plain.len() < 8 {
-        return Err("La contraseña debe tener al menos 8 caracteres.".to_string());
+        return Err(CommandError::new(ERR_PASSWORD_TOO_SHORT).with_param("min", "8"));
     }
     if !VALID_ROLES.contains(&role.as_str()) {
-        return Err(format!("Rol inválido: {}", role));
+        return Err(CommandError::new(ERR_INVALID_ROLE).with_param("role", &role));
     }
 
     let hashed = auth::hash_password(&password_plain)?;
@@ -121,9 +143,9 @@ pub fn admin_create_user(
         )
         .map_err(|e| {
             if e.to_string().contains("UNIQUE") {
-                "Ya existe un usuario con ese nombre.".to_string()
+                CommandError::new(ERR_USERNAME_TAKEN)
             } else {
-                format!("Error al crear usuario: {}", e)
+                CommandError::internal(format!("Error al crear usuario: {}", e))
             }
         })?;
 
@@ -154,7 +176,7 @@ pub fn admin_create_user(
 pub fn list_users(
     session_state: State<'_, SessionState>,
     db_state: State<'_, DbState>,
-) -> Result<Vec<UserAdminRow>, String> {
+) -> Result<Vec<UserAdminRow>, CommandError> {
     require_admin(&session_state)?;
 
     with_conn(&db_state, |conn| {
@@ -193,11 +215,11 @@ pub fn set_user_active(
     active: bool,
     session_state: State<'_, SessionState>,
     db_state: State<'_, DbState>,
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     let actor = require_admin(&session_state)?;
 
     if user_id == actor.user_id {
-        return Err("No podés desactivar tu propia cuenta.".to_string());
+        return Err(CommandError::new(ERR_SELF_DEACTIVATE));
     }
 
     with_conn(&db_state, |conn| {
@@ -209,9 +231,9 @@ pub fn set_user_active(
             )
             .map_err(|e| {
                 if e.to_string().contains("QueryReturnedNoRows") {
-                    "El usuario no existe.".to_string()
+                    CommandError::new(ERR_USER_NOT_FOUND)
                 } else {
-                    e.to_string()
+                    CommandError::internal(e.to_string())
                 }
             })?;
 
@@ -224,10 +246,7 @@ pub fn set_user_active(
                 )
                 .map_err(|e| e.to_string())?;
             if admins <= 1 {
-                return Err(
-                    "No se puede desactivar: quedaría la instalación sin administradores activos."
-                        .to_string(),
-                );
+                return Err(CommandError::new(ERR_LAST_ADMIN));
             }
         }
 
@@ -260,7 +279,7 @@ pub fn set_user_active(
 pub fn list_audit_log(
     session_state: State<'_, SessionState>,
     db_state: State<'_, DbState>,
-) -> Result<Vec<serde_json::Value>, String> {
+) -> Result<Vec<serde_json::Value>, CommandError> {
     require_admin(&session_state)?;
 
     with_conn(&db_state, |conn| {
@@ -316,22 +335,20 @@ pub fn admin_reset_password(
     session_state: State<'_, SessionState>,
     db_state: State<'_, DbState>,
     data_key_state: State<'_, DataKey>,
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     let actor = require_admin(&session_state)?;
 
     if new_password.len() < 8 {
-        return Err("La contraseña debe tener al menos 8 caracteres.".to_string());
+        return Err(CommandError::new(ERR_PASSWORD_TOO_SHORT).with_param("min", "8"));
     }
     if target_user_id == actor.user_id {
-        return Err(
-            "Para tu propia cuenta usá «Cambiar contraseña» desde tu perfil.".to_string(),
-        );
+        return Err(CommandError::new(ERR_OWN_PASSWORD_RESET));
     }
 
     let app_dir = app_handle
         .path()
         .app_local_data_dir()
-        .map_err(|e| format!("Error al obtener ruta del sistema: {}", e))?;
+        .map_err(|_| CommandError::new(ERR_STORAGE_PATH))?;
 
     // DataKey en RAM: solo hace falta para re-envolver el wrap de staff.
     // `None` si no está inicializada — el rol del target lo decide el core.
@@ -366,23 +383,21 @@ fn reset_password_core(
     new_password: &str,
     data_key_ram: Option<&Zeroizing<[u8; 32]>>,
     conn: &rusqlite::Connection,
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     let role: String = conn
         .query_row(
             "SELECT role FROM users WHERE id = ?1;",
             rusqlite::params![target_user_id],
             |r| r.get(0),
         )
-        .map_err(|e| format!("Error consultando usuario destino: {}", e))?;
+        .map_err(|e| CommandError::internal(format!("Error consultando usuario destino: {}", e)))?;
 
     // DataKey en RAM: sin ella no se puede re-envolver el wrap del usuario.
     // El paciente no tiene wrap → no se exige ni se guarda.
     let data_key = if role == "paciente" {
         None
     } else {
-        Some(data_key_ram.ok_or_else(|| {
-            "Data key no inicializada. ¿Reiniciaste la aplicación?".to_string()
-        })?)
+        Some(data_key_ram.ok_or_else(|| CommandError::new(ERR_VAULT_LOCKED))?)
     };
 
     // 1. Regenerar vault (master nueva + keypair nuevo) — sin tocar la DB todavía.
@@ -467,18 +482,18 @@ pub fn admin_rotate_seed(
     session_state: State<'_, SessionState>,
     db_state: State<'_, DbState>,
     data_key_state: State<'_, DataKey>,
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     let actor = require_admin(&session_state)?;
 
     // Validación de formato/checksum de la mnemonic antes de persistir.
     if !crate::security::seed::verify_seed_phrase(phrase.trim())? {
-        return Err("La frase semilla no es válida.".to_string());
+        return Err(CommandError::new(crate::error::ERR_SEED_MALFORMED));
     }
 
     let app_dir = app_handle
         .path()
         .app_local_data_dir()
-        .map_err(|e| format!("Error al obtener ruta del sistema: {}", e))?;
+        .map_err(|_| CommandError::new(ERR_STORAGE_PATH))?;
 
     let data_key = super::get_data_key(&data_key_state)?;
 
@@ -486,13 +501,13 @@ pub fn admin_rotate_seed(
     data_key::save_master_wrap(&app_dir, &data_key, phrase.trim())?;
 
     with_conn(&db_state, |conn| {
-        record_audit(
+        Ok(record_audit(
             conn,
             &actor.user_id,
             "seed_rotate",
             None,
             "frase semilla de la instalación rotada",
-        )
+        )?)
     })?;
 
     println!("🌱 [Admin] Frase semilla rotada por {}", actor.username);
@@ -584,7 +599,7 @@ mod tests {
             &conn,
         )
         .expect_err("staff exige DataKey en RAM");
-        assert!(err.contains("Data key no inicializada"), "err: {}", err);
+        assert_eq!(err.code, ERR_VAULT_LOCKED, "err: {}", err);
 
         // Falló ANTES de tocar nada: ni vault ni hash rotados.
         let hash: String = conn

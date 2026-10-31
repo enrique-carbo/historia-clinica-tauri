@@ -9,15 +9,15 @@ El "porqué" del diseño vive en `README.md` y `docs/` — acá va lo operativo.
 
 ```bash
 cd src-tauri
-cargo test                    # baseline: 138 tests, 0 fallas
+cargo test                    # baseline: 142 tests, 0 fallas
 cargo clippy --all-targets    # baseline: 3 warnings, 0 errores
 cd .. && npx tsc --noEmit     # baseline: sin errores
-pnpm test                     # baseline: 73 tests, 0 fallas (vitest; Node >= 22.12)
+pnpm test                     # baseline: 100 tests, 0 fallas (vitest; Node >= 22.12)
 pnpm version:check            # tauri.conf.json = package.json = Cargo.toml
 ```
 
 - Perfiles Med/Vet: verificar también `FICHIO_PROFILE=vet cargo test`
-  (mismo baseline 138) — build.rs copia el schema del perfil a OUT_DIR;
+  (mismo baseline 142) — build.rs copia el schema del perfil a OUT_DIR;
   `pnpm build` / `pnpm build:vet:frontend` compilan cada lado del frontend.
 
 - Los 3 warnings de clippy son `too_many_arguments` aceptados en
@@ -46,6 +46,7 @@ pnpm version:check            # tauri.conf.json = package.json = Cargo.toml
   - `src/commands/*.rs` — comandos Tauri. Un command nuevo **debe
     registrarse en `src-tauri/src/lib.rs`** (invoke_handler): si no, el
     `invoke` del frontend falla en runtime y nada lo detecta al compilar.
+  - `src/error.rs` — `CommandError { code, params }` y catálogo de `ERR_*`.
   - `src/db/migrations/mod.rs` — catálogo de migraciones.
   - `src/export/render.rs` — render del Markdown exportado (puro, sin I/O).
   - `src/security/` — vault, crypto, seed, backup, data_key.
@@ -72,6 +73,7 @@ pnpm version:check            # tauri.conf.json = package.json = Cargo.toml
     reiniciá el dev o tocá un `.rs` para que cargo recompile.
 - `src/` — React + TS. Vistas en `src/components/views/`, stores en
   `src/stores/`.
+  - `src/utils/errors.ts` — `formatError()`: código `ERR_*` → texto (i18n-ready).
 - `config/entry_templates/*.json` — labels y orden canónicos de entries.
 
 ## Reglas del proyecto
@@ -96,6 +98,15 @@ pnpm version:check            # tauri.conf.json = package.json = Cargo.toml
   Derivar con `require_session()` / `require_admin()` /
   `require_admin_or_assistant()` (definidos en
   `src-tauri/src/commands/admin_commands.rs`).
+- **Errores de commands**: todo `#[tauri::command]` devuelve
+  `Result<_, CommandError>` (`src-tauri/src/error.rs`): el texto para el
+  usuario **no viaja desde Rust**, viaja un código estable
+  (`ERR_...`) + `params` para interpolar. El frontend traduce con
+  `formatError()` (`src/utils/errors.ts`) — código nuevo = entrada nueva en
+  el diccionario. `From<String>`/`From<&str>` convierten solo a
+  `ERR_INTERNAL` (detalle técnico en `params.detail`, sin traducir), así
+  que los helpers internos pueden seguir devolviendo `String`. No agregar
+  `Err("texto".to_string())` en commands.
 - **Auditoría**: `record_audit()` guarda solo nombres de campos y
   metadatos, **nunca valores** — los datos van cifrados en reposo y
   `audit_log` es texto plano.

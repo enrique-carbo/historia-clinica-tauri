@@ -1,6 +1,7 @@
 // src/stores/usePatientStore.ts
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
+import { formatError } from "../utils/errors";
 import type { Entity } from "./useEntityStore";
 
 interface PatientStoreState {
@@ -26,7 +27,7 @@ export const usePatientStore = create<PatientStoreState>((set) => ({
         isLoading: false,
       });
     } catch (err) {
-      set({ error: String(err), isLoading: false });
+      set({ error: formatError(err), isLoading: false });
     }
   },
 

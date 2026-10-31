@@ -1,6 +1,7 @@
 // src/stores/useEntryStore.ts
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
+import { formatError } from "../utils/errors";
 
 export type EntryCategory = "SOAP_NOTE" | "MEDICATION" | "ALLERGY" | "CONDITION";
 export type EntryStatus = "ACTIVE" | "RESOLVED" | "COMPLETED";
@@ -84,7 +85,7 @@ export const useEntryStore = create<EntryState>((set, get) => ({
         hasMore: res.length === pageSize,
       });
     } catch (err) {
-      set({ error: String(err), isLoading: false });
+      set({ error: formatError(err), isLoading: false });
     }
   },
 
@@ -107,7 +108,7 @@ export const useEntryStore = create<EntryState>((set, get) => ({
         hasMore: res.length === pageSize,
       });
     } catch (err) {
-      set({ error: String(err), isLoading: false });
+      set({ error: formatError(err), isLoading: false });
     }
   },
 
@@ -150,7 +151,7 @@ export const useEntryStore = create<EntryState>((set, get) => ({
         hasMore: res.length === pageSize,
       });
     } catch (err) {
-      set({ error: String(err), isLoadingMore: false });
+      set({ error: formatError(err), isLoadingMore: false });
     }
   },
 
@@ -185,7 +186,7 @@ export const useEntryStore = create<EntryState>((set, get) => ({
 
       return entry;
     } catch (err) {
-      set({ error: String(err), isLoading: false });
+      set({ error: formatError(err), isLoading: false });
       return null;
     }
   },

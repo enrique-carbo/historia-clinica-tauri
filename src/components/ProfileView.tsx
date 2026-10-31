@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useAuthStore } from "../stores/useAuthStore";
 import { invoke } from "@tauri-apps/api/core";
+import { formatError } from "../utils/errors";
 import { ChangePasswordForm } from "./ChangePasswordForm";
 import { Alert } from "./ui/Alert";
 import { Button } from "./ui/Button";
@@ -68,7 +69,7 @@ export function ProfileView() {
       });
       setError(null);
     } catch (e) {
-      setError(`No se pudo cargar el perfil: ${e}`);
+      setError(`No se pudo cargar el perfil: ${formatError(e)}`);
     }
   };
 
@@ -86,7 +87,7 @@ export function ProfileView() {
       setIsEditing(false);
       await loadProfile();
     } catch (e) {
-      setError(`No se pudo guardar el perfil: ${e}`);
+      setError(`No se pudo guardar el perfil: ${formatError(e)}`);
     } finally {
       setLoading(false);
     }
