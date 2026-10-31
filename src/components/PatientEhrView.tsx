@@ -183,7 +183,7 @@ export function PatientEhrView() {
                       value: patient.data[field.name],
                     })).map((item, idx) => (
                       <div key={idx} className="bg-surface/50 rounded-lg p-3 border border-border/50">
-                        <div className="text-[10px] text-text-muted uppercase font-bold tracking-wider">{item.label}</div>
+                        <div className="select-none text-[10px] text-text-muted uppercase font-bold tracking-wider">{item.label}</div>
                         <div className="text-sm text-text-primary mt-0.5 truncate">{item.value || "—"}</div>
                       </div>
                     ))}

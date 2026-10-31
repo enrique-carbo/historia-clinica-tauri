@@ -59,7 +59,7 @@ export function AllergyCard({ subjectId }: AllergyCardProps) {
     <>
       <div className="flex items-center gap-2.5 min-w-0 flex-wrap">
         <span className="text-sm shrink-0" aria-hidden="true">⚠️</span>
-        <span className="text-[10px] text-text-muted uppercase font-bold tracking-wider shrink-0">
+        <span className="select-none text-[10px] text-text-muted uppercase font-bold tracking-wider shrink-0">
           Alergias
         </span>
 

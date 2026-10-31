@@ -14,7 +14,9 @@ function DetailRow({ label, value }: { label: string; value?: string }) {
   const hasValue = value != null && value.trim() !== "";
   return (
     <div className="col-span-1">
-      <div className="text-xs font-bold text-text-muted mb-1.5 uppercase tracking-wide">
+      {/* Rótulo del campo: es UI, no dato — sin selección (index.css).
+          El valor de abajo sí es seleccionable (copiar DNI, etc.). */}
+      <div className="select-none text-xs font-bold text-text-muted mb-1.5 uppercase tracking-wide">
         {label}
       </div>
       <div

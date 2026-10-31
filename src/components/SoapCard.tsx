@@ -34,7 +34,7 @@ export function SoapCard({ entry, onClick }: SoapCardProps) {
       className="p-4 rounded-lg bg-surface border border-border hover:border-border-strong transition-colors cursor-pointer"
     >
       {/* Header: badge SOAP + estado */}
-      <div className="flex items-center justify-between gap-3 mb-2">
+      <div className="select-none flex items-center justify-between gap-3 mb-2">
         <CategoryBadge category={entry.category} />
         <StatusBadge status={entry.status} />
       </div>

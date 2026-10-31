@@ -129,3 +129,22 @@
   --color-selected-tint: var(--selected-tint);
   --color-selected-border: var(--selected-border);
 }
+
+/* Selección de texto (2026-10): la UI no se selecciona — labels, títulos
+   y botones quedan sin highlight accidental al clickear. Los datos sí:
+   inputs/textareas y el contenido clínico (ficha detalle, entries,
+   mensajes del sistema) siguen seleccionables para copiar-pegar.
+   `-webkit-` es por WebKitGTK (Linux); el prefijo va primero. */
+label,
+h1, h2, h3, h4, h5, h6,
+button {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+input,
+textarea,
+select {
+  -webkit-user-select: text;
+  user-select: text;
+}

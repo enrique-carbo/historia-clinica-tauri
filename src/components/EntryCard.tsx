@@ -104,7 +104,7 @@ export function EntryCard({ entry, onClick }: EntryCardProps) {
       {/* Payload (solo expandido) */}
       {isExpanded && (
         <div className="mt-3 pt-3 border-t border-border">
-          <div className="text-[10px] text-text-muted uppercase font-bold tracking-wider mb-2">
+          <div className="select-none text-[10px] text-text-muted uppercase font-bold tracking-wider mb-2">
             Contenido
           </div>
           <div className="space-y-2">
@@ -113,7 +113,7 @@ export function EntryCard({ entry, onClick }: EntryCardProps) {
                 key={key}
                 className="bg-canvas/50 border border-border/50 rounded-lg px-3 py-2"
               >
-                <div className="text-[10px] text-text-muted uppercase font-bold tracking-wider mb-1">
+                <div className="select-none text-[10px] text-text-muted uppercase font-bold tracking-wider mb-1">
                   {formatKey(key)}
                 </div>
                 <div className="text-xs text-text-primary whitespace-pre-wrap wrap-break-words leading-relaxed">
