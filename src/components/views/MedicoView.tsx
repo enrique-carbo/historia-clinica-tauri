@@ -96,7 +96,7 @@ export function MedicoView() {
             <h2 className="text-lg font-semibold text-text-primary flex items-center gap-2">
               Entries <span className="hidden md:inline">(Append-Only)</span>
               {selectedPatient && (
-                <span className="text-text-muted font-normal text-sm">
+                <span className="font-normal text-md">
                   · {selectedPatient.data.nombre} {selectedPatient.data.apellido}
                 </span>
               )}

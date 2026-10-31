@@ -8,6 +8,7 @@ import { usePatientStore } from "../stores/usePatientStore";
 import { PATIENT_FIELDS, flattenFields } from "../utils/schema";
 import { PatientListPanel, type EntityRecord } from "./PatientListPanel";
 import { PatientForm } from "./PatientForm";
+import { PatientDetailView } from "./PatientDetailView";
 import { PatientAccessPanel } from "./PatientAccessPanel";
 
 type EntityData = Record<string, string>;
@@ -24,7 +25,7 @@ const FLAT_FIELDS = flattenFields(PATIENT_FIELDS);
 
 export function Entity() {
   const { activeUser, isVaultUnlocked } = useAuthStore();
-  const { selected, selectPatient } = usePatientStore();
+  const { selected, selectPatient, clearSelection } = usePatientStore();
 
   const [form, setForm] = useState<EntityData>({});
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -36,6 +37,11 @@ export function Entity() {
 
   const canManageAccess =
     activeUser?.role === "administrador" || activeUser?.role === "asistente";
+
+  // Paciente seleccionado en el padrón: alimenta la vista detalle del
+  // panel derecho, el highlight de la lista y el Acceso del paciente.
+  const selectedPatient = selected?.patient ?? null;
+  const selectedId = selectedPatient?.id ?? null;
 
   // Sincronizar formulario cuando cambia la selección global (modo edición)
   useEffect(() => {
@@ -59,6 +65,13 @@ export function Entity() {
     });
     setForm(clean);
     setEditingId(null);
+  };
+
+  // "➕ Nuevo": vuelve al formulario de alta en blanco, limpiando además
+  // la selección (si no, el detalle del paciente seguiría ganando).
+  const handleNewPatient = () => {
+    resetForm();
+    clearSelection();
   };
 
   const handleCreateOrUpdate = async () => {
@@ -147,9 +160,10 @@ export function Entity() {
   };
 
   const handleSelect = async (id: number) => {
-    // Selección global: actualiza EHR y este componente
+    // Selección global: muestra la ficha en el panel derecho y actualiza
+    // EHR / Entries en las otras pestañas.
     await selectPatient(id);
-    setResult(`👁️ Seleccionado: ID=${id}. Haz clic en "Editar" para modificar.`);
+    setResult(`👁️ Seleccionado: ID=${id} — la ficha está a la derecha.`);
   };
 
   const handleList = async () => {
@@ -195,16 +209,18 @@ export function Entity() {
         loading={loading}
         searchQuery={searchQuery}
         searchDni={searchDni}
-        selectedId={selected?.patient?.id ?? null}
+        selectedId={selectedId}
         onSearchQueryChange={setSearchQuery}
         onSearchDniChange={setSearchDni}
         onSearch={handleSearch}
         onFind={handleFind}
         onSelect={handleSelect}
-        onEdit={loadEntityForEdit}
+        onNew={handleNewPatient}
       />
 
-      {/* PANEL DERECHO: Formulario Dinámico */}
+      {/* PANEL DERECHO: detalle (solo lectura) del seleccionado, o el
+          formulario — edición si editingId, alta en blanco si no hay
+          selección. La precedencia es edición > detalle > alta. */}
       <div className="col-span-1 md:col-span-7 lg:col-span-8 flex flex-col gap-4 overflow-hidden">
         {result && (
           <div className="whitespace-pre-wrap rounded-lg border border-border bg-canvas p-3 text-sm text-text-primary font-mono shadow-inner animate-in fade-in duration-200 overflow-x-auto">
@@ -212,18 +228,26 @@ export function Entity() {
           </div>
         )}
 
-        <PatientForm
-          form={form}
-          editingId={editingId}
-          loading={loading}
-          onChange={handleChange}
-          onReset={resetForm}
-          onSubmit={handleCreateOrUpdate}
-        />
+        {editingId !== null || !selectedPatient ? (
+          <PatientForm
+            form={form}
+            editingId={editingId}
+            loading={loading}
+            onChange={handleChange}
+            onReset={resetForm}
+            onSubmit={handleCreateOrUpdate}
+          />
+        ) : (
+          <PatientDetailView
+            patient={selectedPatient}
+            onEdit={() => loadEntityForEdit(selectedPatient.id)}
+          />
+        )}
 
-        {/* Acceso del paciente (admin/asistente, solo sobre ficha existente) */}
+        {/* Acceso del paciente (admin/asistente): sobre la ficha en
+            edición o la seleccionada */}
         <PatientAccessPanel
-          editingId={editingId}
+          activeId={editingId ?? selectedId}
           canManageAccess={canManageAccess}
         />
       </div>

@@ -1,6 +1,7 @@
 // Bloque "Acceso del paciente" (admin/asistente): consulta, alta y estado
 // del usuario con el que el paciente entra a la app. Autocontenido: su
-// estado y sus invokes viven acá; solo depende de editingId.
+// estado y sus invokes viven acá; solo depende del id activo (ficha en
+// edición o seleccionada en el padrón).
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Button } from "./ui/Button";
@@ -13,12 +14,12 @@ interface PatientAccess {
 }
 
 interface PatientAccessPanelProps {
-  editingId: number | null;
+  activeId: number | null;
   canManageAccess: boolean;
 }
 
 export function PatientAccessPanel({
-  editingId,
+  activeId,
   canManageAccess,
 }: PatientAccessPanelProps) {
   const [access, setAccess] = useState<PatientAccess | null>(null);
@@ -33,13 +34,13 @@ export function PatientAccessPanel({
 
   // Cargar estado del acceso al editar una ficha existente
   useEffect(() => {
-    if (!editingId || !canManageAccess) return;
+    if (!activeId || !canManageAccess) return;
     let cancelled = false;
     setAccess(null);
     setAccessMsg(null);
     setShowAccessForm(false);
     setAccessLoading(true);
-    invoke<PatientAccess | null>("get_entity_access", { entityId: editingId })
+    invoke<PatientAccess | null>("get_entity_access", { entityId: activeId })
       .then((res) => {
         if (!cancelled) setAccess(res);
       })
@@ -52,10 +53,10 @@ export function PatientAccessPanel({
     return () => {
       cancelled = true;
     };
-  }, [editingId, canManageAccess]);
+  }, [activeId, canManageAccess]);
 
   const handleGrantAccess = async () => {
-    if (!editingId) return;
+    if (!activeId) return;
     setAccessMsg(null);
     if (accessPassword.length < 8) {
       setAccessMsg({
@@ -67,7 +68,7 @@ export function PatientAccessPanel({
     setAccessLoading(true);
     try {
       const res = await invoke<PatientAccess>("grant_patient_access", {
-        entityId: editingId,
+        entityId: activeId,
         username: accessUsername,
         passwordPlain: accessPassword,
       });
@@ -83,7 +84,7 @@ export function PatientAccessPanel({
     }
   };
 
-  if (!editingId || !canManageAccess) return null;
+  if (!activeId || !canManageAccess) return null;
 
   return (
     <div className="shrink-0 rounded-xl border border-border bg-surface p-4 sm:p-6">

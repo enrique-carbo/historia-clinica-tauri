@@ -195,7 +195,8 @@ Pestaña **Paciente** (profesionales) o **Admisión de Pacientes**
 
 ### Crear una ficha
 
-1. Formulario **"➕ Nuevo Paciente"**.
+1. Botón **"➕ Nuevo"** (arriba del listado) → formulario
+   **"Nuevo Paciente"**.
 2. Completá los campos (para **Fichio Care**): Nombre, Apellido,
    **DNI / Documento** (obligatorio), Fecha de Nacimiento, Teléfono,
    Correo, Dirección, Ciudad, Provincia, Seguro Salud, Afiliado y — si
@@ -205,14 +206,19 @@ Pestaña **Paciente** (profesionales) o **Admisión de Pacientes**
 
 ### Editar o seleccionar
 
-- Clic en un paciente de la lista: lo **seleccionás** (queda activo para la
-  Historia Clínica y las Entries).
-- ✏️ **"Editar paciente"**: carga la ficha en el formulario → cambios →
-  **"Guardar Cambios"** (o **"Cancelar Edición"**).
+- Clic en un paciente de la lista: lo **seleccionás** y su **ficha aparece
+  en el panel derecho** (solo lectura — los campos sin dato muestran "—").
+  Queda además activo para la Historia Clínica y las Entries.
+- ✏️ **"Editar"** (arriba a la derecha de la ficha): carga el formulario →
+  cambios → **"Guardar Cambios"** (o **"Cancelar Edición"**, que vuelve a
+  la ficha de solo lectura).
+- **"➕ Nuevo"** (arriba del listado): formulario en blanco para dar de
+  alta otro paciente — también sale de una edición en curso.
 
 ### Acceso del paciente a la app (administrador / asistente)
 
-Con una ficha existente seleccionada aparece **"🎟️ Acceso del paciente"**:
+Con una ficha seleccionada (o mientras la editás) aparece
+**"🎟️ Acceso del paciente"**:
 
 - **"Dar acceso al paciente"** → Usuario + Contraseña temporal (mínimo 8) →
   **"Otorgar"**. Esa persona podrá entrar con rol `paciente`

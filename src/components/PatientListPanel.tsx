@@ -23,7 +23,7 @@ interface PatientListPanelProps {
   onSearch: () => void;
   onFind: () => void;
   onSelect: (id: number) => void;
-  onEdit: (id: number) => void;
+  onNew: () => void;
 }
 
 const INPUT_CLASSES =
@@ -42,14 +42,24 @@ export function PatientListPanel({
   onSearch,
   onFind,
   onSelect,
-  onEdit,
+  onNew,
 }: PatientListPanelProps) {
   return (
     <div className="col-span-1 md:col-span-5 lg:col-span-4 flex flex-col border border-border rounded-xl bg-surface overflow-hidden shadow-lg min-h-100 md:min-h-0">
       <div className="p-4 border-b border-border space-y-3 bg-surface">
-        <h3 className="text-xs font-bold text-text-muted uppercase tracking-widest">
-          Padrón de Pacientes
-        </h3>
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="text-xs font-bold text-text-muted uppercase tracking-widest">
+            Padrón de Pacientes
+          </h3>
+          <button
+            type="button"
+            onClick={onNew}
+            className="shrink-0 rounded-lg bg-action-primary px-3 py-1.5 text-xs font-bold text-text-inverse hover:bg-action-primary-hover transition-colors"
+            title="Crear un paciente nuevo"
+          >
+            <span aria-hidden="true" className="text-lg">+</span><span className="hidden sm:inline ml-1">Nuevo</span>
+          </button>
+        </div>
 
         {/* Búsqueda por Nombre / Teléfono */}
         <div className="flex gap-2">
@@ -112,7 +122,7 @@ export function PatientListPanel({
           entities.map((e) => (
             <div
               key={e.id}
-              className={`w-full text-left p-3 rounded-lg transition-colors duration-200 group flex items-center justify-between gap-2 ${
+              className={`w-full text-left p-3 rounded-lg transition-colors duration-200 flex items-center ${
                 selectedId === e.id
                   ? "bg-selected-tint/20 border border-selected-border/50"
                   : "bg-canvas/50 border border-transparent hover:bg-surface-raised hover:border-border-strong"
@@ -142,16 +152,6 @@ export function PatientListPanel({
                     {BLIND_INDEX_LABEL}: {e.data.dni}
                   </span>
                 </div>
-              </button>
-
-              {/* En móviles siempre visible, en desktop sólo en hover */}
-              <button
-                onClick={() => onEdit(e.id)}
-                aria-label="Editar paciente"
-                className="shrink-0 px-2.5 py-1.5 rounded-lg bg-surface-raised text-text-secondary hover:text-text-inverse hover:bg-action-primary transition-[color,background-color,border-color,opacity] text-xs font-bold border border-border-strong hover:border-action-primary opacity-100 md:opacity-0 md:group-hover:opacity-100"
-                title="Editar paciente"
-              >
-                <span aria-hidden="true">✏️</span>
               </button>
             </div>
           ))

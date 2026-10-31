@@ -21,9 +21,11 @@ export function Navbar({
   children,
 }: NavbarProps) {
   return (
-    <div className="flex flex-col h-full w-full overflow-hidden select-none bg-canvas">
-      {/* Contenedor del Navbar con flex-wrap */}
-      <div className="w-full border-b border-border bg-canvas p-3 sm:px-4 sm:pt-3">
+    <div className="flex flex-col h-full w-full overflow-hidden bg-canvas">
+      {/* Contenedor del Navbar con flex-wrap — select-none acá y no en el
+          raíz: el shell no debe impedir seleccionar texto del contenido
+          (copiar DNIs, diagnósticos, etc.). */}
+      <div className="w-full border-b border-border bg-canvas p-3 sm:px-4 sm:pt-3 select-none">
         <div className="flex items-center gap-2 w-full">
           <nav role="tablist" aria-label="Secciones" className="flex flex-wrap gap-2 sm:gap-1.5 w-full flex-1">
             {tabs.map((tab) => {
