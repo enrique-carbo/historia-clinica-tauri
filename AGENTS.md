@@ -12,7 +12,7 @@ cd src-tauri
 cargo test                    # baseline: 142 tests, 0 fallas
 cargo clippy --all-targets    # baseline: 3 warnings, 0 errores
 cd .. && npx tsc --noEmit     # baseline: sin errores
-pnpm test                     # baseline: 100 tests, 0 fallas (vitest; Node >= 22.12)
+pnpm test                     # baseline: 105 tests, 0 fallas (vitest; Node >= 22.12)
 pnpm version:check            # tauri.conf.json = package.json = Cargo.toml
 ```
 

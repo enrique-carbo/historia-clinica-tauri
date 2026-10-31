@@ -5,6 +5,7 @@ import { Button } from "./ui/Button";
 import { Alert } from "./ui/Alert";
 import { Input } from "./ui/Input";
 import { useAuthStore } from "../stores/useAuthStore";
+import { AppVersion } from "./ui/AppVersion";
 
 export function AuthBox() {
   const [bootstrap, setBootstrap] = useState<boolean | null>(null);
@@ -296,6 +297,8 @@ export function AuthBox() {
         )}
       </form>
       )}
+
+      <AppVersion className="mt-6 block w-full text-center" />
     </div>
   );
 }

@@ -152,6 +152,10 @@ forma de recuperar los datos.
 Los profesionales trabajan en **4 pestañas**: **Perfil** 👨🏻‍⚕️ · **Paciente**
 👤 · **Historia Clínica** 📋 · **Entries** ⏱️.
 
+Al pie del menú lateral (y también en la pantalla de login) figura la
+**versión instalada**, ej. `Fichio Care v0.1.2`. Si hacés clic se abre
+**Acerca de**: versión, licencia y el link a las descargas.
+
 ---
 
 ## 5. Tu perfil profesional
@@ -420,7 +424,8 @@ cambio de contraseña. **No ve entries ni fichas** — ni siquiera las suyas
 
 - **Issues**: https://github.com/enrique-carbo/historia-clinica-tauri/issues
   (o directo al equipo del beta).
-- Incluí: qué hiciste, qué esperabas, qué pasó y tu sistema operativo.
+- Incluí: qué hiciste, qué esperabas, qué pasó, tu sistema operativo y la
+  **versión de la app** (abajo del menú lateral, o en el login).
 - 🔒 **El repo es público**: **nunca subas capturas ni datos de pacientes
   reales**. Para probar, usá datos de prueba mientras avanza la beta.
 - ¿Falta algo en esta guía? Contanos y la agregamos.

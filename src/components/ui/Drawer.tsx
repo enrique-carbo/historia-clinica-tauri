@@ -3,6 +3,7 @@ import { useNavigationStore, MedicoTab, AdminTab } from "../../stores/useNavigat
 import { useAuthStore } from "../../stores/useAuthStore";
 import { Button } from "./Button";
 import { ThemeToggle } from "./ThemeToggle";
+import { AppVersion } from "./AppVersion";
 
 interface NavigationDrawerProps {
   onLogout: () => void;
@@ -236,6 +237,7 @@ export function NavigationDrawer({ onLogout }: NavigationDrawerProps) {
 
         {/* Logout */}
         <div className="p-4 border-t border-border">
+          <AppVersion className="block w-full text-center mb-3" />
           <Button
             variant="ghost-danger"
             onClick={() => {
