@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { formatError } from "../../utils/errors";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -6,7 +6,9 @@ import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { Button } from "../ui/Button";
 import { Alert } from "../ui/Alert";
 import { useAuthStore } from "../../stores/useAuthStore";
+import { useBackupStore } from "../../stores/useBackupStore";
 import { formatDateTime } from "../../utils/dateUtils";
+import { backupReminder } from "../../utils/backupReminder";
 
 interface BackupFile {
   name: string;
@@ -46,6 +48,16 @@ function formatBytes(bytes: number): string {
 
 export function AdminBackupPanel() {
   const lockVault = useAuthStore((s) => s.lockVault);
+  const { status: backupStatus, load: loadBackupStatus } = useBackupStore();
+  const lastBackupDays = backupStatus
+    ? backupReminder(backupStatus.last_backup_at).days
+    : null;
+
+  // El panel siempre muestra el estado real: el banner del layout puede
+  // haberse cargado antes de crear un respaldo.
+  useEffect(() => {
+    void loadBackupStatus();
+  }, [loadBackupStatus]);
 
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -76,6 +88,7 @@ export function AdminBackupPanel() {
       if (typeof dest !== "string") return;
       const info = await invoke<BackupInfo>("create_backup", { destParent: dest });
       setCreated(info);
+      void loadBackupStatus();
     } catch (e) {
       setError(formatError(e));
     } finally {
@@ -136,6 +149,35 @@ export function AdminBackupPanel() {
           Copia de seguridad de la base de datos, vaults y wraps de claves. Todo el contenido va
           cifrado en reposo.
         </p>
+        {backupStatus && (
+          <p className="text-xs mt-2 text-text-secondary">
+            {lastBackupDays === null ? (
+              <span className="text-warning-text">
+                Nunca se generó un respaldo en este equipo.
+              </span>
+            ) : (
+              <>
+                Último respaldo:{" "}
+                <strong className="text-text-primary">
+                  {formatDateTime(backupStatus.last_backup_at)}
+                </strong>{" "}
+                <span className="text-text-muted">
+                  (hace {lastBackupDays}{" "}
+                  {lastBackupDays === 1 ? "día" : "días"})
+                </span>
+              </>
+            )}
+            {backupStatus.backup_count > 0 && (
+              <span className="text-text-muted">
+                {" · "}
+                {backupStatus.backup_count}{" "}
+                {backupStatus.backup_count === 1
+                  ? "respaldo registrado"
+                  : "respaldos registrados"}
+              </span>
+            )}
+          </p>
+        )}
       </div>
 
       {error && (

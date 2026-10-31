@@ -9,15 +9,15 @@ El "porqué" del diseño vive en `README.md` y `docs/` — acá va lo operativo.
 
 ```bash
 cd src-tauri
-cargo test                    # baseline: 142 tests, 0 fallas
+cargo test                    # baseline: 145 tests, 0 fallas
 cargo clippy --all-targets    # baseline: 3 warnings, 0 errores
 cd .. && npx tsc --noEmit     # baseline: sin errores
-pnpm test                     # baseline: 105 tests, 0 fallas (vitest; Node >= 22.12)
+pnpm test                     # baseline: 118 tests, 0 fallas (vitest; Node >= 22.12)
 pnpm version:check            # tauri.conf.json = package.json = Cargo.toml
 ```
 
 - Perfiles Med/Vet: verificar también `FICHIO_PROFILE=vet cargo test`
-  (mismo baseline 142) — build.rs copia el schema del perfil a OUT_DIR;
+  (mismo baseline 145) — build.rs copia el schema del perfil a OUT_DIR;
   `pnpm build` / `pnpm build:vet:frontend` compilan cada lado del frontend.
 
 - Los 3 warnings de clippy son `too_many_arguments` aceptados en

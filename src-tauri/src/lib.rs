@@ -78,6 +78,7 @@ pub fn run() {
             commands::generate_seed,
             commands::verify_seed,
             commands::create_backup,
+            commands::backup_status,
             commands::validate_backup,
             commands::restore_backup,
             commands::seed_recovery,

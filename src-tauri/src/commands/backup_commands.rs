@@ -2,7 +2,7 @@ use std::path::Path;
 
 use tauri::{AppHandle, Manager, State};
 
-use super::{record_audit, require_admin};
+use super::{record_audit, require_admin, with_conn};
 use crate::db;
 use crate::error::{
     CommandError, ERR_BACKUP_SIGNATURE_INVALID, ERR_BACKUP_UNVERIFIED, ERR_DB_NOT_INITIALIZED,
@@ -100,6 +100,42 @@ pub fn create_backup(
     }
 
     Ok(info)
+}
+
+/// Último respaldo registrado en `audit_log`.
+///
+/// `audit_log` es la fuente local de verdad (el archivo de respaldo puede
+/// estar en cualquier carpeta elegida por el usuario, así que no se puede
+/// inferir del filesystem). Tras una restauración, el "último" es el que
+/// quedó dentro del respaldo restaurado — que es lo correcto: no hay
+/// respaldo posterior a ese.
+#[derive(Debug, serde::Serialize)]
+pub struct BackupStatus {
+    /// RFC3339 del último `backup_created`, o `None` si nunca hubo.
+    pub last_backup_at: Option<String>,
+    pub backup_count: i64,
+}
+
+/// Estado del respaldo para el recordatorio de la UI. Solo administradores:
+/// expone metadatos de auditoría (fechas), nunca contenido.
+#[tauri::command]
+pub fn backup_status(
+    session: State<'_, SessionState>,
+    db_state: State<'_, DbState>,
+) -> Result<BackupStatus, CommandError> {
+    require_admin(&session)?;
+    with_conn(&db_state, |conn| {
+        conn.query_row(
+            "SELECT MAX(created_at), COUNT(*) FROM audit_log WHERE action = 'backup_created'",
+            [],
+            |r| Ok((r.get::<_, Option<String>>(0)?, r.get::<_, i64>(1)?)),
+        )
+        .map(|(last_backup_at, backup_count)| BackupStatus {
+            last_backup_at,
+            backup_count,
+        })
+        .map_err(|e| CommandError::internal(e.to_string()))
+    })
 }
 
 /// Estado de la firma del manifest devuelto por `validate_backup`.
@@ -307,5 +343,97 @@ pub fn restore_backup(
 
             Ok(())
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::database::init_db;
+    use crate::error::ERR_ADMIN_REQUIRED;
+    use crate::types::SessionUser;
+    use std::sync::Mutex;
+    use tauri::Manager;
+
+    /// App mock con DB temporal y una sesión del rol dado. El usuario actor
+    /// existe porque `audit_log.actor_user_id` tiene FK a `users`.
+    fn setup(role: &str) -> (tauri::App<tauri::test::MockRuntime>, tempfile::TempDir) {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = init_db(dir.path().to_path_buf()).expect("init_db");
+        conn.execute(
+            "INSERT INTO users (id, username, password_hash, role, created_at)
+             VALUES ('actor-1', 'actor.test', 'hash', ?1, ?2)",
+            rusqlite::params![role, chrono::Utc::now().to_rfc3339()],
+        )
+        .expect("insert actor");
+
+        let app = tauri::test::mock_app();
+        app.manage(DbState(Mutex::new(Some(conn))));
+        app.manage(SessionState(Mutex::new(Some(SessionUser {
+            user_id: "actor-1".into(),
+            username: "actor".into(),
+            role: role.into(),
+        }))));
+        (app, dir)
+    }
+
+    fn status(
+        app: &tauri::App<tauri::test::MockRuntime>,
+    ) -> Result<BackupStatus, CommandError> {
+        backup_status(
+            app.state::<SessionState>(),
+            app.state::<DbState>(),
+        )
+    }
+
+    fn audit_backup(app: &tauri::App<tauri::test::MockRuntime>, created_at: &str) {
+        let db = app.state::<DbState>();
+        let guard = db.0.lock().unwrap();
+        record_audit(
+            guard.as_ref().unwrap(),
+            "actor-1",
+            "backup_created",
+            None,
+            "respaldo de prueba",
+        )
+        .expect("audit");
+        // `record_audit` usa NOW(); para el test necesitamos fechas fijas.
+        guard
+            .as_ref()
+            .unwrap()
+            .execute(
+                "UPDATE audit_log SET created_at = ?1 WHERE action = 'backup_created'",
+                rusqlite::params![created_at],
+            )
+            .expect("fix created_at");
+    }
+
+    #[test]
+    fn sin_respaldos_no_hay_fecha_ni_conteo() {
+        let (app, _dir) = setup("administrador");
+        let s = status(&app).expect("status");
+        assert_eq!(s.last_backup_at, None);
+        assert_eq!(s.backup_count, 0);
+    }
+
+    #[test]
+    fn toma_el_respaldo_mas_reciente_y_cuenta_los_previos() {
+        let (app, _dir) = setup("administrador");
+        audit_backup(&app, "2026-10-01T10:00:00+00:00");
+        audit_backup(&app, "2026-10-20T10:00:00+00:00");
+
+        let s = status(&app).expect("status");
+        assert_eq!(s.backup_count, 2);
+        assert_eq!(
+            s.last_backup_at.as_deref(),
+            Some("2026-10-20T10:00:00+00:00")
+        );
+    }
+
+    #[test]
+    fn solo_administradores_ven_el_estado() {
+        let (app, _dir) = setup("profesional");
+        let err = status(&app).expect_err("debe rechazar");
+        assert_eq!(err.code, ERR_ADMIN_REQUIRED, "err: {}", err);
     }
 }

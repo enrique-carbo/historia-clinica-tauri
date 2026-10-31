@@ -7,10 +7,12 @@ import { useEntityStore } from "../../stores/useEntityStore";
 import { useNavigationStore } from "../../stores/useNavigationStore";
 import { useSeedStore } from "../../stores/useSeedStore";
 import { NavigationDrawer } from "../ui/Drawer";
+import { BackupReminderBanner } from "../BackupReminderBanner";
 import { SeedPhraseSetup } from "../SeedPhraseSetup";
 import { Alert } from "../ui/Alert";
 import { Button } from "../ui/Button";
 import { useEntryStore } from "../../stores/useEntryStore";
+import { useBackupStore } from "../../stores/useBackupStore";
 import { APP_NAME } from "../../utils/branding";
 
 interface DashboardLayoutProps {
@@ -51,6 +53,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         isLoadingMore: false,
         error: null,
       });
+
+      // El estado de respaldos es del admin logueado: no debe sobrevivir
+      // al cierre de sesión.
+      useBackupStore.setState({ status: null, isLoading: false });
     } catch (err) {
       setLogoutError(formatError(err));
     }
@@ -131,6 +137,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           </button>
         </div>
       </header>
+
+      <BackupReminderBanner />
 
       {logoutError && (
         <Alert variant="error" className="mx-4 mt-3 sm:mx-10">

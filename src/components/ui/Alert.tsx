@@ -1,7 +1,7 @@
 import { ReactNode } from "react";
 
 interface AlertProps {
-  variant?: "error" | "success" | "info";
+  variant?: "error" | "success" | "info" | "warning";
   className?: string;
   children: ReactNode;
 }
@@ -11,6 +11,7 @@ export function Alert({ variant = "info", className = "", children }: AlertProps
     error: "bg-danger-tint border-danger-border text-danger-text",
     success: "bg-success-tint border-success-border text-success-text",
     info: "bg-info-tint border-info-border text-info-text",
+    warning: "bg-warning-tint border-warning-border text-warning-text",
   };
 
   return (

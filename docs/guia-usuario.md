@@ -387,6 +387,12 @@ versión, `integridad ✓ · firma ✓`) → **"Restaurar y cerrar sesión"**. L
 cierra la sesión y te deja en la pantalla de entrada: entrá con una
 **contraseña del respaldo** (o la frase semilla).
 
+**Recordatorio**: el panel muestra la fecha del **último respaldo** (y
+cuántos hay registrados en este equipo). Si pasaron **7 días** o nunca se
+generó uno, aparece un aviso en la parte superior de la app, en cualquier
+pestaña, con el botón **"Ir a Respaldos"**. El aviso desaparece al generar
+un respaldo nuevo.
+
 > ⚠️ Restaurar **reemplaza todos los datos actuales** por los del respaldo.
 > Usalo para recuperarte de un problema, no para "deshacer" cambios.
 
