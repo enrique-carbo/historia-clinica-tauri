@@ -158,3 +158,7 @@ pnpm version:check            # tauri.conf.json = package.json = Cargo.toml
 - `docs/cumplimientos.md` — marco legal (Ley 26.529, Argentina): qué
   garantiza el sistema, qué queda a cargo del profesional; no es
   asesoramiento legal, revisión anual.
+- `docs/i18n.md` — internacionalización **en preparación** (sin mercado
+  concreto no se implementa): errores del backend como códigos estables,
+  diccionarios tipados, labels del schema por locale; el texto legal nunca
+  se traduce automáticamente.

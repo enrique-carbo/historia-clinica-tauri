@@ -112,6 +112,24 @@
 ### ⬜ Fase 6: Interoperabilidad (Futuro)
 - [ ] Motor de exportación JSON y traducción a estándares FHIR (IA-Driven)
 
+### 🌍 Futuro: Internacionalización (preparación, sin fecha)
+
+Decisión (2026-10-31): importante para un mercado internacional, **sin
+apuro**. No se implementa framework ni se traduce la UI ahora (Core mínimo);
+se deja el diseño y las convenciones listas para completar por fases cuando
+haya un mercado/idioma concreto. Diseño completo: `docs/i18n.md`.
+
+- [ ] Fase 0 (convención, costo 0): strings nuevos centralizados; errores
+      nuevos del backend como códigos estables, no frases
+- [ ] Fase 1: `src/i18n/` tipado + `useT()` + locale en settings; fechas
+      vía `Intl` (hoy `es-AR` aislado en `dateUtils`)
+- [ ] Fase 2: `commands/*.rs` → códigos `ERR_...` (rinde solo: mensajes
+      consistentes y testeables); export con labels por locale
+- [ ] Fase 3: labels del schema por locale (`profiles/*/entity_schema.json`
+      ya es data-driven → extensión, no refactor)
+- [ ] Fase 4: guía por idioma solo si hay mercado; texto legal con
+      revisión humana, nunca automático
+
 ### 📱 Futuro: Mobile (tras Fase 4)
 
 Decisión (2026-10-17): el producto debe poder correr en mobile **después
