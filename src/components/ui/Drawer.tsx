@@ -236,8 +236,7 @@ export function NavigationDrawer({ onLogout }: NavigationDrawerProps) {
         </nav>
 
         {/* Logout */}
-        <div className="p-4 border-t border-border">
-          <AppVersion className="block w-full text-center mb-3" />
+        <div className="p-4">
           <Button
             variant="ghost-danger"
             onClick={() => {
@@ -251,6 +250,9 @@ export function NavigationDrawer({ onLogout }: NavigationDrawerProps) {
             </svg>
             Cerrar Bóveda
           </Button>
+        </div>
+        <div className="p-4 border-t border-border">
+          <AppVersion className="block w-full text-center" />
         </div>
       </aside>
     </div>
