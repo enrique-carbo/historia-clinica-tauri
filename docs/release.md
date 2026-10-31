@@ -64,10 +64,51 @@ el checklist.
      dir de datos redirigido: `XDG_DATA_HOME=/tmp/fichio-fresh <binario>`
      (Tauri respeta `XDG_DATA_HOME`; ahí arranca vacío → bootstrap del
      primer admin).
-6. **Publicar**: release con instaladores + notas de versión (qué cambió
+6. **Restore cruzado** (lo único destructivo y lo único que ningún test
+   automático cubre de punta a punta): con el build **nuevo** instalado,
+   restaurar un respaldo generado por la **release anterior**
+   (Admin → Respaldos → Validar → Restaurar). Verificar: la validación
+   dice `verified` (o `unverifiable` si el firmante no está en esta
+   instalación), la app vuelve al login, se entra con una contraseña del
+   respaldo y las fichas/entries están completas.
+   - Sirve también para detectar que un cambio de formato de manifest
+     rompió los respaldos viejos (ver "Compatibilidad hacia atrás").
+7. **Publicar**: release con instaladores + notas de versión (qué cambió
    para el usuario, si hay migración avisarlo explícitamente;
    **requisitos mínimos de SO** según el entorno de build — ver nota de
    glibc en el paso 4) + aviso de **respaldar antes de actualizar**.
+
+## Compatibilidad hacia atrás (fixture congelado)
+
+`src-tauri/tests/fixtures/db-v0.1.2.db` es una base **real de 0.1.2**
+commiteada en el repo. Dos tests la abren con el build actual
+(`src-tauri/src/db/database.rs`, `compat_tests`):
+
+- `init_db` sobre la base vieja → `user_version == MIGRATIONS.len()` y los
+  datos previos siguen legibles (users, perfil, signing_keys, entries).
+- el fixture sigue declarando `user_version = 1` (guarda contra
+  regenerarlo por error con un build nuevo).
+
+**Cuándo regenerarlo**: al congelar una versión nueva, **antes** de
+agregar la próxima migración, con el build de esa versión:
+
+```bash
+cd src-tauri
+cargo test regenerar_fixture -- --ignored
+git add tests/fixtures/db-v0.1.2.db
+```
+
+El nombre del archivo está en `include_bytes!` (`src/db/database.rs`) y en
+esta sección: al congelar una versión nueva, actualizá ambos (ej.
+`db-v0.2.0.db`) y borrá el fixture más viejo.
+
+Mantener **como máximo dos** fixtures (la última versión publicada y la
+anterior). Los datos del fixture son sintéticos (`admin.fixture`,
+`dra.fixture`): nunca datos de pacientes reales.
+
+> Esto no cubre el instalador ni el SO (para eso está el smoke test); cubre
+> el contrato de datos: una base vieja tiene que seguir abriendo y
+> migrando.
 
 ## Después del release
 
