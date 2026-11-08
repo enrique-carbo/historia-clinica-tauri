@@ -61,10 +61,13 @@
   --field: #09090b; /* zinc-950 */
   --border: #27272a; /* zinc-800 */
   --border-strong: #3f3f46; /* zinc-700 */
-  --text-primary: #e4e4e7; /* zinc-200 */
-  --text-secondary: #a1a1aa; /* zinc-400 */
-  --text-muted: #71717a; /* zinc-500 */
-  --text-placeholder: #3f3f46; /* zinc-700 */
+  /* Texto más claro que en el diseño original (2026-11): sobre zinc-900,
+     zinc-200 daba 14:1 y los grises de apoyo caían a 3:1. Escala actual:
+     primario 17:1 / secundario 12:1 / muted 7:1 / placeholder 4:1. */
+  --text-primary: #fafafa; /* zinc-50 */
+  --text-secondary: #d4d4d8; /* zinc-300 */
+  --text-muted: #a1a1aa; /* zinc-400 */
+  --text-placeholder: #71717a; /* zinc-500 */
   --text-inverse: #ffffff;
   --action-primary: #2563eb; /* blue-600 */
   --action-primary-hover: #1d4ed8; /* blue-700 */

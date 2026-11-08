@@ -5,6 +5,8 @@ import { usePatientStore } from "../stores/usePatientStore";
 import { useEntryStore } from "../stores/useEntryStore";
 import { SoapCard } from "./SoapCard";
 import { AllergyCard } from "./AllergyCard";
+import { EntryForm } from "./EntryForm";
+import { Button } from "./ui/Button";
 import { Alert } from "./ui/Alert";
 import { EmptyState } from "./ui/EmptyState";
 import { calculateAge } from "../utils/dateUtils";
@@ -34,6 +36,7 @@ export function PatientEhrView() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [isPatientDetailsOpen, setIsPatientDetailsOpen] = useState(false);
+  const [showSoapForm, setShowSoapForm] = useState(false);
 
 
   useEffect(() => {
@@ -60,6 +63,13 @@ export function PatientEhrView() {
     clearError();
     fetchEntries(patient.id, "SOAP_NOTE");
   }, [patient, fetchEntries, clearError]);
+
+  // Cerrar el atajo al cambiar de paciente: EntryForm lee `selected` en el
+  // submit, así que un formulario abierto podría firmarse en la ficha
+  // equivocada. El `key` del form lo remonta; este efecto lo oculta.
+  useEffect(() => {
+    setShowSoapForm(false);
+  }, [patient?.id]);
 
   return (
   <div className="grid grid-cols-1 md:grid-cols-12 gap-6 h-auto md:h-[calc(100vh-180px)]">
@@ -198,14 +208,35 @@ export function PatientEhrView() {
               <h3 className="text-xs font-bold text-text-muted uppercase tracking-widest">
                 Historial — Notas SOAP
               </h3>
-              {!entriesLoading && !entriesError && soapEntries.length > 0 && (
-                <span className="text-[10px] font-mono bg-surface-raised text-text-secondary px-2 py-0.5 rounded">
-                  {soapEntries.length}
-                </span>
-              )}
+              <div className="flex items-center gap-2 shrink-0">
+                {!entriesLoading && !entriesError && soapEntries.length > 0 && (
+                  <span className="text-[10px] font-mono bg-surface-raised text-text-secondary px-2 py-0.5 rounded">
+                    {soapEntries.length}
+                  </span>
+                )}
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => setShowSoapForm((open) => !open)}
+                  aria-expanded={showSoapForm}
+                  aria-controls="soap-entry-form"
+                >
+                  {showSoapForm ? "Cancelar" : "Nueva nota SOAP"}
+                </Button>
+              </div>
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+              {showSoapForm && (
+                <div id="soap-entry-form" className="mb-4">
+                  <EntryForm
+                    key={patient.id}
+                    lockedCategory="SOAP_NOTE"
+                    onSuccess={() => setShowSoapForm(false)}
+                  />
+                </div>
+              )}
+
               {entriesLoading && soapEntries.length === 0 ? (
                 <div className="flex justify-center py-10">
                   <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-focus"></div>
@@ -215,10 +246,13 @@ export function PatientEhrView() {
                   {entriesError}
                 </Alert>
               ) : soapEntries.length === 0 ? (
-                <EmptyState
-                  title="Sin notas SOAP registradas"
-                  hint="Se crean desde la pestaña Entries"
-                />
+                // Con el form abierto el empty state sobra (está justo arriba).
+                showSoapForm ? null : (
+                  <EmptyState
+                    title="Sin notas SOAP registradas"
+                    hint="Usá «Nueva nota SOAP» para crear la primera"
+                  />
+                )
               ) : (
                 <div className="space-y-4">
                   {soapEntries.map((entry) => (

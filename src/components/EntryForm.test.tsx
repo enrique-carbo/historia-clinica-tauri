@@ -90,6 +90,21 @@ describe("EntryForm — formulario", () => {
     expect(await screen.findByText("El título es requerido")).toBeInTheDocument();
   });
 
+  it("con lockedCategory fija la categoría y oculta el selector", async () => {
+    const user = userEvent.setup();
+    render(<EntryForm lockedCategory="SOAP_NOTE" />);
+
+    expect(await screen.findByText(/^Nueva /)).toBeInTheDocument();
+    expect(
+      screen.queryByRole("group", { name: "Categoría" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/Título/)).toBeInTheDocument();
+
+    // La plantilla ya está seleccionada: el submit valida sin elegir categoría.
+    await user.click(screen.getByRole("button", { name: "Crear Entry" }));
+    expect(await screen.findByText("El título es requerido")).toBeInTheDocument();
+  });
+
   it("todo label del formulario está asociado a su control (invariante a11y)", async () => {
     const user = userEvent.setup();
     render(<EntryForm />);

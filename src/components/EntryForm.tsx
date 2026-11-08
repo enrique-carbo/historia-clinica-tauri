@@ -8,6 +8,10 @@ import { Alert } from "./ui/Alert";
 
 interface EntryFormProps {
   onSuccess?: () => void;
+  // Atajo contextual: fija la categoría y oculta el selector (ej. "Nueva
+  // nota SOAP" desde la ficha del paciente). Sin la prop el formulario se
+  // comporta igual que en la tab Entries.
+  lockedCategory?: EntryCategory;
 }
 
 interface TemplateField {
@@ -73,8 +77,10 @@ const CATEGORY_ICONS: Record<EntryCategory, string> = {
   CONDITION: "🏥",
 };
 
-export function EntryForm({ onSuccess }: EntryFormProps) {
-  const [selectedCategory, setSelectedCategory] = useState<EntryCategory | null>(null);
+export function EntryForm({ onSuccess, lockedCategory }: EntryFormProps) {
+  const [selectedCategory, setSelectedCategory] = useState<EntryCategory | null>(
+    lockedCategory ?? null,
+  );
   const [formData, setFormData] = useState<Record<string, string>>({});
   const [title, setTitle] = useState("");
   const [status, setStatus] = useState<EntryStatus>("ACTIVE");
@@ -158,7 +164,7 @@ export function EntryForm({ onSuccess }: EntryFormProps) {
       // Éxito
       setFormData({});
       setTitle("");
-      setSelectedCategory(null);
+      setSelectedCategory(lockedCategory ?? null);
       onSuccess?.();
     }
   };
@@ -197,39 +203,43 @@ export function EntryForm({ onSuccess }: EntryFormProps) {
       )}
       <h3 className="text-lg font-semibold text-text-primary mb-4 flex items-center gap-2">
         <span className="text-2xl" aria-hidden="true">➕</span>
-        Nueva Entry
+        {lockedCategory
+          ? `Nueva ${TEMPLATES[lockedCategory]?.label ?? "Entry"}`
+          : "Nueva Entry"}
       </h3>
 
-      {/* Selector de categoría */}
-      <div className="mb-6">
-        <span
-          id="entry-category-label"
-          className="block text-sm font-medium text-text-secondary mb-2"
-        >
-          Categoría
-        </span>
-        <div
-          role="group"
-          aria-labelledby="entry-category-label"
-          className="grid grid-cols-1 sm:grid-cols-4 gap-2"
-        >
-          {CATEGORY_ORDER.filter((category) => TEMPLATES[category]).map((category) => (
-            <button
-              key={category}
-              type="button"
-              onClick={() => handleCategoryChange(category)}
-              className={`p-3 rounded-lg border text-sm font-medium transition-colors ${
-                selectedCategory === category
-                  ? "bg-selected-tint border-selected-border text-selected-text"
-                  : "bg-field border-border text-text-secondary hover:border-border-strong"
-              }`}
-            >
-              <span className="text-lg block mb-1" aria-hidden="true">{CATEGORY_ICONS[category]}</span>
-              {TEMPLATES[category].label}
-            </button>
-          ))}
+      {/* Selector de categoría (se oculta cuando el contexto ya la fija) */}
+      {!lockedCategory && (
+        <div className="mb-6">
+          <span
+            id="entry-category-label"
+            className="block text-sm font-medium text-text-secondary mb-2"
+          >
+            Categoría
+          </span>
+          <div
+            role="group"
+            aria-labelledby="entry-category-label"
+            className="grid grid-cols-1 sm:grid-cols-4 gap-2"
+          >
+            {CATEGORY_ORDER.filter((category) => TEMPLATES[category]).map((category) => (
+              <button
+                key={category}
+                type="button"
+                onClick={() => handleCategoryChange(category)}
+                className={`p-3 rounded-lg border text-sm font-medium transition-colors ${
+                  selectedCategory === category
+                    ? "bg-selected-tint border-selected-border text-selected-text"
+                    : "bg-field border-border text-text-secondary hover:border-border-strong"
+                }`}
+              >
+                <span className="text-lg block mb-1" aria-hidden="true">{CATEGORY_ICONS[category]}</span>
+                {TEMPLATES[category].label}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Formulario */}
       {template && (

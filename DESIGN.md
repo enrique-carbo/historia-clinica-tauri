@@ -28,10 +28,10 @@ Los nombres de la columna *Token* son los que deben existir en la migración (§
 | `field` | Fondo de inputs, selects, textareas | `zinc-950` | `white` |
 | `border` | Borde de superficies (cards, inputs, filas) | `zinc-800` | `zinc-200` |
 | `border-strong` | Borde en hover/estado activo, divisores | `zinc-700` | `zinc-300` |
-| `text-primary` | Texto principal, títulos, contenido | `zinc-200` | `zinc-900` |
-| `text-secondary` | Labels, texto de apoyo, ítems de nav | `zinc-400` | `zinc-600` |
-| `text-muted` | Meta (timestamps, contadores, estados) | `zinc-500` | `zinc-500` |
-| `text-placeholder` | Placeholder de campos | `zinc-700` | `zinc-400` |
+| `text-primary` | Texto principal, títulos, contenido | `zinc-50` | `zinc-900` |
+| `text-secondary` | Labels, texto de apoyo, ítems de nav | `zinc-300` | `zinc-600` |
+| `text-muted` | Meta (timestamps, contadores, estados) | `zinc-400` | `zinc-500` |
+| `text-placeholder` | Placeholder de campos | `zinc-500` | `zinc-400` |
 | `text-inverse` | Texto sobre fondos de acción | `white` | `white` |
 | `action-primary` | Fondo de acción primaria (hover: `+1 step`) | `blue-600` | `blue-600` |
 | `action-primary-hover` | Hover de acción primaria | `blue-700` | `blue-700` |
@@ -205,7 +205,7 @@ Tailwind v4 ya está activo (`src/index.css` = `@import "tailwindcss"`). El plan
 .dark {
   /* tema OSCURO = valores actuales de §2 */
   --surface: #18181b;      /* zinc-900 */
-  --text-primary: #e4e4e7; /* zinc-200 */
+  --text-primary: #fafafa; /* zinc-50 */
   --border: #27272a;       /* zinc-800 */
   /* … */
 }
@@ -238,6 +238,7 @@ Con esto, `bg-surface` significa "superficie" y se resuelve según el tema activ
 2. **Fase B — Vistas** ✅: clases sueltas reemplazadas por tokens semánticos en `src/components/**/*.tsx` (verificado con `grep -rn "bg-zinc\|text-zinc\|border-zinc" src/` → 0 residuos; acciones azules → `action-primary`). Colores de estado (`sky`/`teal`/`amber` en badges) quedan como literales por decisión.
 3. **Fase C — Tema claro** ✅: valores light en `:root`, oscuro en `.dark`; toggle (`ui/ThemeToggle` en `Navbar` y `Drawer`) con persistencia en localStorage (`fichio-theme`) + `prefers-color-scheme` inicial + script anti-flash en `index.html`; tokens de estado (`danger/success/warning/info/selected`) con valores por tema; contraste corregido en textos de estado, listados seleccionados, tabs activos y hovers `text-inverse`.
 4. **Fase D — Componentes exploratorios**: Drawer, modales y sombras; estados hover/active en light.
+5. **Fase E — Contraste del tema oscuro** ✅ (2026-11): texto subido un escalón (`primary` zinc-50, `secondary` zinc-300, `muted` zinc-400, `placeholder` zinc-500); el `muted` anterior quedaba en 3:1 sobre `surface-raised` y el primario en 14:1 sobre `surface`.
 
 ---
 
@@ -263,7 +264,7 @@ Registrar y evitar replicar; se limpia al migrar (Fase B):
 | Botones icon-only `✕` (dismisss de Alert) y `✏️` (reveal de `Entity`) | Vistas | ⏳ Excepción aceptada: `✕` de Alerts ahora usa `Button` `size="icon"`; `✏️` de `Entity` conserva `<button>` puro (hover-reveal con `opacity` + `transition-[...]` no mapea limpio a `Button`) |
 | ~~Botones de acción con clases sueltas (fase B)~~ | `ProfileView`, `SeedPhraseSetup`, `DashboardLayout` | ✅ Clases a tokens (`bg-action-primary`/`hover:bg-action-primary-hover`/`text-text-inverse`); aún `<button>` puro — pasar a `Button` al tocar cada vista |
 | ~~`Alert` con `m-3` interno~~ | `Alert.tsx` + `AuthBox` | ✅ `m-3` eliminado; `Alert` ahora acepta `className` y el consumidor pone su margen (`my-3`) |
-| ~~`text-zinc-600/700` en texto no-placeholder~~ | 13 usos en 8 archivos (meta, empty states, iconos decorativos) | ✅ Todos a `text-zinc-500` (`text-muted`). Placeholders (`zinc-700`) intactos por diseño |
+| ~~`text-zinc-600/700` en texto no-placeholder~~ | 13 usos en 8 archivos (meta, empty states, iconos decorativos) | ✅ Todos a `text-zinc-500` (`text-muted`). Placeholders pasaron de `zinc-700` a `zinc-500` en Fase E (contraste oscuro) |
 | ~~Animaciones muertas (`animate-in` sin plugin)~~ | `Entity:355`, `PatientEhrView:155` | ✅ Instalado `tw-animate-css` (compatible Tailwind v4) + import en `index.css` |
 | Sombras ad-hoc (`shadow-md` en seleccionados, `shadow-emerald-*` en botón export) | `Entity`, `PatientEhrView`, `ProfileView` | ✅ Eliminadas (selección usa solo tint+borde §8; acciones sin sombra). `shadow-lg`/`shadow-2xl` de paneles inline (`AuthBox`, `PacienteView`, EHR) → pendiente Fase D (§7: solo flotantes) |
 | Literals de estado sin token (~108 usos: `AllergyCard` escala de severidad, letras SOAP de `SoapCard`, fills de acciones `emerald`/`amber`/`red`, `AuthBox`, mensajes de `ChangePasswordForm`, chips de `MedicoView`, badge `CONDITION` purple, panel de edición ámbar) | Varios | ⏳ Migrar a tokens `danger/success/warning/info/selected` al tocar cada archivo (en light los literals `-400`/`-950` pierden contraste) |
