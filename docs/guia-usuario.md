@@ -58,7 +58,7 @@ contraseña de la instalación.
 
 1. Descargá el instalador desde la
    [página de la release](https://github.com/enrique-carbo/historia-clinica-tauri/releases)
-   (`Fichio.Care_0.1.2_x64-setup.exe` o `Fichio.Vet_0.1.2_x64-setup.exe`).
+   (`Fichio.Care_0.2.0_x64-setup.exe` o `Fichio.Vet_0.2.0_x64-setup.exe`).
 2. Doble clic → **Instalar**.
 3. ⚠️ **Windows va a advertir** ("Windows protegió tu computadora" o "App no
    reconocida"): el binario aún no tiene certificado comercial de firma.
@@ -77,7 +77,7 @@ También podés instalar Care y Vet en la misma PC: son coinstalables.
 | Cualquier distro | archivo `.AppImage` |
 
 - **.deb**: doble clic en el gestor de paquetes, o
-  `sudo apt install ./Fichio.Care_0.1.2_amd64.deb`
+  `sudo apt install ./Fichio.Care_0.2.0_amd64.deb`
 - **AppImage**: `chmod +x *.AppImage` y doble clic (no requiere instalación).
 - Si queja de dependencias en Debian/Ubuntu:
   `sudo apt install libwebkit2gtk-4.1-0`
@@ -153,7 +153,7 @@ Los profesionales trabajan en **4 pestañas**: **Perfil** 👨🏻‍⚕️ · *
 👤 · **Historia Clínica** 📋 · **Entries** ⏱️.
 
 Al pie del menú lateral (y también en la pantalla de login) figura la
-**versión instalada**, ej. `Fichio Care v0.1.2`. Si hacés clic se abre
+**versión instalada**, ej. `Fichio Care v0.2.0`. Si hacés clic se abre
 **Acerca de**: versión, licencia y el link a las descargas.
 
 ---
@@ -497,5 +497,5 @@ Fichio Vet es el **mismo producto** con:
 
 ---
 
-*Guía de Fichio v0.1.2 — beta. Si encontrás una discrepancia entre esta
+*Guía de Fichio v0.2.0 — beta. Si encontrás una discrepancia entre esta
 guía y la app, reportala: la app manda, esta guía se corrige.*
