@@ -1,0 +1,28 @@
+Creative Commons Atribución 4.0 Internacional (CC BY 4.0)
+
+Copyright (c) 2026 Julián Sánchez Viamonte — Proyecto SemantIAr
+Universidad Nacional de La Plata (UNLP)
+
+Los criterios editoriales, reglas de delimitación sintáctica (Familias 1 a 5),
+expansiones léxicas del español rioplatense, clasificación en 4 ejes taxonómicos,
+esquemas OntoLex-Lemon / SHACL / JSON Schema, exportaciones de grafo, interfaz web
+y frecuencias agregadas de este repositorio se distribuyen bajo la licencia
+Creative Commons Atribución 4.0 Internacional (CC BY 4.0):
+https://creativecommons.org/licenses/by/4.0/deed.es
+
+AVISO OBLIGATORIO DE PROPIEDAD INTELECTUAL SOBRE SNOMED CT®:
+Este recurso incluye identificadores (SCTID) y términos preferidos procedentes de
+SNOMED CT® Edición Argentina en español únicamente con fines de interoperabilidad
+terminológica, docencia e investigación científica reproducible.
+SNOMED® y SNOMED CT® son marcas registradas de SNOMED International
+(International Health Terminology Standards Development Organisation — IHTSDO).
+El uso de conceptos oficiales de SNOMED CT® en sistemas productivos o aplicaciones
+clínicas fuera de los términos de evaluación e investigación está sujeto a la
+licencia vigente de SNOMED International o de su Centro Nacional de Referencia
+(Ministerio de Salud de la Nación — República Argentina).
+
+EXENCIÓN DE USO CLÍNICO DIRECTO Y PROTOCOLO DE PRIVACIDAD:
+- Versión 1.1.0 (2026-11-13) libre de texto clínico de pacientes e
+  identificadores internos de historia clínica.
+- Recurso de referencia y estandarización documental; prohibido su uso como ayuda
+  durante rondas de anotación humana ciega (Core Blind).
