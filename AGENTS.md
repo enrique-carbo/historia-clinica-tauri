@@ -160,6 +160,14 @@ pnpm version:check            # tauri.conf.json = package.json = Cargo.toml
 - `docs/fase4-diseno-sync.md` — diseño de sync (fase 4) y deuda pendiente.
 - `docs/roadmap.md` — mapa de ruta completo (fases 1→6 + "Futuro: Mobile");
   el README solo resume.
+- `docs/posicionamiento.md` — nicho y decisiones de producto: la
+  instalación como única unidad (independiente / equipo 2–4 / HC personal
+  del rotante = el mismo objeto), sync multi-dispositivo como único
+  mecanismo nuevo, anti-creep (sin modos por nicho).
+- `docs/GUIA-USUARIO/onboarding.md` — flujo de instalación (3 pasos
+  deliberados: admin bootstrap → frase semilla → altas) con los commands
+  de cada paso y tutoriales por perfil (independiente / equipo 2–4 /
+  rotante); checklist de QA del onboarding.
 - `docs/esquema-db.md` — esquema de DB (tablas, SQL de `entries`) y
   arquitectura de templates.
 - `docs/module-contract.md` — **arquitectura de módulos vinculante**

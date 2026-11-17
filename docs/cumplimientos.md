@@ -326,6 +326,7 @@ Antes de usar Fichio en un consultorio real:
 | **Custodia de la semilla** | No puede impedir que el profesional la pierda o la comparta. |
 | **Backup** | No lo ejecuta automáticamente. Depende del profesional. |
 | **Co-usuarios** | La DataKey es compartida. El filtrado por rol es de UI, no criptográfico. |
+| **HC institucional** | La instalación personal (caso "segunda HC", §13) no reemplaza el registro del establecimiento. |
 | **Plazo de conservación** | No borra automáticamente, pero tampoco garantiza que el profesional no borre la base. |
 
 ---
@@ -363,3 +364,33 @@ Antes de usar Fichio en un consultorio real:
   Electrónica (RVE, SIGTRAZAVET, CUVE).
 - **Proyecto de Ley HCEV (CABA)** — Historia Clínica Electrónica Veterinaria
   (no vigente).
+
+---
+
+## 13. Caso de uso: la segunda historia clínica personal (profesional multi-lugar)
+
+**Qué es**: un profesional que trabaja en varios establecimientos mantiene
+en Fichio una **instalación personal** con sus propias anotaciones
+clínicas, complementaria a la historia clínica institucional de cada
+lugar. Contexto de producto: `docs/posicionamiento.md`.
+
+| Aspecto | Análisis | Implicancia |
+|---|---|---|
+| **Obligación institucional** | La Ley 26.529 obliga al establecimiento y al profesional a registrar la atención en el sistema del lugar. | La HC personal **no sustituye** el registro institucional. Usarla para omitirlo es un problema del profesional, no de la herramienta. |
+| **Doble registro** | No hay prohibición legal de que el profesional lleve notas propias; pero en un litigio o pericia pueden **requerirse ambas** historias. | Si la HC personal contradice a la institucional, ambas son exhibibles. Recomendación: que la personal no contenga nada que deba estar en la institucional y falte allí. |
+| **Derecho de acceso del paciente** (art. 14, Ley 26.529) | Aplica a toda historia clínica que contenga datos del paciente, incluida una personal. | Si el paciente (o un juez) pide copia, el profesional debe poder entregarla: el export `.md` firmado cubre esto (§5). |
+| **Secreto profesional** (Ley 25.326, art. 10) | Las notas personales también son datos sensibles bajo custodia del profesional. | El cifrado local con DataKey es una ventaja del modelo; la custodia de la seed y del backup sigue siendo responsabilidad del profesional (§6). |
+
+**Guía práctica para el profesional**:
+
+- Registrar en la HC institucional de cada lugar lo que corresponde a ese
+  lugar; usar Fichio personal para el seguimiento propio del caso y el
+  conocimiento que lo acompaña.
+- En una instalación personal el profesional es **también su propio
+  administrador**: semilla en papel y backup periódico con el mismo rigor
+  de la checklist (§9).
+- Ante pedido de acceso del paciente sobre su HC personal: generar el
+  export firmado y entregarlo.
+
+> Esta sección es guía técnica, no asesoramiento legal (ver encabezado
+> del documento).
