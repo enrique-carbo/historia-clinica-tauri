@@ -389,9 +389,9 @@ await invoke("module_execute", {
 
 - **Una sola base de código**, N builds por feature flags de Cargo.
 - **Med y Vet no son ediciones comerciales**: son builds del Core (`FICHIO_PROFILE=med|vet`). Coexisten en la misma máquina (distinto `identifier` → distinto `app_local_data_dir`).
-- **El vendor controla los builds** de las ediciones pagas. Los módulos viven en repos privados (o en un monorepo privado con el Core público como espejo).
+- **El vendor controla los builds** de las ediciones pagas. El monorepo es **público** (decisión 2026-11-21): Core y módulos comparten repo, así que el código fuente de los módulos es visible. La frontera del paywall es **qué código se compila en cada binario** (feature flags), no quién puede leer el source; lo que se compra es el release firmado, sus actualizaciones y el soporte.
 - **El usuario que compra un módulo instala un binario nuevo encima**. No hay "descarga de plugin" sin reinstalar la app. Es una limitación aceptada: las actualizaciones clínicas son raras y controladas.
-- **AGPL × ediciones**: el paywall depende de ser el **único copyright holder** del Core y de los módulos (dual licensing). Contribuciones externas al Core obligan a revisar la distribución de binarios con módulos privados antes de aceptarlas.
+- **AGPL × ediciones**: el paywall depende de ser el **único copyright holder** del Core y de los módulos (dual licensing). Que el monorepo sea público no cambia esa titularidad, pero sí expone el source: las contribuciones externas obligan a revisar la distribución de binarios con módulos incluidos antes de aceptarlas. No es asesoramiento legal; revisión periódica.
 
 ---
 
@@ -470,8 +470,8 @@ Si se rompe cualquiera de las cinco, Ruta 2 reescribe esa parte. Con las cinco, 
 ## 14. Pendientes (marcados, no bloquean v1)
 
 - ✅ **`wrap_with_datakey` en v1**: decidido — el chat de teleconsulta lo necesita. Se suma `wrap_for_user`/`unwrap_for_user` (thread keys lado paciente).
-- ⚠️ **CoreApi (prerequisite Ruta 1)**: refactorizar `commands/` en una capa de servicio `CoreApi` sobre la que se implemente `ModuleContext` in-process. Hoy no existe (0 referencias en el código) — es el trabajo real previo al primer módulo.
-- ⚠️ **Monorepo vs. repos separados**: para un solo dev, monorepo privado con `core/` + `modules/` es más simple. `core/` se espeja a repo público cuando haya algo que publicar. Decidir antes de crear el primer crate de módulo.
+- ⚠️ **CoreApi (prerequisite Ruta 1)**: capa de servicio **angosta** sobre la que se implementa `ModuleContext` in-process, sin reescribir los commands del frontend. Hoy no existe (0 referencias en el código) — es el trabajo real previo al primer módulo. Diseño: `docs/core-api.md`.
+- ✅ **Monorepo vs. repos separados (decidido 2026-11-21)**: **monorepo público** (el repo ya es público). `core/` y los crates de módulo comparten repo: un solo CI, un solo bump de versión, DTOs compartidos sin publicar crates y commits atómicos Core+módulo. El source de los módulos es visible; el paywall sigue siendo **build-time** por feature flags (§9), no secreto del código. Ver consecuencias de AGPL en §9.
 - ⚠️ **Nombre**: `modules` + `Module` (recomendado) vs. `plugins` + `Plugin` (vocabulario de clientes). Cosmético, pero se propaga. Recomendación: `Module` en código, "Plugin" en UI de cara al usuario si se prefiere.
 - ⚠️ **Allowlist de `http_fetch`**: dónde vive la config de URLs permitidas por módulo. Recomendación: `config/http_allowlist.json` en el repo del Core, embebido, editable por PR. No en la DB (sería config de seguridad en un lugar mutable).
 - ⚠️ **UI de "Módulos" en Admin**: confirmar que el tab es solo `administrador` (no `asistente`). Recomendación: sí, porque activar un módulo es una decisión técnica/contractual.

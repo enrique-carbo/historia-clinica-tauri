@@ -98,8 +98,8 @@ Err(Unsupported)`, §4).
 
 ## 6. Pendientes (no bloquean el diseño)
 
-- **Prerequisite**: refactor `commands/` → `CoreApi` + trait `Module` /
-  `PluginHost` (§14).
+- **Prerequisite**: `CoreApi` angosto (diseño en `docs/core-api.md`) + trait
+  `Module` / `PluginHost` (contrato §14), sin tocar los commands del frontend.
 - **Formato de salida**: PDF y librería a elegir; hoy no hay dependencia de PDF.
 - **Firma/auditoría de emisión**: copiar el patrón de `export_emitted` o no.
 - **Sync de fase 4**: outbox propia prevista desde el primer `migrate()` (§13).

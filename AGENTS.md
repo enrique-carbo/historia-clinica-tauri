@@ -91,6 +91,10 @@ pnpm version:check            # tauri.conf.json = package.json = Cargo.toml
   es agnóstico de especie. Pedidos de clientes específicos → config o
   módulo, nunca forks ni `#ifdefs` en Core (ver
   `docs/module-contract.md` §1, "Un perfil de producto").
+- **Módulos en monorepo público**: `core/` y los crates de módulo comparten
+  este repo (decidido 2026-11-21). El source de los módulos es visible; el
+  paywall es build-time por feature flags, no secreto del código
+  (`docs/module-contract.md` §9/§14). Prerequisite: `CoreApi` (`docs/core-api.md`).
 - **Mobile-aware** (futuro tras Fase 4, ver `docs/roadmap.md` §"Futuro: Mobile"):
   al usar APIs/UI de escritorio, verificar soporte mobile o dejar el
   fallback explícito. `dialog` ✅ y `opener.openUrl` ✅ funcionan en
@@ -174,6 +178,9 @@ pnpm version:check            # tauri.conf.json = package.json = Cargo.toml
   (Ruta 1: compilados + feature flags, paywall build-time, trait `Module`
   + `ModuleContext` + `module_execute`; reemplaza a
   `PLUGIN_ARCHITECTURE.md`).
+- `docs/core-api.md` — diseño del `CoreApi` (capa de servicio angosta sobre
+  la que se implementa `ModuleContext`; prerequisite de la Ruta 1; DTOs y
+  proyecciones por perfil, sin tocar los commands del frontend).
 - `docs/MODULES/plugin-teleconsulta-v1.md` — diseño del módulo de teleconsulta
   (v5, paciente como usuario `role: 'paciente'`; alcance: chat + pago P2;
   SOAP la escribe el profesional en el Core; DB propia del módulo).

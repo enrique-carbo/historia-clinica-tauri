@@ -103,11 +103,25 @@
 - [ ] `enroll_data_key`: admin envuelve DataKey al registrar médico (sin tipear seed)
 - [x] `change_password`: verifica actual, re-cifra vault, re-envuelve `.data_key.{user_id}`, actualiza `password_hash` (no toca master wrap) + UI en Perfil & 6 tests
 
-### 🟥 Fase 5: Teleconsulta Asíncrona (módulo)
-- [x] Diseño v5: `docs/MODULES/plugin-teleconsulta-v1.md` — chat + pago QR/transferencia (confirmación manual); la SOAP la escribe el profesional en el Core; paciente = usuario `role: 'paciente'` con DataKey ausente estructuralmente; DB propia del módulo (`docs/module-contract.md`)
-- [x] P0 Core: `unlock_vault` role-aware + `change_password` sin rewrap + `grant_patient_access` (`users.entity_id`, alta lazy desde la ficha) + reset de contraseña sin wrap para paciente + vista paciente = username/contraseña (sin entries/EHR; la deuda `require_session` de fase 4 M1 quedó resuelta) — 2026-10-11
-- [ ] Prerequisite de módulos: refactor `commands/` → `CoreApi` + trait `Module`/`PluginHost` (`module-contract.md` §14)
-- [ ] Hitos P1–P5 del diseño (P4 — sync — depende de fase 4, M1–M3)
+### 🟥 Fase 5: Módulos (sobre `CoreApi`)
+
+Prerequisite compartido (decisión 2026-11-21): **CoreApi angosto**, sin tocar
+los 38 commands del frontend — diseño en `docs/core-api.md`. Los módulos
+viven en **monorepo público** (`module-contract.md` §9/§14): el source es
+visible y el paywall es build-time por feature flags. Orden de implementación:
+CoreApi → solicitudes → teleconsulta → sync.
+
+- [ ] Prerequisite: `core/` con `CoreApi<'a>`, funciones puras de proyección y
+      trait `Module` / `PluginHost` (`docs/core-api.md`, `module-contract.md` §3–5)
+- [ ] **5a — Solicitudes de estudios complementarios**: diseño en
+      `docs/MODULES/module-solicitudes-v1.md` — templates editables por
+      profesional en DB propia, solicitudes autocontenidas, filiación y
+      profesional vía `ModuleContext`, resultado en la SOAP del Core, render
+      para imprimir/descargar
+- [ ] **5b — Teleconsulta asíncrona**
+  - [x] Diseño v5: `docs/MODULES/plugin-teleconsulta-v1.md` — chat + pago QR/transferencia (confirmación manual); la SOAP la escribe el profesional en el Core; paciente = usuario `role: 'paciente'` con DataKey ausente estructuralmente; DB propia del módulo (`docs/module-contract.md`)
+  - [x] P0 Core: `unlock_vault` role-aware + `change_password` sin rewrap + `grant_patient_access` (`users.entity_id`, alta lazy desde la ficha) + reset de contraseña sin wrap para paciente + vista paciente = username/contraseña (sin entries/EHR; la deuda `require_session` de fase 4 M1 quedó resuelta) — 2026-10-11
+  - [ ] Hitos P1–P5 del diseño (P4 — sync — depende de fase 4, M1–M3)
 
 ### ⬜ Fase 6: Interoperabilidad (Futuro)
 - [ ] Motor de exportación JSON y traducción a estándares FHIR (IA-Driven)

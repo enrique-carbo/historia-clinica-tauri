@@ -194,7 +194,7 @@ Detalle histórico y checklists por fase: **[docs/roadmap.md](./docs/roadmap.md)
 
 - ✅ **Fases 1–3.11** — Core local completo: vault, cifrado por capas, Entity-Entry firmado (append-only), roles + auditoría, respaldos firmados, migraciones append-only, export `.md` firmado.
 - 🟧 **Fase 4** (próximo): infraestructura y sync híbrida (VPS + PocketBase + outbox `sync_queue`) — `docs/fase4-diseno-sync.md`.
-- 🟥 **Fase 5**: teleconsulta — módulo de chat + pago; diseño v5 en `docs/MODULES/plugin-teleconsulta-v1.md` sobre el contrato de módulos (`docs/module-contract.md`); prerequisite: refactor `commands/` → `CoreApi`.
+- 🟥 **Fase 5**: módulos sobre un `CoreApi` angosto (`docs/core-api.md`, sin tocar los commands): primero **solicitudes de estudios complementarios** (`docs/MODULES/module-solicitudes-v1.md`), después teleconsulta (`docs/MODULES/plugin-teleconsulta-v1.md`); contrato en `docs/module-contract.md`, monorepo público.
 - ⬜ **Fase 6**: interoperabilidad (export FHIR — futuro).
 - 📱 **Mobile**: solo tras la Fase 4 (sync es el prerequisito); un core, N targets; updates vía tiendas — `docs/roadmap.md` §"Futuro: Mobile".
 
