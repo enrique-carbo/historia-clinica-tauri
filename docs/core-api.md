@@ -3,115 +3,145 @@
 ### v1 — 2026-11-21 | Diseño, no implementación
 
 > Prerequisite de la Ruta 1 (`docs/module-contract.md` §14): hoy `CoreApi`
-> tiene 0 referencias en el código. Es el servicio sobre el que se
-> implementa `ModuleContext` in-process (§4). Alineado con el principio de
-> Core mínimo: **no** implica reescribir los 38 commands de `lib.rs`.
+> tiene 0 referencias en el código. Es la capa de servicio en Rust puro sobre
+> la que se implementa `ModuleContext` in-process (§4). Alineado con el
+> principio de Core mínimo: **no** implica reescribir los 38 commands de
+> `lib.rs`.
 
 ---
 
-## 1. Por qué angosto
+## 1. Por qué angosto y sin `tauri::State`
 
-El contrato pide "refactorizar `commands/` en una capa de servicio", pero el
-requisito real es más chico: que los módulos puedan pedir datos del Core sin
-abrir su DB ni ver la DataKey. Los commands siguen siendo la superficie IPC
-del frontend; `CoreApi` es la superficie de **servicio** del Core hacia adentro.
+El contrato pide una capa de servicio para que los módulos pidan datos del Core
+sin abrir su DB ni ver la DataKey. Los commands siguen siendo la superficie IPC
+del frontend; `src/core/` es la superficie de **servicio** del Core hacia
+adentro.
 
-Un módulo no necesita los 38 commands. Necesita proyecciones, auditoría y
-crypto opt-in. Empezar por eso evita un refactor grande y no agrega nada
-"por si acaso".
+Dos reglas de diseño evitan capas redundantes:
+
+1. **Un módulo no necesita los 38 commands**: necesita proyecciones, auditoría y
+   crypto opt-in.
+2. **`src/core/` no importa `tauri`**: las funciones de servicio operan
+   directamente sobre tipos de dominio (`&Connection`, `&[u8; 32]`,
+   `&SchemaConfig`, `&SessionUser`). La implementación in-process de
+   `ModuleContext` (en el `PluginHost`) es la única que toma los locks de
+   `DbState`/`DataKey` desde Tauri y delega en `core::api::*`. Así no hay un
+   struct `CoreApi<'a>` intermedio peleando con lifetimes de `tauri::State<'a, T>`
+   y los tests son Rust puro con SQLite en memoria.
 
 ## 2. Ubicación y forma
 
 ```
 src-tauri/src/core/
-├── mod.rs      # mod api; mod dto;
-├── api.rs      # CoreApi<'a> + CoreHandles
-└── dto.rs      # FiliationDto, ProfessionalDto, AuditEvent
+├── mod.rs      # pub mod api; pub mod dto;
+├── api.rs      # Funciones de servicio puras (sin dependencia de Tauri)
+└── dto.rs      # FiliationDto, FiliationFieldDto, ProfessionalDto, AuditEvent
 ```
 
-- `CoreApi<'a>` **guarda los `State<'a, T>` por valor** (`DbState`, `DataKey`,
-  `SessionState`, `CryptoState`, `SchemaConfig`). Son newtypes baratos sobre
-  `&T` e implementan `Clone`. No cambia `types.rs`, no agrega `app.manage`,
-  no modifica `lib.rs` salvo por `mod core;`.
-- Se construye por llamada, igual desde un command que desde `module_execute`.
-- **Cero cambios en `with_conn`, `get_key` ni `get_data_key`**: los métodos
-  de `CoreApi` los llaman con los mismos `&State`/`&DataKey` de siempre.
-  Cambiar sus firmas a `&DbState`/`&CryptoState` habría tocado helpers usados
-  por los 38 commands solo para ganar comodidad en los tests — se descartó.
-- Para testear sin Tauri, la lógica se separa en **funciones puras**
-  (`project_filiation(conn: &Connection, key: &[u8; 32], schema: &SchemaConfig,
-  entity_id) -> Result<FiliationDto, CommandError>`, etc.). El método de
-  `CoreApi` solo adquiere el state y delega; el test llama a la función pura
-  con una DB en memoria. `State` tiene el campo privado y no se puede
-  construir a mano en un test.
+- **Cero cambios en `types.rs`, `with_conn`, `get_key` ni `get_data_key`**: los
+  38 commands siguen intactos. En `lib.rs` solo se agrega `mod core;`.
+- `InProcessModuleContext` (cuando se conecte `PluginHost`) guarda el actor de
+  la sesión ya resuelto por `require_session()` y adquiere `&Connection` /
+  `Zeroizing<[u8; 32]>` por llamada (nunca cachea la `DataKey`, para que
+  `lock_vault` surta efecto inmediato).
 
-## 3. Superficie v1
+## 3. Superficie v1 (`core::api`)
 
-| Método | Implementación |
+| Función | Firma conceptual e implementación |
 |---|---|
-| `fetch_filiation(entity_id)` | Extraer de `get_entity` un helper `load_entity(...) -> EntityRecord`, y proyectar solo los campos del DTO. **Un solo camino de descifrado** |
-| `entity_exists(id)` | `SELECT 1` vía `with_conn` |
-| `fetch_professional(user_id)` | Proyección del perfil profesional del command existente |
-| `audit(actor, AuditEvent)` | Reutilizar `record_audit()` → `to_detail()` sin PHI |
-| `wrap_with_datakey` / `unwrap_with_datakey` | `get_data_key` + `crypto::*` (sumar cuando un módulo lo pida) |
+| `fetch_filiation` | `(conn, data_key, schema, actor: &SessionUser, entity_id: i64) -> Result<FiliationDto, CommandError>`. **Scoping obligatorio**: si `actor.role == "paciente"`, verifica en `users.entity_id` que `entity_id` sea el propio; si no, devuelve `AccessDenied` (nunca `EntityNotFound`, §12). Descifra la entidad y proyecta `FiliationDto` |
+| `entity_exists` | `(conn, actor: &SessionUser, entity_id: i64) -> Result<bool, CommandError>`. Mismo scoping para `paciente`; `SELECT 1 FROM entities WHERE id = ?1` para staff |
+| `fetch_professional` | `(conn, data_key, user_id: &str) -> Result<ProfessionalDto, CommandError>`. Reutiliza la lógica de `load_profile` y proyecta `full_name`, `profession`, `specialty`, `licenses` y `public_key_hex` |
+| `audit` | `(conn, actor_user_id: &str, event: AuditEvent) -> Result<(), CommandError>`. Convierte `event.to_detail()` (sin PHI) y delega en `record_audit()` |
+| `wrap_with_datakey` / `unwrap_with_datakey` | `(data_key, bytes) -> Result<..., CommandError>` sobre `security::crypto` (se suma cuando el primer módulo lo pida) |
 
 **Fuera del primer corte**: `wrap_for_user` / `unwrap_for_user` (solo
 teleconsulta) y `http_fetch` (allowlist, auditar host+path sin query — lo más
 sensible; ningún módulo actual lo necesita). `fetch_entry_metadata`, para
-verificar el `entry_id` de la SOAP en solicitudes, se agrega después con
-`default → Err(Unsupported)` (§4).
+verificar un `entry_id` de SOAP si algún módulo post-v1 lo requiere, se agrega
+después con `default → Err(Unsupported)` (§4).
 
-## 4. DTOs y perfiles
+## 4. DTOs alineados con el código real y los perfiles Med/Vet
 
-Los DTOs van en `core::api::dto`, derivan `Serialize + Deserialize` desde el
-día 1 (Ruta 2 es un swap de transporte, §11) y son proyecciones acotadas:
-nunca `enc_data_blob` ni filas completas.
+Los DTOs viven en `core::dto`, derivan `Serialize + Deserialize` desde el día 1
+(Ruta 2 es un swap de transporte, §11) y son proyecciones acotadas: nunca
+`enc_data_blob`.
 
-`FiliationDto { entity_id, full_name, document, birth_date, sex }` (§4). El
-problema: los nombres de campo viven en `profiles/{med,vet}/entity_schema.json`
-y **no coinciden** — Med no tiene `sexo`, Vet sí; el document es `dni` en
-ambos. Reglas:
+### `FiliationDto` (agnóstico de Med/Vet, igual que `export/render.rs`)
 
-- `document` se resuelve con `schema.get_blind_index_field()` (helper ya
-  existe), no con un string hardcodeado.
-- `full_name` = `nombre` + `apellido`; `birth_date` = `fecha_nacimiento` si
-  está; `sex` = `sexo` si está (`None` en Med).
-- Un **test de invariante estructural** sobre ambos schemas falla en CI si un
-  perfil renombra estos campos. No se acoplan tests al contenido del schema
-  más allá de esa invariante (regla del repo).
+```rust
+pub struct FiliationFieldDto {
+    pub key: String,
+    pub label: String,
+    pub value: String,
+}
+
+pub struct FiliationDto {
+    pub entity_id: i64,
+    pub full_name: String,
+    pub document: String,
+    pub fields: Vec<FiliationFieldDto>,
+}
+```
+
+- `document`: se extrae usando `schema.get_blind_index_field("patient")`
+  (helper ya existente en `config_schema.rs`).
+- `full_name`: `nombre` + `apellido` (misma convención que `render.rs:175`).
+- `fields`: pares `(key, label, value)` no vacíos en el orden canónico de
+  `schema.field_labels("patient")`. Esto permite que una orden médica en Med
+  disponga de `seguro_salud` / `afiliado` y en Vet de `especie` / `raza` /
+  `responsable_*` **sin hardcodear listas de campos ni acoplar tests al
+  contenido de `profiles/{med,vet}/entity_schema.json`** (regla de `AGENTS.md`).
+
+### `ProfessionalDto` (alineado con `ProfessionalProfile`)
+
+```rust
+pub struct ProfessionalDto {
+    pub user_id: String,
+    pub full_name: String,
+    pub profession: String,
+    pub specialty: String,
+    pub licenses: Vec<License>, // { number, jurisdiction }; la 1ª es la principal
+    pub public_key_hex: String,
+}
+```
+
+Incluye `profession` y `licenses: Vec<License>` (con jurisdicción), coincidiendo
+con `ProfessionalProfile` y `ExportProfessional`.
 
 ## 5. Riesgos y mitigaciones
 
 | Riesgo | Mitigación |
 |---|---|
-| `CoreApi` guarde la DataKey → `lock_vault` no surte efecto | El struct no tiene campos de clave: `get_data_key()` en cada llamada. Test unlock → fetch → lock → fetch falla |
-| Mutex sync dentro de `ModuleContext` async | Ningún `MutexGuard` a través de un `.await`: DB síncrona, guard suelto antes del await |
-| Se salte el gate §5 | `CoreApi` recibe `&SessionUser` ya resuelto por `require_session()`; `role: String` → `ActorRole` enum con fail-closed |
-| Segundo catálogo de errores | Reutilizar `CommandError` con `ERR_*`; `ModuleError` mapea a esos códigos y el frontend agrega las entradas en `src/utils/errors.ts` |
-| PHI en el audit | `AuditEvent` enum cerrado, `to_detail()` con test anti-PHI (nombre y `".md"` en la fixture) |
-| `too_many_arguments` en clippy | Agrupar los states en `CoreHandles` (los 3 warnings permitidos ya están ocupados) |
-| Ventana entre chequear sesión y key | Re-chequear en el punto de uso; aceptado en v1 y documentado, como los límites de zeroize |
+| `DataKey` cacheada → `lock_vault` no surte efecto | `core::api` recibe `&[u8; 32]` por llamada; `InProcessModuleContext` llama a `get_data_key()` en cada invocación y no guarda la clave |
+| Scoping de `paciente` omitido en `fetch_filiation` | `fetch_filiation` recibe `&SessionUser` y valida `users.entity_id == Some(entity_id)` cuando `role == "paciente"`, devolviendo `AccessDenied` si no coincide |
+| Mutex sync dentro de `ModuleContext` async | Ningún `MutexGuard` cruza un `.await`: lock, llamada síncrona a `core::api::*`, drop del guard y recién después retorno async |
+| Segundo catálogo de errores | Reutilizar `CommandError` con códigos `ERR_*`; el frontend traduce con `formatError()` en `src/utils/errors.ts` |
+| PHI en `audit_log` | `AuditEvent` enum cerrado; `to_detail()` testeado con fixtures que contengan nombres propios y `".md"` |
 
 ## 6. Testing y verificación
 
-- Tests nuevos sobre las **funciones puras** con DB en memoria: proyección de
-  filiación en ambos perfiles, `entity_exists`, `audit` anti-PHI, roundtrip
-  crypto, vault-locked y rol desconocido.
-- Los tests de los 38 commands quedan intactos: `CoreApi` es aditivo y no
-  modifica ningún helper de `commands/mod.rs`.
-- Al implementar, sube el baseline Rust (hoy 147) → actualizar `AGENTS.md` y
-  README. `cargo clippy --all-targets` debe seguir en 3 warnings. No correr
+- Tests unitarios en `core::api` con SQLite en memoria y **schema fixture
+  propio** (sin acoplar a `entity_schema.json`):
+  - `fetch_filiation` para staff y scoping para `role == "paciente"` (propia
+    entity → ok; ajena → `AccessDenied`).
+  - `entity_exists` (existente, inexistente y scoping paciente).
+  - `fetch_professional` con múltiples matrículas y profesión.
+  - `audit` anti-PHI en todas las variantes de `AuditEvent`.
+- Los 147 tests actuales de Rust y los 38 commands quedan intactos.
+- Al implementar, actualizar el baseline en `AGENTS.md` y `README.md`, y
+  verificar `cargo clippy --all-targets` (máximo 3 warnings). No correr
   `cargo fmt`.
 
 ## 7. Primer slice
 
-1. Crear `core/` con `mod.rs`, `dto.rs` y `api.rs`, sin tocar `commands/`.
-2. Funciones puras de proyección + cuatro métodos: `fetch_filiation`,
-   `entity_exists`, `fetch_professional`, `audit`, con sus tests.
-3. Crypto y `http_fetch` en cortes posteriores, igual de angostos.
+1. Crear `src-tauri/src/core/` (`mod.rs`, `dto.rs`, `api.rs`) sin tocar
+   `commands/`.
+2. Implementar `fetch_filiation`, `entity_exists`, `fetch_professional` y
+   `audit` + sus tests en memoria.
+3. Sumar `wrap_with_datakey` / `unwrap_with_datakey` y `PluginHost` en el
+   siguiente corte.
 
 **Decisión tomada** (`docs/module-contract.md` §14): **monorepo público** —
-`core/` y los crates de módulo viven en el mismo repo (ya público). El
-paywall es build-time, no secreto del source (§9). No bloquea este slice: el
-`core/` de `src-tauri/src/core/` es la capa de servicio; los módulos se
-agregan como crates hermanos cuando se implemente el primero.
+`core/` y los crates de módulo viven en el mismo repo (ya público). El paywall
+es build-time, no secreto del source (§9).

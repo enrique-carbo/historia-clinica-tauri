@@ -167,21 +167,32 @@ pub trait ModuleContext: Send + Sync {
 **DTOs en el Core** (`core::api::dto`), no en cada módulo:
 
 ```rust
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct FiliationFieldDto {
+    pub key: String,
+    pub label: String,
+    pub value: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FiliationDto {
     pub entity_id: i64,
     pub full_name: String,
     pub document: String,
-    pub birth_date: Option<String>,   // ISO 8601
-    pub sex: Option<String>,
+    /// Campos no vacíos en el orden canónico de `schema.field_labels("patient")`
+    /// (agnóstico de perfil: incluye obra social/afiliado en Med, especie/raza/tutor en Vet).
+    pub fields: Vec<FiliationFieldDto>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProfessionalDto {
     pub user_id: String,
     pub full_name: String,
-    pub license_number: String,
-    pub specialty: Option<String>,
+    pub profession: String,
+    pub specialty: String,
+    /// Misma estructura `License { number, jurisdiction }` que `ProfessionalProfile`;
+    /// la primera es la matrícula principal.
+    pub licenses: Vec<License>,
     pub public_key_hex: String,
 }
 
