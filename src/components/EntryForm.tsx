@@ -297,8 +297,7 @@ export function EntryForm({ onSuccess, lockedCategory }: EntryFormProps) {
                   value={formData[field.name] || ""}
                   onChange={(e) => handleFieldChange(field.name, e.target.value)}
                   placeholder={field.placeholder}
-                  rows={3}
-                  className="w-full px-3 py-2 bg-field border border-border-strong rounded-lg text-text-primary text-sm placeholder:text-text-placeholder focus:outline-none focus:border-focus resize-none"
+                  className="w-full px-3 py-2 min-h-20 bg-field border border-border-strong rounded-lg text-text-primary text-sm antialiased field-sizing-content max-h-96 placeholder:text-text-placeholder focus:outline-none focus:border-focus resize-none"
                 />
               ) : field.type === "select" ? (
                 <select
