@@ -104,7 +104,7 @@
 - [x] `change_password`: verifica actual, re-cifra vault, re-envuelve `.data_key.{user_id}`, actualiza `password_hash` (no toca master wrap) + UI en Perfil & 6 tests
 
 ### 🟥 Fase 5: Teleconsulta Asíncrona (módulo)
-- [x] Diseño v5: `docs/plugin-teleconsulta-v1.md` — chat + pago QR/transferencia (confirmación manual); la SOAP la escribe el profesional en el Core; paciente = usuario `role: 'paciente'` con DataKey ausente estructuralmente; DB propia del módulo (`docs/module-contract.md`)
+- [x] Diseño v5: `docs/MODULES/plugin-teleconsulta-v1.md` — chat + pago QR/transferencia (confirmación manual); la SOAP la escribe el profesional en el Core; paciente = usuario `role: 'paciente'` con DataKey ausente estructuralmente; DB propia del módulo (`docs/module-contract.md`)
 - [x] P0 Core: `unlock_vault` role-aware + `change_password` sin rewrap + `grant_patient_access` (`users.entity_id`, alta lazy desde la ficha) + reset de contraseña sin wrap para paciente + vista paciente = username/contraseña (sin entries/EHR; la deuda `require_session` de fase 4 M1 quedó resuelta) — 2026-10-11
 - [ ] Prerequisite de módulos: refactor `commands/` → `CoreApi` + trait `Module`/`PluginHost` (`module-contract.md` §14)
 - [ ] Hitos P1–P5 del diseño (P4 — sync — depende de fase 4, M1–M3)

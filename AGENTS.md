@@ -174,9 +174,14 @@ pnpm version:check            # tauri.conf.json = package.json = Cargo.toml
   (Ruta 1: compilados + feature flags, paywall build-time, trait `Module`
   + `ModuleContext` + `module_execute`; reemplaza a
   `PLUGIN_ARCHITECTURE.md`).
-- `docs/plugin-teleconsulta-v1.md` — diseño del módulo de teleconsulta
+- `docs/MODULES/plugin-teleconsulta-v1.md` — diseño del módulo de teleconsulta
   (v5, paciente como usuario `role: 'paciente'`; alcance: chat + pago P2;
   SOAP la escribe el profesional en el Core; DB propia del módulo).
+- `docs/MODULES/module-solicitudes-v1.md` — diseño del módulo de estudios
+  complementarios (templates editables por profesional en DB propia, como
+  atajo opcional al dar de alta una solicitud; solicitudes imprimibles
+  autocontenidas; filiación/profesional vía `ModuleContext`; resultado en la
+  SOAP del Core; sin reimpresión: si hace falta se crea otra solicitud).
 - `docs/cumplimientos.md` — marco legal (Ley 26.529, Argentina): qué
   garantiza el sistema, qué queda a cargo del profesional; no es
   asesoramiento legal, revisión anual.
