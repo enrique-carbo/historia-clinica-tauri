@@ -6,6 +6,7 @@ import { AdminUsersPanel } from "./AdminUsersPanel";
 import { AdminAuditPanel } from "./AdminAuditPanel";
 import { AdminSeedPanel } from "./AdminSeedPanel";
 import { AdminBackupPanel } from "./AdminBackupPanel";
+import { AdminModulesPanel } from "./AdminModulesPanel";
 
 const ADMIN_TABS: Tab[] = [
   { id: "usuarios", label: "Usuarios", icon: "👥" },
@@ -13,6 +14,7 @@ const ADMIN_TABS: Tab[] = [
   { id: "auditoria", label: "Auditoría", icon: "📋" },
   { id: "semilla", label: "Frase Semilla", icon: "🌱" },
   { id: "respaldos", label: "Respaldos", icon: "💾" },
+  { id: "modulos", label: "Módulos", icon: "🧩" },
 ];
 
 const ASISTENTE_TABS: Tab[] = [{ id: "paciente", label: "Admisión de Pacientes", icon: "👤" }];
@@ -49,6 +51,8 @@ export function AdminView() {
       {activeTab === "semilla" && <AdminSeedPanel />}
 
       {activeTab === "respaldos" && <AdminBackupPanel />}
+
+      {activeTab === "modulos" && <AdminModulesPanel />}
     </Navbar>
   );
 }

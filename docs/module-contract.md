@@ -488,7 +488,7 @@ Si se rompe cualquiera de las cinco, Ruta 2 reescribe esa parte. Con las cinco, 
 - ✅ **Monorepo vs. repos separados (decidido 2026-11-21)**: **monorepo público** (el repo ya es público). `core/` y los crates de módulo comparten repo: un solo CI, un solo bump de versión, DTOs compartidos sin publicar crates y commits atómicos Core+módulo. El source de los módulos es visible; el paywall sigue siendo **build-time** por feature flags (§9), no secreto del código. Ver consecuencias de AGPL en §9.
 - ⚠️ **Nombre**: `modules` + `Module` (recomendado) vs. `plugins` + `Plugin` (vocabulario de clientes). Cosmético, pero se propaga. Recomendación: `Module` en código, "Plugin" en UI de cara al usuario si se prefiere.
 - ⚠️ **Allowlist de `http_fetch`**: dónde vive la config de URLs permitidas por módulo. Recomendación: `config/http_allowlist.json` en el repo del Core, embebido, editable por PR. No en la DB (sería config de seguridad en un lugar mutable).
-- ⚠️ **UI de "Módulos" en Admin**: confirmar que el tab es solo `administrador` (no `asistente`). Recomendación: sí, porque activar un módulo es una decisión técnica/contractual.
+- ✅ **UI de "Módulos" en Admin (2026-11-22)**: implementada en `src/components/views/AdminModulesPanel.tsx` como tab exclusivo de `administrador` (no visible para `asistente`).
 - ✅ **Retiro de `PLUGIN_ARCHITECTURE.md`**: resuelto en este cambio (borrado; referencias en AGENTS.md actualizadas).
 
 ---

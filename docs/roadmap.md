@@ -120,8 +120,9 @@ CoreApi → solicitudes → teleconsulta → sync.
       profesional, `solicitud.create/list/get` y render Markdown; feature
       `module-solicitudes` (build-time). Diseño en
       `docs/MODULES/module-solicitudes-v1.md`
-- [ ] **5a — Solicitudes (PDF + UI)**: formateador PDF, pantalla de templates,
-      alta de solicitud y flujo imprimir/descargar con fallback mobile
+- [x] **5a — Solicitudes (UI/impresión)**: `SolicitudesPanel` con templates,
+      alta, vista previa, imprimir/guardar PDF (diálogo del sistema) y
+      descarga `.md`/`.html`; `navigator.share` como fallback mobile
 - [ ] **5b — Teleconsulta asíncrona**
   - [x] Diseño v5: `docs/MODULES/plugin-teleconsulta-v1.md` — chat + pago QR/transferencia (confirmación manual); la SOAP la escribe el profesional en el Core; paciente = usuario `role: 'paciente'` con DataKey ausente estructuralmente; DB propia del módulo (`docs/module-contract.md`)
   - [x] P0 Core: `unlock_vault` role-aware + `change_password` sin rewrap + `grant_patient_access` (`users.entity_id`, alta lazy desde la ficha) + reset de contraseña sin wrap para paciente + vista paciente = username/contraseña (sin entries/EHR; la deuda `require_session` de fase 4 M1 quedó resuelta) — 2026-10-11

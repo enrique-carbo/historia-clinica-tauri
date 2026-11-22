@@ -7,10 +7,10 @@
 > `wrap_with_datakey` / `unwrap_with_datakey`; el contrato
 > `Module` / `ModuleContext`; y el `PluginHost` con `module_execute`,
 > `is_module_available`, `list_modules` y activación/desactivación
-> (`v002`: `modules` + `module_access`) y el backend del módulo de
-> solicitudes (`core::module` + `modules::solicitudes`). Pendiente: PDF + UI
-> del módulo. Alineado con Core mínimo: **no** reescribe los 38 commands del
-> frontend.
+> (`v002`: `modules` + `module_access`) y el módulo de solicitudes completo
+> para v1 (`core::module` + `modules::solicitudes` + `SolicitudesPanel`).
+> PDF nativo con librería queda como mejora opcional. Alineado con Core
+> mínimo: **no** reescribe los 38 commands del frontend.
 
 ---
 
@@ -141,7 +141,7 @@ con `ProfessionalProfile` y `ExportProfessional`.
   - `fetch_professional` con múltiples matrículas y profesión.
   - `audit` anti-PHI en todas las variantes de `AuditEvent`.
 - Los 147 tests previos de Rust y los 38 commands quedan intactos.
-- Baseline actualizado a **192 tests** en `AGENTS.md` y `README.md`;
+- Baseline actualizado a **195 tests** en `AGENTS.md` y `README.md`;
   `cargo clippy --all-targets` sigue en **3 warnings**. No correr `cargo fmt`.
 
 ## 7. Cortes
@@ -157,7 +157,9 @@ con `ProfessionalProfile` y `ExportProfessional`.
 5. ✅ Módulo de solicitudes (backend): `src-tauri/src/modules/solicitudes/` con
    `migrate()`, templates CRUD, `solicitud.create/list/get` y render Markdown.
    Feature `module-solicitudes` (default on; `--no-default-features` = Free).
-6. ⬜ Solicitudes: PDF + UI (templates, alta, impresión/descarga).
+6. ✅ Solicitudes: render HTML imprimible + UI (`SolicitudesPanel`) con
+   templates, alta, vista previa, imprimir/guardar PDF (diálogo del sistema)
+   y descarga `.md`/`.html`; `navigator.share` como fallback mobile.
 
 **Decisión tomada** (`docs/module-contract.md` §14): **monorepo público** —
 `core/` y los crates de módulo viven en el mismo repo (ya público). El paywall

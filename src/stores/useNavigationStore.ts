@@ -9,7 +9,13 @@ export type MedicoTab =
   | "ehr"
   | "entries";
 
-export type AdminTab = "usuarios" | "paciente" | "auditoria" | "semilla" | "respaldos";
+export type AdminTab =
+  | "usuarios"
+  | "paciente"
+  | "auditoria"
+  | "semilla"
+  | "respaldos"
+  | "modulos";
 
 interface NavigationState {
   isDrawerOpen: boolean;

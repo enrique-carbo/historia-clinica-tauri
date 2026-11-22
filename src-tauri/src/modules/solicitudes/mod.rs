@@ -15,7 +15,7 @@ use crate::core::module::{
 };
 use async_trait::async_trait;
 use models::TemplateDefinition;
-use render::render_solicitud;
+use render::{render_solicitud, render_solicitud_html};
 use rusqlite::Connection;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -173,7 +173,7 @@ async fn solicitud_create(
         if study_name.is_empty() {
             study_name = template.name.clone();
         }
-        template.fields.validate_values(&values)?;
+        template.definition.validate_values(&values)?;
     }
 
     if study_name.is_empty() {
@@ -268,7 +268,7 @@ async fn solicitud_render(
 
     let template = match &record.summary.template_id {
         Some(template_id) => store::load_template(db, template_id, &ctx.actor().user_id)?
-            .map(|template| template.fields),
+            .map(|template| template.definition),
         None => None,
     };
 
@@ -282,9 +282,17 @@ async fn solicitud_render(
         template.as_ref(),
         &record.summary.created_at,
     );
+    let html = render_solicitud_html(
+        &filiation,
+        &professional,
+        &record.summary.study_name,
+        &values,
+        template.as_ref(),
+        &record.summary.created_at,
+    );
 
     Ok(ModuleResponse {
-        payload: json!({ "markdown": markdown }),
+        payload: json!({ "markdown": markdown, "html": html }),
     })
 }
 
@@ -636,6 +644,10 @@ mod tests {
         assert!(markdown.contains("**Estudio:** frente y perfil"));
         assert!(markdown.contains("**Indicación:** control evolutivo"));
         assert!(markdown.contains("**Prioridad:** Rutina"));
+        assert!(rendered["html"]
+            .as_str()
+            .unwrap()
+            .contains("<!doctype html>"));
 
         // Regla de oro: si el profesional edita el template después y quita
         // el campo `indicacion`, la solicitud ya emitida sigue mostrando su

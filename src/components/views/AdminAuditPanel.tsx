@@ -22,6 +22,10 @@ const ACTION_LABELS: Record<string, string> = {
   user_deactivate: "Baja de usuario",
   password_reset: "Contraseña reseteada",
   seed_rotate: "Frase semilla rotada",
+  module_activated: "Módulo activado",
+  module_deactivated: "Módulo desactivado",
+  solicitud_issued: "Solicitud emitida",
+  solicitud_template_saved: "Template de solicitud guardado",
 };
 
 export function AdminAuditPanel() {

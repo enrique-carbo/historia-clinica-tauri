@@ -1,10 +1,12 @@
 # 🧩 Módulo: Solicitud de Estudios Complementarios
 
-### v1 — 2026-11-21 | Backend implementado 2026-11-22
+### v1 — 2026-11-21 | Implementado 2026-11-22 (backend + UI/impresión)
 
-> **Estado**: backend operativo (`src-tauri/src/modules/solicitudes/`):
-> migración propia, templates por profesional, alta/listado/consulta de
-> solicitudes y render Markdown. Pendiente: PDF + UI (siguiente corte).
+> **Estado**: backend operativo (`src-tauri/src/modules/solicitudes/`) y UI
+> (`src/components/SolicitudesPanel.tsx`): templates por profesional,
+> alta/listado/consulta de solicitudes, render Markdown + HTML imprimible,
+> vista previa, imprimir/guardar PDF con el diálogo del sistema y descarga
+> `.md`/`.html`; `navigator.share` como fallback mobile.
 >
 > **Ruta 1**: se compila como módulo interno del crate `fichio-care` con la
 > feature `module-solicitudes` (default on). `cargo build --no-default-features`
@@ -27,7 +29,7 @@ la nota SOAP que el profesional escribe en el Core.
 | Solicitudes completas a mano o desde un template propio | Reconstruir documentos antiguos a partir del template |
 | Solicitudes con valores cifrados y estado | Resultados, informes o archivos clínicos en la DB del módulo |
 | Filiación y profesional desde `ModuleContext` | Copiar esos datos a la DB del módulo |
-| Render del documento (Markdown hoy; PDF en el siguiente corte) | Firma Ed25519 y auditoría de emisión (decisión pendiente) |
+| Render del documento (Markdown + HTML imprimible; guardar PDF vía diálogo del sistema) | Firma Ed25519 y auditoría de emisión (decisión pendiente) |
 | DB propia `fichio-solicitudes.db` | Integración con PACS/laboratorio (`ctx.http_fetch`, post-v1) |
 
 ## 2. Qué vive dónde
@@ -89,7 +91,7 @@ renderizar.
 | `solicitud.create` | Valida `entity_id` (vía Core), template y required; cifra valores; audita `SolicitudIssued` | ✅ |
 | `solicitud.list` | Metadatos del actor, filtrable por `entity_id` (sin valores) | ✅ |
 | `solicitud.get` | Metadatos + valores descifrados | ✅ |
-| `solicitud.render` | Documento Markdown con datos del Core + template | ✅ (PDF en el siguiente corte) |
+| `solicitud.render` | Markdown + HTML imprimible con datos del Core + template | ✅ |
 
 La forma de `fields` es la misma de `config/entry_templates/*.json`:
 `{"name","label","type" (text/textarea/select/date),"required","options"}`.
@@ -112,10 +114,10 @@ Err(Unsupported)`, §4).
 - Render del documento en Rust puro (sin I/O), como `export/render.rs`. El
   guardado/share respetará mobile: sharesheet donde `revealItemInDir` no aplica.
 
-## 6. Pendientes (no bloquean el backend)
+## 6. Pendientes (no bloquean v1)
 
-- **PDF + UI** (siguiente corte): formateador PDF, pantalla de templates, alta de
-  solicitud y flujo imprimir/descargar con fallback mobile.
+- **PDF nativo** (opcional): hoy se usa el diálogo de impresión del sistema
+  («Guardar como PDF»); una librería PDF embebida queda como mejora.
 - **Firma/auditoría de emisión** del documento: copiar el patrón de
   `export_emitted` o no.
 - **Sync de fase 4**: outbox propia prevista desde el primer `migrate()` (§13).

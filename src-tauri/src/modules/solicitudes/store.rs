@@ -108,7 +108,7 @@ pub fn list_templates(
             out.push(TemplateRecord {
                 id,
                 name,
-                fields: parse_definition(&fields_json)?,
+                definition: parse_definition(&fields_json)?,
                 created_at,
                 updated_at,
             });
@@ -147,7 +147,7 @@ pub fn load_template(
         Some((id, name, fields_json, created_at, updated_at)) => Ok(Some(TemplateRecord {
             id,
             name,
-            fields: parse_definition(&fields_json)?,
+            definition: parse_definition(&fields_json)?,
             created_at,
             updated_at,
         })),

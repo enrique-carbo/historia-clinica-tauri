@@ -132,7 +132,10 @@ impl TemplateDefinition {
 pub struct TemplateRecord {
     pub id: String,
     pub name: String,
-    pub fields: TemplateDefinition,
+    /// Se aplana en el JSON como `fields: [...]` para que el frontend no
+    /// tenga que anidar `fields.fields`.
+    #[serde(flatten)]
+    pub definition: TemplateDefinition,
     pub created_at: String,
     pub updated_at: String,
 }
