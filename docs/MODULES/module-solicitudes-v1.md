@@ -98,8 +98,9 @@ Err(Unsupported)`, §4).
 
 ## 6. Pendientes (no bloquean el diseño)
 
-- **Prerequisite**: `CoreApi` angosto (diseño en `docs/core-api.md`) + trait
-  `Module` / `PluginHost` (contrato §14), sin tocar los commands del frontend.
+- **Prerequisite**: ✅ `CoreApi` + `PluginHost` + contrato `Module`/
+  `ModuleContext` implementados (`docs/core-api.md`, migración v002). Falta
+  el crate del módulo con su `migrate()` y acciones.
 - **Formato de salida**: PDF y librería a elegir; hoy no hay dependencia de PDF.
 - **Firma/auditoría de emisión**: copiar el patrón de `export_emitted` o no.
 - **Sync de fase 4**: outbox propia prevista desde el primer `migrate()` (§13).

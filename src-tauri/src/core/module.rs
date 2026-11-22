@@ -51,6 +51,18 @@ pub struct ModuleDescriptor {
     pub allowed_roles: Vec<ActorRole>,
 }
 
+/// Estado de un módulo compilado para la UI de administración.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ModuleStatusDto {
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    pub scope: ModuleScope,
+    pub allowed_roles: Vec<ActorRole>,
+    /// `active` | `inactive` | `uninstalled` (fila de `modules` o implícito).
+    pub state: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ModuleError {
     /// Acción/método todavía no implementado (aditivo, §4).
@@ -109,6 +121,12 @@ impl From<ModuleError> for CommandError {
 /// través de un `.await`.
 pub struct ModuleDb {
     conn: Mutex<Connection>,
+}
+
+impl std::fmt::Debug for ModuleDb {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ModuleDb").finish_non_exhaustive()
+    }
 }
 
 impl ModuleDb {
@@ -180,7 +198,9 @@ pub trait Module: Send + Sync + 'static {
 
     /// Migración de la DB **propia** del módulo. El host la llama en la
     /// activación y en cada arranque con el módulo activo. Idempotente.
-    fn migrate(&self, conn: &mut Connection) -> Result<(), ModuleError>;
+    /// Recibe `&Connection` para poder correr dentro de la transacción que
+    /// abre el host (`Transaction` no implementa `DerefMut`).
+    fn migrate(&self, conn: &Connection) -> Result<(), ModuleError>;
 
     /// Único punto de entrada. Recibe `db` (la DB propia del módulo) y `ctx`
     /// (acceso mediado al Core).
@@ -265,7 +285,7 @@ mod tests {
             }
         }
 
-        fn migrate(&self, conn: &mut Connection) -> Result<(), ModuleError> {
+        fn migrate(&self, conn: &Connection) -> Result<(), ModuleError> {
             conn.execute_batch("CREATE TABLE IF NOT EXISTS items (id TEXT PRIMARY KEY)")
                 .map_err(|e| ModuleError::Internal(e.to_string()))
         }
@@ -308,9 +328,9 @@ mod tests {
         assert_eq!(desc.id, "dummy");
         assert_eq!(desc.allowed_roles, vec![ActorRole::Profesional]);
 
-        let mut conn = Connection::open_in_memory().expect("in-memory");
-        module.migrate(&mut conn).expect("migrate");
-        module.migrate(&mut conn).expect("migrate es idempotente");
+        let conn = Connection::open_in_memory().expect("in-memory");
+        module.migrate(&conn).expect("migrate");
+        module.migrate(&conn).expect("migrate es idempotente");
         let db = ModuleDb::new(conn);
 
         let ctx = DummyContext {

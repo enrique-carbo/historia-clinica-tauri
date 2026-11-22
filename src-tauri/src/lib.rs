@@ -31,7 +31,7 @@ pub fn run() {
             // Se resuelve en unlock_vault() con la master_key del usuario
             // (o con la seed en el bootstrap de nuevos usuarios).
 
-            let conn = db::database::init_db(app_data_dir)
+            let conn = db::database::init_db(app_data_dir.clone())
                 .map_err(|e| format!("Fallo crítico de DB: {}", e))?;
 
             let state = app.state::<DbState>();
@@ -41,6 +41,10 @@ pub fn run() {
             let schema = db::config_schema::from_embedded()?;
 
             app.manage(schema);
+            app.manage(core::host::PluginHost::new(
+                app_data_dir,
+                core::host::PluginHost::default_modules(),
+            ));
 
             Ok(())
         })
@@ -83,6 +87,11 @@ pub fn run() {
             commands::validate_backup,
             commands::restore_backup,
             commands::seed_recovery,
+            commands::module_execute,
+            commands::is_module_available,
+            commands::list_modules,
+            commands::module_activate,
+            commands::module_deactivate,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

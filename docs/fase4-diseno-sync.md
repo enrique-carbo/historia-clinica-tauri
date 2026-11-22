@@ -54,8 +54,8 @@ Principios heredados que se mantienen:
 | 3.5.4 Índices faltantes | `idx_entries_*` ya existen; `blind_index UNIQUE` ya indexa; `entity_id` de notes aplica a notes | Sin acción |
 | 3.5.5 Múltiples blind indexes (dni, teléfono…) | **Pendiente**, no bloquea v1 (la búsqueda server-side es post-v1) | Diferido |
 | 3.5.6 Zeroize de claves en RAM | **Resuelto**: estados y transitorios en `Zeroizing` (crate `zeroize`), args de comandos como `Zeroizing<String>` | Sin acción |
-| `entities.external_id` | **Ya se puebla**: `create_entity` asigna UUIDv4 (crate `uuid`); filas legacy pueden tener NULL | Backfill v002 solo para NULLs, con el crate `uuid` |
-| `entities.updated_at` / soft delete | No existen. **Además `update_entity` pisa `created_by_user_id`** con el editor (borra al autor original) — bug de atribución | `updated_at` en v002; **update_entity deja de tocar `created_by_user_id`**; soft delete solo si algún día hay delete |
+| `entities.external_id` | **Ya se puebla**: `create_entity` asigna UUIDv4 (crate `uuid`); filas legacy pueden tener NULL | Backfill v003 solo para NULLs, con el crate `uuid` |
+| `entities.updated_at` / soft delete | No existen. **Además `update_entity` pisa `created_by_user_id`** con el editor (borra al autor original) — bug de atribución | `updated_at` en v003; **update_entity deja de tocar `created_by_user_id`**; soft delete solo si algún día hay delete |
 
 ---
 
@@ -84,13 +84,13 @@ Principios heredados que se mantienen:
 
 Solución:
 
-- `entities.external_id TEXT UNIQUE` (ya existe): **`create_entity` ya lo asigna con el crate `uuid`**; el v002 solo backfillea las filas legacy con NULL (mismo formato UUIDv4).
+- `entities.external_id TEXT UNIQUE` (ya existe): **`create_entity` ya lo asigna con el crate `uuid`**; el v003 solo backfillea las filas legacy con NULL (mismo formato UUIDv4).
 - El sync de entities usa `external_id` como clave externa; el `id` INTEGER sigue siendo local y privado.
 - El payload de sync de una entry lleva el `external_id` del paciente; al aplicar el pull se resuelve al `id` local (insert implícito del entity si aún no existe).
 - `entries.id` ya es TEXT UUID → sirve como clave externa directa.
 - `sync_queue.external_record_id` (columna existente) guarda el UUID de la fila empujada.
 
-### 3.3 Migración v002 (pre-requisito)
+### 3.3 Migración v003 (pre-requisito)
 
 ```sql
 -- backfill de UUIDs solo para filas legacy sin external_id
@@ -126,7 +126,7 @@ CREATE TABLE file_sync (
 
 Notas:
 
-- `entries.is_synced` queda **deprecado** (fuente única de verdad = `sync_queue`); no se elimina en v002 por prudencia.
+- `entries.is_synced` queda **deprecado** (fuente única de verdad = `sync_queue`); no se elimina en v003 por prudencia.
 - `enc_meta` nullable: las **entries legacy** no lo tienen; el push de esas filas cifra title/status en el momento (transicional — requiere bóveda abierta solo para ellas; las entries nuevas siempre lo traen pre-cifrado).
 - `sync_queue.local_record_id` es INTEGER y `entries.id` es TEXT UUID: para **entries la clave de la cola es `external_record_id`** (el UUID); no depender de `local_record_id` en ese caso.
 - `users.last_login_at` **no se sincroniza** (churn en cada login, sin valor cross-device): va fuera del envelope.
@@ -352,7 +352,7 @@ Timestamps de LWW: el campo `updated` de PocketBase (reloj del servidor) — no 
 
 - El `user_version` local es de cada equipo; **no se sincroniza**. Lo que sincroniza es el binario.
 - Regla: todos los equipos de un consultorio deben correr la **misma versión menor** de la app. El handshake de sync compara `app_version` contra `meta.min_app_version`: versión menor → sync bloqueado con *"Actualizá la app en este equipo"*.
-- Migraciones de esquema (v002, v003…) siguen el mecanismo existente (`MIGRATIONS` + guard de downgrade), por equipo, al abrir.
+- Migraciones de esquema (v003, v004…) siguen el mecanismo existente (`MIGRATIONS` + guard de downgrade), por equipo, al abrir.
 
 ### 7.5 Backups del servidor
 
@@ -381,7 +381,7 @@ Cobertura objetivo: las reglas de §4 y el orden de §6.4 tienen test de invaria
 | # | Hito | Contenido | Tamaño |
 |---|---|---|---|
 | M0 | Este documento | Aprobado | ✅ |
-| M1 | Pre-requisitos locales | v002 (`external_id` backfill legacy con crate `uuid`, `updated_at`, `enc_meta` en entries, `sync_state`/`sync_cursors`/`file_sync`), outbox en todos los comandos de escritura (con `enc_meta` pre-cifrado en `create_entry`), **`require_session` en entity_commands y create_entry — autor desde la sesión, nunca del frontend**, **`update_entity` deja de pisar `created_by_user_id`**, verificación de zeroize, CI verde sin servidor | M |
+| M1 | Pre-requisitos locales | v003 (`external_id` backfill legacy con crate `uuid`, `updated_at`, `enc_meta` en entries, `sync_state`/`sync_cursors`/`file_sync`), outbox en todos los comandos de escritura (con `enc_meta` pre-cifrado en `create_entry`), **`require_session` en entity_commands y create_entry — autor desde la sesión, nunca del frontend**, **`update_entity` deja de pisar `created_by_user_id`**, verificación de zeroize, CI verde sin servidor | M |
 | M2 | Infra + identidad de dispositivo | Compose perfiles lan/vps, colecciones PB, pairing + tokens, panel admin "Dispositivos" | M |
 | M3 | Engine push/pull | Worker, reglas de conflicto, indicador de estado, tests unit + integración PB + 2 dispositivos | L |
 | M4 | Onboarding + vaults E2E | Flujo "Unirse al consultorio", sync de archivos (salt/vaults/wraps), re-login por rotación, invariante de firma cross-install | M |
@@ -410,7 +410,7 @@ Cobertura objetivo: las reglas de §4 y el orden de §6.4 tienen test de invaria
 
 ## 11. Checklist de entrega de la Fase 4
 
-- [ ] M1: v002 aplicada, outbox en todos los comandos, `external_id` siempre poblado
+- [ ] M1: v003 aplicada, outbox en todos los comandos, `external_id` siempre poblado
 - [x] Ningún command confía `user_id`/`author_id` del frontend: `require_session` en entity_commands y `create_entry`; `update_entity` preserva `created_by_user_id` (2026-10-11)
 - [ ] `create_entry` pre-cifra `enc_meta`; el push de entries funciona con bóveda cerrada
 - [ ] Push con error → pull omitido en el mismo ciclo (test de pérdida silenciosa §4.1.4)

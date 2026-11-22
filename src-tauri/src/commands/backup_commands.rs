@@ -55,6 +55,10 @@ pub fn create_backup(
     let actor = require_admin(&session)?;
     let app_dir = app_data_dir(&app)?;
 
+    if let Some(host) = app.try_state::<crate::core::host::PluginHost>() {
+        host.checkpoint_open_dbs()?;
+    }
+
     let result = {
         let sign_guard = signing_state
             .0
@@ -308,6 +312,10 @@ pub fn restore_backup(
         .take()
         .ok_or_else(|| CommandError::new(ERR_DB_NOT_INITIALIZED))?;
     drop(old_conn);
+
+    if let Some(host) = app.try_state::<crate::core::host::PluginHost>() {
+        host.close_all_dbs()?;
+    }
 
     // 5. Restaurar
     let restore_result = backup::restore_backup(src, &app_dir);

@@ -111,8 +111,10 @@ viven en **monorepo público** (`module-contract.md` §9/§14): el source es
 visible y el paywall es build-time por feature flags. Orden de implementación:
 CoreApi → solicitudes → teleconsulta → sync.
 
-- [ ] Prerequisite: `core/` con funciones de servicio puras (`core::api` + `core::dto`)
-      y trait `Module` / `PluginHost` (`docs/core-api.md`, `module-contract.md` §3–5)
+- [x] Prerequisite: `core/` con `core::api` + `core::dto` + `core::module`
+      (trait `Module` / `ModuleContext`) + `core::host` (`PluginHost`,
+      `module_execute`, activación/desactivación) y migración **v002**
+      (`modules`/`module_access`) — 2026-11-22 (`docs/core-api.md`)
 - [ ] **5a — Solicitudes de estudios complementarios**: diseño en
       `docs/MODULES/module-solicitudes-v1.md` — templates editables por
       profesional en DB propia, solicitudes autocontenidas, filiación y

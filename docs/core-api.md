@@ -1,13 +1,15 @@
 # CoreApi — capa de servicio del Core
 
-### v1 — 2026-11-21 | Implementados proyecciones, crypto y contrato de módulos
+### v1 — 2026-11-21 | CoreApi y PluginHost implementados (2026-11-22)
 
 > Capa de servicio en Rust puro (`src-tauri/src/core/`). Implementado:
-> `fetch_filiation`, `entity_exists`, `fetch_professional`, `audit` y
-> `wrap_with_datakey` / `unwrap_with_datakey`; además el contrato
-> `Module` / `ModuleContext` (`core::module`). Pendiente: el `PluginHost`
-> con `module_execute`. Alineado con el principio de Core mínimo: **no**
-> reescribe los 38 commands de `lib.rs`.
+> `fetch_filiation`, `entity_exists`, `fetch_professional`, `audit`,
+> `wrap_with_datakey` / `unwrap_with_datakey`; el contrato
+> `Module` / `ModuleContext`; y el `PluginHost` con `module_execute`,
+> `is_module_available`, `list_modules` y activación/desactivación
+> (`v002`: `modules` + `module_access`). Pendiente: el primer módulo
+> (solicitudes). Alineado con Core mínimo: **no** reescribe los 38 commands
+> del frontend.
 
 ---
 
@@ -34,10 +36,16 @@ Dos reglas de diseño evitan capas redundantes:
 
 ```
 src-tauri/src/core/
-├── mod.rs      # pub mod api; pub mod dto;
+├── mod.rs      # pub mod api, dto, module, host
 ├── api.rs      # Funciones de servicio puras (sin dependencia de Tauri)
-└── dto.rs      # FiliationDto, FiliationFieldDto, ProfessionalDto, AuditEvent
+├── dto.rs      # Anchor/DTOs de dominio (Filiation*, Professional*, AuditEvent)
+├── module.rs   # Contrato: Module, ModuleContext, ModuleDb, ModuleError
+└── host.rs     # PluginHost: gate, DBs de módulo, activación/desactivación
 ```
+
+El `ModuleContext` in-process vive en `commands/module_commands.rs` (es el
+borde Tauri: toma los `State` y delega en `core::api`), por eso `core::host`
+no importa `tauri`.
 
 - **Cero cambios de comportamiento** en `types.rs`, `with_conn`, `get_key`,
   `get_data_key` ni en los 38 commands. `lib.rs` expone `pub mod core;`.
@@ -132,7 +140,7 @@ con `ProfessionalProfile` y `ExportProfessional`.
   - `fetch_professional` con múltiples matrículas y profesión.
   - `audit` anti-PHI en todas las variantes de `AuditEvent`.
 - Los 147 tests previos de Rust y los 38 commands quedan intactos.
-- Baseline actualizado a **171 tests** en `AGENTS.md` y `README.md`;
+- Baseline actualizado a **180 tests** en `AGENTS.md` y `README.md`;
   `cargo clippy --all-targets` sigue en **3 warnings**. No correr `cargo fmt`.
 
 ## 7. Cortes
@@ -142,8 +150,9 @@ con `ProfessionalProfile` y `ExportProfessional`.
 2. ✅ Crypto opt-in: `wrap_with_datakey` / `unwrap_with_datakey` + tests.
 3. ✅ Contrato de módulos: `core::module` (`Module`, `ModuleContext`,
    `ModuleRequest`/`ModuleResponse`/`ModuleDescriptor`/`ModuleError`).
-4. ⬜ `PluginHost` + `ModuleContext` in-process + `module_execute`,
-   `is_module_available`, activación y tablas `modules`/`module_access`.
+4. ✅ `PluginHost` (`core::host`) + `ModuleContext` in-process + `module_execute`,
+   `is_module_available`, `list_modules`, activación/desactivación y migración
+   **v002** (`modules`/`module_access`). `PluginHost::default_modules()` vacío.
 5. ⬜ Módulo de solicitudes (crate propio, `migrate()` y acciones).
 
 **Decisión tomada** (`docs/module-contract.md` §14): **monorepo público** —

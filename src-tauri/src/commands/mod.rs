@@ -5,6 +5,7 @@ mod backup_commands;
 mod entity_commands;
 mod entry_commands;
 mod export_commands;
+mod module_commands;
 mod professional_profile_commands;
 mod seed_commands;
 
@@ -15,6 +16,7 @@ pub use backup_commands::*;
 pub use entity_commands::*;
 pub use entry_commands::*;
 pub use export_commands::*;
+pub use module_commands::*;
 pub use professional_profile_commands::*;
 pub use seed_commands::*;
 

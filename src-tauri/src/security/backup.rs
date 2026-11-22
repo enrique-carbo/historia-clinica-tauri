@@ -87,10 +87,17 @@ fn sha256_hex(bytes: &[u8]) -> String {
     hex::encode(hasher.finalize())
 }
 
-/// Archivos que integran un respaldo: base, wraps y vaults. El blind index
-/// ya no tiene sal: su clave se deriva de la DataKey (que viaja en los wraps).
+/// DB propia de un módulo (`fichio-<module_id>.db`, `module-contract.md` §7).
+fn is_module_db(name: &str) -> bool {
+    name.starts_with("fichio-") && name.ends_with(".db") && name.len() > "fichio-.db".len()
+}
+
+/// Archivos que integran un respaldo: base del Core, DBs de módulos
+/// (`fichio-*.db`), wraps y vaults. El blind index ya no tiene sal: su clave
+/// se deriva de la DataKey (que viaja en los wraps).
 fn is_backup_candidate(name: &str) -> bool {
     name == DB_FILENAME
+        || is_module_db(name)
         || name.starts_with(".data_key.")
         || (name.starts_with("vault_") && (name.ends_with(".bin") || name.ends_with(".salt")))
 }
@@ -442,6 +449,47 @@ mod tests {
             assert_eq!(sha256_hex(&copied), f.sha256);
         }
         assert_eq!(read_manifest(&path).unwrap(), manifest);
+    }
+
+    #[test]
+    fn test_create_backup_includes_zero_one_and_multiple_module_dbs() {
+        let (app, conn) = make_installation();
+        let dest_parent = TempDir::new().unwrap();
+
+        // 0 DBs de módulo
+        let (_, m0) = create_backup(&conn, app.path(), dest_parent.path(), "u1", &TEST_SK).unwrap();
+        assert!(!m0.files.iter().any(|f| f.name.starts_with("fichio-")));
+
+        // 1 DB de módulo
+        fs::write(app.path().join("fichio-solicitudes.db"), b"sqlite-mod-1").unwrap();
+        let (p1, m1) =
+            create_backup(&conn, app.path(), dest_parent.path(), "u1", &TEST_SK).unwrap();
+        let sol = m1
+            .files
+            .iter()
+            .find(|f| f.name == "fichio-solicitudes.db")
+            .expect("fichio-solicitudes.db en manifest");
+        assert_eq!(sol.sha256, sha256_hex(b"sqlite-mod-1"));
+        assert_eq!(
+            fs::read(p1.join("fichio-solicitudes.db")).unwrap(),
+            b"sqlite-mod-1"
+        );
+
+        // N DBs de módulo (+ un archivo que empieza con fichio- pero no es .db)
+        fs::write(app.path().join("fichio-teleconsulta.db"), b"sqlite-mod-2").unwrap();
+        fs::write(app.path().join("fichio-.db"), b"nombre vacio invalido").unwrap();
+        fs::write(app.path().join("fichio-notas.txt"), b"no es db").unwrap();
+        let (_, mn) = create_backup(&conn, app.path(), dest_parent.path(), "u1", &TEST_SK).unwrap();
+        let mod_names: Vec<&str> = mn
+            .files
+            .iter()
+            .map(|f| f.name.as_str())
+            .filter(|n| n.starts_with("fichio-"))
+            .collect();
+        assert_eq!(
+            mod_names,
+            vec!["fichio-solicitudes.db", "fichio-teleconsulta.db"]
+        );
     }
 
     #[test]

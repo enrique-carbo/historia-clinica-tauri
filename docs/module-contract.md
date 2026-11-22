@@ -67,7 +67,9 @@ pub trait Module: Send + Sync + 'static {
 
     /// Migración de la DB propia del módulo. El host la llama en la
     /// activación y en cada arranque con el módulo activo. Idempotente.
-    fn migrate(&self, conn: &mut rusqlite::Connection) -> Result<(), ModuleError>;
+    /// `&Connection` (no `&mut`): el host la corre dentro de su transacción
+    /// y `rusqlite::Transaction` no implementa `DerefMut`.
+    fn migrate(&self, conn: &rusqlite::Connection) -> Result<(), ModuleError>;
 
     /// Único punto de entrada. Serialización de ida y vuelta obligatoria.
     /// En Ruta 1 el host llama in-process; en Ruta 2 serializa y manda por IPC.
@@ -297,10 +299,9 @@ async fn module_execute(
 
 ### 6.6 Estado en la DB
 
-Migración de activación de módulos — **versión a determinar al implementar**
-(hoy el catálogo está en `v001`; fase 4 reserva `v002` para su M1 según
-`fase4-diseno-sync.md` — las tablas de módulos toman la siguiente versión
-libre; append-only):
+Migración de activación de módulos — **v002** (implementada 2026-11-22).
+`v001` era el baseline; las migraciones son append-only, así que sync M1
+pasa a **v003** (antes el diseño de fase 4 lo anotaba como v002):
 
 ```sql
 CREATE TABLE modules (
@@ -482,7 +483,7 @@ Si se rompe cualquiera de las cinco, Ruta 2 reescribe esa parte. Con las cinco, 
 ## 14. Pendientes (marcados, no bloquean v1)
 
 - ✅ **`wrap_with_datakey` en v1**: decidido — el chat de teleconsulta lo necesita. Se suma `wrap_for_user`/`unwrap_for_user` (thread keys lado paciente).
-- ⚠️ **CoreApi (prerequisite Ruta 1)**: capa de servicio **angosta** sobre la que se implementa `ModuleContext` in-process, sin reescribir los commands del frontend. Hoy no existe (0 referencias en el código) — es el trabajo real previo al primer módulo. Diseño: `docs/core-api.md`.
+- ✅ **CoreApi (prerequisite Ruta 1)**: implementado en `src-tauri/src/core/` — proyecciones, crypto, trait `Module`/`ModuleContext` y `PluginHost` con `module_execute`. Sin reescribir los commands del frontend. Diseño: `docs/core-api.md`.
 - ✅ **Monorepo vs. repos separados (decidido 2026-11-21)**: **monorepo público** (el repo ya es público). `core/` y los crates de módulo comparten repo: un solo CI, un solo bump de versión, DTOs compartidos sin publicar crates y commits atómicos Core+módulo. El source de los módulos es visible; el paywall sigue siendo **build-time** por feature flags (§9), no secreto del código. Ver consecuencias de AGPL en §9.
 - ⚠️ **Nombre**: `modules` + `Module` (recomendado) vs. `plugins` + `Plugin` (vocabulario de clientes). Cosmético, pero se propaga. Recomendación: `Module` en código, "Plugin" en UI de cara al usuario si se prefiere.
 - ⚠️ **Allowlist de `http_fetch`**: dónde vive la config de URLs permitidas por módulo. Recomendación: `config/http_allowlist.json` en el repo del Core, embebido, editable por PR. No en la DB (sería config de seguridad en un lugar mutable).

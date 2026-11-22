@@ -19,11 +19,18 @@ pub struct Migration {
 //  - Si la DB tiene un user_version MAYOR al último conocido, la app no
 //    arranca (una versión más nueva de la app creó esa base).
 
-pub const MIGRATIONS: &[Migration] = &[Migration {
-    version: 1,
-    description: "baseline: esquema inicial (users, profiles, signing_keys, audit_log, entities, entries, sync)",
-    up: v001_baseline,
-}];
+pub const MIGRATIONS: &[Migration] = &[
+    Migration {
+        version: 1,
+        description: "baseline: esquema inicial (users, profiles, signing_keys, audit_log, entities, entries, sync)",
+        up: v001_baseline,
+    },
+    Migration {
+        version: 2,
+        description: "módulos: registro de activación y acceso (modules, module_access)",
+        up: v002_modules,
+    },
+];
 
 /// v001: esquema inicial completo (movido desde init_db sin cambios).
 /// Usa IF NOT EXISTS → idempotente para DBs de desarrollo creadas antes
@@ -175,6 +182,38 @@ fn v001_baseline(conn: &Connection) -> Result<(), String> {
 // =======================================================================
 
 /// Aplica las migraciones pendientes de `MIGRATIONS`. Devuelve la versión final.
+/// v002: registro de módulos en la DB del Core.
+///
+/// **No** son tablas de datos de módulos: cada módulo guarda lo suyo en su
+/// propia `fichio-<id>.db` (§7). Acá vive solo la gobernanza del host:
+/// activación (`modules.state`) y acceso por profesional (`module_access`).
+fn v002_modules(conn: &Connection) -> Result<(), String> {
+    conn.execute_batch(
+        r#"
+        CREATE TABLE IF NOT EXISTS modules (
+            id TEXT PRIMARY KEY NOT NULL,
+            state TEXT NOT NULL DEFAULT 'inactive'
+                CHECK(state IN ('inactive','active','uninstalled')),
+            activated_at TEXT,
+            activated_by TEXT,
+            FOREIGN KEY(activated_by) REFERENCES users(id) ON DELETE SET NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS module_access (
+            module_id TEXT NOT NULL,
+            user_id   TEXT NOT NULL,
+            granted_at TEXT NOT NULL,
+            granted_by TEXT NOT NULL,
+            PRIMARY KEY (module_id, user_id),
+            FOREIGN KEY(module_id) REFERENCES modules(id) ON DELETE CASCADE,
+            FOREIGN KEY(user_id)   REFERENCES users(id)   ON DELETE CASCADE,
+            FOREIGN KEY(granted_by) REFERENCES users(id)  ON DELETE RESTRICT
+        );
+        "#,
+    )
+    .map_err(|e| format!("v002 falló: {}", e))
+}
+
 pub fn run_migrations(conn: &mut Connection) -> Result<u32, String> {
     run_migrations_with(conn, MIGRATIONS)
 }
@@ -245,6 +284,31 @@ mod tests {
         )
         .unwrap()
             > 0
+    }
+
+    #[test]
+    fn migration_versions_are_contiguous() {
+        // El runner usa `MIGRATIONS.len()` como última versión y el guard de
+        // downgrade compara `user_version > latest`. Un hueco (ej. v001, v003)
+        // haría que una DB en v003 se rechace como "más nueva".
+        for (index, migration) in MIGRATIONS.iter().enumerate() {
+            assert_eq!(
+                migration.version,
+                index as u32 + 1,
+                "versión no contigua: {}",
+                migration.description
+            );
+        }
+    }
+
+    #[test]
+    fn v002_creates_module_registry_tables() {
+        let mut conn = open_mem();
+        run_migrations(&mut conn).unwrap();
+
+        assert_eq!(user_version(&conn), MIGRATIONS.len() as u32);
+        assert!(table_exists(&conn, "modules"));
+        assert!(table_exists(&conn, "module_access"));
     }
 
     #[test]

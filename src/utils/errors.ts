@@ -87,6 +87,11 @@ const MESSAGES: Record<string, string | ((params: Params) => string)> = {
   ERR_FOREIGN_PROFILE: "No podés editar el perfil de otro usuario.",
 
   // --- Módulos ---
+  ERR_MODULE_NOT_INSTALLED:
+    "Este módulo no está incluido en tu versión de la app.",
+  ERR_MODULE_NOT_ACTIVE: "El módulo no está activado.",
+  ERR_MODULE_ROLE_DENIED: "Tu rol no tiene acceso a este módulo.",
+  ERR_MODULE_ACCESS_DENIED: "No tenés acceso a este módulo.",
   ERR_MODULE_UNSUPPORTED: "La acción no está soportada por este módulo.",
   ERR_MODULE_INVALID_REQUEST: (p) =>
     `La solicitud al módulo es inválida: ${p.detail ?? ""}.`,

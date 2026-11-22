@@ -7,4 +7,5 @@
 
 pub mod api;
 pub mod dto;
+pub mod host;
 pub mod module;
