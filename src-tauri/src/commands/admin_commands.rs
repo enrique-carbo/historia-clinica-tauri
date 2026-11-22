@@ -1,4 +1,4 @@
-use super::with_conn;
+use super::{record_audit, with_conn};
 use crate::error::{
     CommandError, ERR_ADMIN_OR_ASSISTANT_REQUIRED, ERR_ADMIN_REQUIRED, ERR_INVALID_ROLE,
     ERR_LAST_ADMIN, ERR_OWN_PASSWORD_RESET, ERR_PASSWORD_TOO_SHORT, ERR_SESSION_REQUIRED,
@@ -60,29 +60,6 @@ pub fn require_admin_or_assistant(
         return Err(CommandError::new(ERR_ADMIN_OR_ASSISTANT_REQUIRED));
     }
     Ok(session.clone())
-}
-
-/// Registra una acción sensible en `audit_log`.
-pub fn record_audit(
-    conn: &rusqlite::Connection,
-    actor_user_id: &str,
-    action: &str,
-    target_user_id: Option<&str>,
-    detail: &str,
-) -> Result<(), String> {
-    conn.execute(
-        "INSERT INTO audit_log (actor_user_id, action, target_user_id, detail, created_at)
-         VALUES (?1, ?2, ?3, ?4, ?5);",
-        rusqlite::params![
-            actor_user_id,
-            action,
-            target_user_id,
-            detail,
-            chrono::Utc::now().to_rfc3339()
-        ],
-    )
-    .map_err(|e| format!("Error registrando auditoría: {}", e))?;
-    Ok(())
 }
 
 const VALID_ROLES: [&str; 4] = ["administrador", "asistente", "profesional", "paciente"];

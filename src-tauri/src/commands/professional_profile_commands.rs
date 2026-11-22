@@ -9,18 +9,13 @@ use tauri::State;
 
 use super::{get_data_key, record_audit, require_session, with_conn};
 
+// `License` vive en `core::dto` (DTO compartido con los módulos). Se
+// re-exporta para conservar `crate::commands::License` y los `use super::*`.
+pub use crate::core::dto::License;
+
 // =======================================================================
 // TIPOS
 // =======================================================================
-
-/// Una matrícula profesional: número + jurisdicción (provincia/colegio).
-/// El orden del array es el orden de presentación — la primera es la
-/// matrícula principal.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct License {
-    pub number: String,
-    pub jurisdiction: String,
-}
 
 #[derive(Serialize, Debug)]
 pub struct ProfessionalProfile {

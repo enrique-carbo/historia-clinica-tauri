@@ -2,6 +2,7 @@ use std::sync::Mutex;
 use tauri::Manager;
 
 mod commands;
+pub mod core;
 mod db;
 mod error;
 mod export;

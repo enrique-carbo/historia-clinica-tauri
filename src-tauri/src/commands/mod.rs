@@ -18,6 +18,10 @@ pub use export_commands::*;
 pub use professional_profile_commands::*;
 pub use seed_commands::*;
 
+// `record_audit` vive en `core::api` (servicio puro, sin Tauri). Se
+// re-exporta acá para conservar los call sites `super::record_audit`.
+pub use crate::core::api::record_audit;
+
 // --- HELPERS ---
 
 use crate::error::{CommandError, ERR_DB_NOT_INITIALIZED, ERR_VAULT_LOCKED};

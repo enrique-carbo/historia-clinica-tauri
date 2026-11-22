@@ -69,6 +69,7 @@ const MESSAGES: Record<string, string | ((params: Params) => string)> = {
 
   // --- Fichas y accesos ---
   ERR_ENTITY_NOT_FOUND: "Ficha no encontrada.",
+  ERR_ENTITY_ACCESS_DENIED: "No tenés acceso a esta ficha.",
   ERR_NOT_PATIENT_ENTITY:
     "El acceso de paciente solo aplica a fichas de tipo paciente.",
   ERR_PATIENT_ACCESS_EXISTS: (p) =>

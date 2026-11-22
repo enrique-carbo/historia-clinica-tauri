@@ -49,6 +49,10 @@ pub const ERR_NO_ACTIVE_ADMIN: &str = "ERR_NO_ACTIVE_ADMIN";
 
 // --- Fichas y accesos ---
 pub const ERR_ENTITY_NOT_FOUND: &str = "ERR_ENTITY_NOT_FOUND";
+/// Un actor `paciente` intentó operar sobre una ficha ajena (o sin
+/// `entity_id`). Se distingue de `ERR_ENTITY_NOT_FOUND` para no filtrar
+/// existencia — ver `module-contract.md` §12.
+pub const ERR_ENTITY_ACCESS_DENIED: &str = "ERR_ENTITY_ACCESS_DENIED";
 pub const ERR_NOT_PATIENT_ENTITY: &str = "ERR_NOT_PATIENT_ENTITY";
 pub const ERR_PATIENT_ACCESS_EXISTS: &str = "ERR_PATIENT_ACCESS_EXISTS";
 pub const ERR_BLIND_INDEX_FIELD_MISSING: &str = "ERR_BLIND_INDEX_FIELD_MISSING";

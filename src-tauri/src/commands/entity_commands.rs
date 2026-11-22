@@ -1,3 +1,4 @@
+use crate::core::api::decrypt_entity_blob;
 use crate::db::config_schema::SchemaConfig;
 use crate::error::{
     CommandError, ERR_BLIND_INDEX_FIELD_MISSING,
@@ -123,31 +124,7 @@ pub fn get_entity(
     })?;
 
     let (external_id, entity_type, enc_data_blob, created_at) = record;
-
-    let encrypted_fields: HashMap<String, String> = serde_json::from_slice(&enc_data_blob)
-        .map_err(|e| format!("Error parseando blob: {}", e))?;
-
-    let mut data: EntityData = HashMap::new();
-    for (field_name, combined) in encrypted_fields {
-        let parts: Vec<&str> = combined.split(':').collect();
-        if parts.len() != 2 {
-            return Err(CommandError::internal(format!(
-                "Formato inválido en campo {}",
-                field_name
-            )));
-        }
-
-        let enc = crypto::EncryptedData {
-            ciphertext: parts[0].to_string(),
-            nonce: parts[1].to_string(),
-        };
-
-        let decrypted =
-            crypto::decrypt_text(&enc, &data_key) // ← Usar data_key
-                .map_err(|e| format!("Error descifrando campo {}: {}", field_name, e))?;
-
-        data.insert(field_name, decrypted);
-    }
+    let data = decrypt_entity_blob(&enc_data_blob, &data_key)?;
 
     Ok(EntityRecord {
         id,
@@ -314,39 +291,6 @@ pub fn search_entities(
     }
 
     Ok(matches)
-}
-
-fn decrypt_entity_blob(
-    enc_data_blob: &[u8],
-    data_key: &[u8; 32],
-) -> Result<EntityData, CommandError> {
-    let encrypted_fields: HashMap<String, String> = serde_json::from_slice(enc_data_blob)
-        .map_err(|e| CommandError::internal(format!("Error parseando blob: {}", e)))?;
-
-    let mut data: EntityData = HashMap::new();
-    for (field_name, combined) in encrypted_fields {
-        let parts: Vec<&str> = combined.split(':').collect();
-        if parts.len() != 2 {
-            return Err(CommandError::internal(format!(
-                "Formato inválido en campo {}",
-                field_name
-            )));
-        }
-
-        let enc = crypto::EncryptedData {
-            ciphertext: parts[0].to_string(),
-            nonce: parts[1].to_string(),
-        };
-
-        let decrypted = crypto::decrypt_text(&enc, data_key)
-            .map_err(|e| {
-                CommandError::internal(format!("Error descifrando campo {}: {}", field_name, e))
-            })?;
-
-        data.insert(field_name, decrypted);
-    }
-
-    Ok(data)
 }
 
 #[tauri::command]

@@ -1,12 +1,12 @@
 # CoreApi — capa de servicio del Core
 
-### v1 — 2026-11-21 | Diseño, no implementación
+### v1 — 2026-11-21 | Primer slice implementado 2026-11-22
 
-> Prerequisite de la Ruta 1 (`docs/module-contract.md` §14): hoy `CoreApi`
-> tiene 0 referencias en el código. Es la capa de servicio en Rust puro sobre
-> la que se implementa `ModuleContext` in-process (§4). Alineado con el
-> principio de Core mínimo: **no** implica reescribir los 38 commands de
-> `lib.rs`.
+> Capa de servicio en Rust puro (`src-tauri/src/core/`) sobre la que se
+> implementa `ModuleContext` in-process (§4). Implementado: `fetch_filiation`,
+> `entity_exists`, `fetch_professional` y `audit`. Pendiente: crypto
+> (`wrap_*`) y el `PluginHost`. Alineado con el principio de Core mínimo:
+> **no** reescribe los 38 commands de `lib.rs`.
 
 ---
 
@@ -38,8 +38,10 @@ src-tauri/src/core/
 └── dto.rs      # FiliationDto, FiliationFieldDto, ProfessionalDto, AuditEvent
 ```
 
-- **Cero cambios en `types.rs`, `with_conn`, `get_key` ni `get_data_key`**: los
-  38 commands siguen intactos. En `lib.rs` solo se agrega `mod core;`.
+- **Cero cambios de comportamiento** en `types.rs`, `with_conn`, `get_key`,
+  `get_data_key` ni en los 38 commands. `lib.rs` expone `pub mod core;`.
+- **Dos movimientos con re-export** (call sites intactos): `record_audit` pasó
+  a `core::api` y `License` a `core::dto`; `commands` los re-exporta.
 - `InProcessModuleContext` (cuando se conecte `PluginHost`) guarda el actor de
   la sesión ya resuelto por `require_session()` y adquiere `&Connection` /
   `Zeroizing<[u8; 32]>` por llamada (nunca cachea la `DataKey`, para que
@@ -51,8 +53,8 @@ src-tauri/src/core/
 |---|---|
 | `fetch_filiation` | `(conn, data_key, schema, actor: &SessionUser, entity_id: i64) -> Result<FiliationDto, CommandError>`. **Scoping obligatorio**: si `actor.role == "paciente"`, verifica en `users.entity_id` que `entity_id` sea el propio; si no, devuelve `AccessDenied` (nunca `EntityNotFound`, §12). Descifra la entidad y proyecta `FiliationDto` |
 | `entity_exists` | `(conn, actor: &SessionUser, entity_id: i64) -> Result<bool, CommandError>`. Mismo scoping para `paciente`; `SELECT 1 FROM entities WHERE id = ?1` para staff |
-| `fetch_professional` | `(conn, data_key, user_id: &str) -> Result<ProfessionalDto, CommandError>`. Reutiliza la lógica de `load_profile` y proyecta `full_name`, `profession`, `specialty`, `licenses` y `public_key_hex` |
-| `audit` | `(conn, actor_user_id: &str, event: AuditEvent) -> Result<(), CommandError>`. Convierte `event.to_detail()` (sin PHI) y delega en `record_audit()` |
+| `fetch_professional` | `(conn, data_key, user_id: &str) -> Result<ProfessionalDto, CommandError>`. Proyección acotada equivalente a `load_profile` (`full_name`, `profession`, `specialty`, `licenses`, `public_key_hex`) |
+| `audit` | `(conn, actor_user_id: &str, event: &AuditEvent) -> Result<(), CommandError>`. Usa `event.action()` + `to_detail()` (sin PHI) y `core::api::record_audit` (movido acá; re-exportado por `commands`) |
 | `wrap_with_datakey` / `unwrap_with_datakey` | `(data_key, bytes) -> Result<..., CommandError>` sobre `security::crypto` (se suma cuando el primer módulo lo pida) |
 
 **Fuera del primer corte**: `wrap_for_user` / `unwrap_for_user` (solo
@@ -128,19 +130,17 @@ con `ProfessionalProfile` y `ExportProfessional`.
   - `entity_exists` (existente, inexistente y scoping paciente).
   - `fetch_professional` con múltiples matrículas y profesión.
   - `audit` anti-PHI en todas las variantes de `AuditEvent`.
-- Los 147 tests actuales de Rust y los 38 commands quedan intactos.
-- Al implementar, actualizar el baseline en `AGENTS.md` y `README.md`, y
-  verificar `cargo clippy --all-targets` (máximo 3 warnings). No correr
-  `cargo fmt`.
+- Los 147 tests previos de Rust y los 38 commands quedan intactos.
+- Baseline actualizado a **161 tests** en `AGENTS.md` y `README.md`;
+  `cargo clippy --all-targets` sigue en **3 warnings**. No correr `cargo fmt`.
 
 ## 7. Primer slice
 
-1. Crear `src-tauri/src/core/` (`mod.rs`, `dto.rs`, `api.rs`) sin tocar
-   `commands/`.
-2. Implementar `fetch_filiation`, `entity_exists`, `fetch_professional` y
-   `audit` + sus tests en memoria.
-3. Sumar `wrap_with_datakey` / `unwrap_with_datakey` y `PluginHost` en el
-   siguiente corte.
+1. ✅ Crear `src-tauri/src/core/` (`mod.rs`, `dto.rs`, `api.rs`).
+2. ✅ Implementar `fetch_filiation`, `entity_exists`, `fetch_professional` y
+   `audit` + 14 tests en memoria.
+3. ⬜ Sumar `wrap_with_datakey` / `unwrap_with_datakey` y el `PluginHost`
+   (`module_execute`) en el siguiente corte.
 
 **Decisión tomada** (`docs/module-contract.md` §14): **monorepo público** —
 `core/` y los crates de módulo viven en el mismo repo (ya público). El paywall

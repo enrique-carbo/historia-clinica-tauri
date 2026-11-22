@@ -19,6 +19,12 @@ describe("formatError", () => {
     );
   });
 
+  it("traduce el acceso denegado a una ficha ajena", () => {
+    expect(formatError({ code: "ERR_ENTITY_ACCESS_DENIED" })).toBe(
+      "No tenés acceso a esta ficha.",
+    );
+  });
+
   it("interpola los parámetros del backend", () => {
     expect(
       formatError({ code: "ERR_PASSWORD_TOO_SHORT", params: { min: "10" } }),
