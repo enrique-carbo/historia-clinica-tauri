@@ -1,12 +1,9 @@
 # 🧩 Módulo: Solicitud de Estudios Complementarios
 
-### v1 — 2026-11-21 | Implementado 2026-11-22 (backend + UI/impresión)
+### v1 — 2026-11-21 | Modelo v2: checklist + diagnóstico + notas (2026-11-22)
 
-> **Estado**: backend operativo (`src-tauri/src/modules/solicitudes/`) y UI
-> (`src/components/SolicitudesPanel.tsx`): templates por profesional,
-> alta/listado/consulta de solicitudes, render Markdown + HTML imprimible,
-> vista previa, imprimir/guardar PDF con el diálogo del sistema y descarga
-> `.md`/`.html`; `navigator.share` como fallback mobile.
+> **Estado**: backend (`src-tauri/src/modules/solicitudes/`) y UI
+> (`src/components/SolicitudesPanel.tsx`) operativos.
 >
 > **Ruta 1**: se compila como módulo interno del crate `fichio-care` con la
 > feature `module-solicitudes` (default on). `cargo build --no-default-features`
@@ -18,18 +15,28 @@
 
 ## 1. Alcance
 
-Generar solicitudes de estudios complementarios (radiología, laboratorio,
-cultivos, etc.) con templates creados por cada profesional, e imprimir o
-descargar el documento. El resultado **no** lo registra el módulo: se anota en
-la nota SOAP que el profesional escribe en el Core.
+Un **template** es un catálogo de estudios: un título + una lista ordenada
+de estudios que el profesional pide seguido.
+
+| Template | Estudios (ítems) |
+|---|---|
+| Laboratorio general | Hemograma completo, Glucemia, Colesterol total, Hepatograma, Orina completa… |
+| Radiografía tórax | Radiografía de tórax frente y perfil |
+| Micológico de uñas | Examen directo, Cultivo micológico de uñas de pies |
+| Urocultivo | Recuento de colonias, Identificación de germen, Antibiograma |
+
+Al emitir una **solicitud**, el profesional:
+
+1. elige un template (o completa a mano),
+2. **tilda los estudios** que pide (checklist),
+3. completa opcionalmente **diagnóstico/indicación** y **notas**.
 
 | En alcance (v1) | Fuera de alcance |
 |---|---|
-| Templates por profesional con campos dinámicos | Reimpresión: no existe; si hace falta se da de alta una solicitud nueva |
-| Solicitudes completas a mano o desde un template propio | Reconstruir documentos antiguos a partir del template |
-| Solicitudes con valores cifrados y estado | Resultados, informes o archivos clínicos en la DB del módulo |
+| Templates por profesional (título + checklist de estudios) | Reimpresión: no existe; si hace falta se da de alta una solicitud nueva |
+| Checklist, diagnóstico/indicación y notas por solicitud | Resultados, informes o archivos clínicos en la DB del módulo |
 | Filiación y profesional desde `ModuleContext` | Copiar esos datos a la DB del módulo |
-| Render del documento (Markdown + HTML imprimible; guardar PDF vía diálogo del sistema) | Firma Ed25519 y auditoría de emisión (decisión pendiente) |
+| Render Markdown + HTML imprimible (guardar PDF vía diálogo del sistema) | Firma Ed25519 y auditoría de emisión (decisión pendiente) |
 | DB propia `fichio-solicitudes.db` | Integración con PACS/laboratorio (`ctx.http_fetch`, post-v1) |
 
 ## 2. Qué vive dónde
@@ -46,73 +53,80 @@ la nota SOAP que el profesional escribe en el Core.
 ## 3. Modelo de datos
 
 ```sql
+-- Catálogo/config del profesional: sin datos de paciente.
 CREATE TABLE templates (
     id            TEXT PRIMARY KEY,
-    owner_user_id TEXT NOT NULL,        -- actor de la sesión; sin FK (otra DB)
-    name          TEXT NOT NULL,        -- "Laboratorio", "Rx tórax", ...
-    fields_json   TEXT NOT NULL,        -- shape igual a config/entry_templates/*.json
+    owner_user_id TEXT NOT NULL,   -- actor de la sesión; sin FK (otra DB)
+    name          TEXT NOT NULL,   -- "Laboratorio general"
+    items_json    TEXT NOT NULL,   -- ["Hemograma completo", "Glucemia", ...] en orden
     created_at    TEXT NOT NULL,
     updated_at    TEXT NOT NULL
 );
 
+-- Orden emitida: snapshot de los ítems tildados + diagnóstico + notas.
 CREATE TABLE solicitudes (
     id                 TEXT PRIMARY KEY,
     entity_id          INTEGER NOT NULL,  -- referencia blanda al Core
     created_by_user_id TEXT NOT NULL,     -- actor de la sesión
-    study_name         TEXT NOT NULL,     -- copiado del template o escrito a mano
+    study_name         TEXT NOT NULL,     -- snapshot del título del template
     template_id        TEXT,              -- procedencia opcional, sin FK
-    values_enc         BLOB NOT NULL,     -- nonce‖ciphertext (DataKey), JSON de valores
+    items_enc          BLOB NOT NULL,     -- nonce‖ciphertext (DataKey), JSON ["..."]
+    diagnostico_enc    BLOB,              -- texto cifrado (PHI), opcional
+    notas_enc          BLOB,              -- texto cifrado (PHI), opcional
     created_at         TEXT NOT NULL,
     status             TEXT NOT NULL DEFAULT 'issued'
         CHECK (status IN ('draft', 'issued'))
 );
 ```
 
-**Regla de oro**: la solicitud es **autocontenida**. Guarda el nombre del
-estudio y los valores (cifrados con la DataKey vía `ctx.wrap_with_datakey`).
-El template es solo un atajo para completarla. Editar o borrar un template
-después no afecta a las solicitudes existentes, así que no necesitan versión
-ni snapshot. Tampoco hay reimpresión: si se necesita el documento, se da de
-alta una solicitud nueva (copiando los datos de la anterior si hace falta).
-`template_id` es solo metadata de procedencia, sin FK justamente para que
-borrar un template no rompa el histórico.
+**Regla de oro**: la solicitud es **autocontenida**. Guarda los ítems
+tildados + diagnóstico + notas (cifrados con la DataKey). El template es solo
+un atajo para completarla. Editar o borrar un template después no afecta a
+las solicitudes existentes. Tampoco hay reimpresión: si se necesita el
+documento, se da de alta una solicitud nueva. `template_id` es solo metadata
+de procedencia, sin FK.
+
+**Schema del módulo**: `PRAGMA user_version` propio. La v2 (checklist)
+reemplaza a la v1 pre-release (campos tipados): `migrate()` resetea
+`templates`/`solicitudes` al detectar `user_version < 2`. En dev también se
+puede borrar `fichio-solicitudes.db` con la app cerrada.
 
 No se guarda filiación ni datos del profesional: se piden al Core al
 renderizar.
 
 ## 4. Acciones (`module_execute`)
 
-| `action` | Efecto | Estado |
+| `action` | Payload | Efecto |
 |---|---|---|
-| `template.create` | Alta (dueño = actor de la sesión); valida `name` + `fields` | ✅ |
-| `template.update` | Solo del dueño; valida la nueva definición | ✅ |
-| `template.delete` | Solo del dueño; no toca solicitudes | ✅ |
-| `template.list` | Solo los templates del actor | ✅ |
-| `solicitud.create` | Valida `entity_id` (vía Core), template y required; cifra valores; audita `SolicitudIssued` | ✅ |
-| `solicitud.list` | Metadatos del actor, filtrable por `entity_id` (sin valores) | ✅ |
-| `solicitud.get` | Metadatos + valores descifrados | ✅ |
-| `solicitud.render` | Markdown + HTML imprimible con datos del Core + template | ✅ |
+| `template.create` | `{ name, items: string[] }` | Alta (dueño = actor); normaliza/deduplica ítems |
+| `template.update` | `{ id, name, items }` | Solo del dueño |
+| `template.delete` | `{ id }` | Solo del dueño; no toca solicitudes |
+| `template.list` | — | Templates del actor, con `items` |
+| `solicitud.create` | `{ template_id?, study_name?, items: string[], diagnostico?, notas? }` | Valida entidad, exige ≥1 ítem; si hay template, cada ítem debe pertenecer; cifra y audita |
+| `solicitud.list` | `{ entity_id? }` | Metadatos del actor (sin contenido clínico) |
+| `solicitud.get` | `{ id }` | Metadatos + `items` + `diagnostico` + `notas` descifrados |
+| `solicitud.render` | `{ id }` | `{ markdown, html }` con encabezado + diagnóstico + checklist + notas |
 
-La forma de `fields` es la misma de `config/entry_templates/*.json`:
-`{"name","label","type" (text/textarea/select/date),"required","options"}`.
-
-No hay acción de resultado: la SOAP es la fuente de verdad clínica. Marcar una
-solicitud como completada con un `entry_id` queda para post-v1 y requiere
-extender `ModuleContext` con `fetch_entry_metadata` (aditivo, `default →
-Err(Unsupported)`, §4).
+- `items` se normaliza: trim, se descartan vacíos y se deduplica preservando
+  el orden.
+- Sin template, `study_name` + ítems libres (lista manual).
+- No hay acción de resultado: la SOAP es la fuente de verdad clínica. Marcar
+  una solicitud como completada con un `entry_id` queda para post-v1.
 
 ## 5. Seguridad y PHI
 
-- `values_enc` puede llevar indicación o sospecha diagnóstica → PHI cifrada con
-  la DataKey (`ctx.wrap_with_datakey` / `unwrap_with_datakey`). Los templates
-  no contienen datos de paciente y quedan en claro.
+- `items_enc`, `diagnostico_enc` y `notas_enc` contienen datos clínicos
+  (PHI): se cifran con la DataKey (`ctx.wrap_with_datakey` /
+  `unwrap_with_datakey`). Los templates no contienen datos de paciente y
+  quedan en claro.
 - `AuditEvent` es enum cerrado y sin texto libre (§4): `SolicitudIssued` lleva
-  `sha256` del JSON de valores (nunca el contenido) y `SolicitudTemplateSaved`
-  solo el id.
+  `sha256` del material `{ items, diagnostico, notas }` (nunca el contenido) y
+  `SolicitudTemplateSaved` solo el id.
 - Actor, rol y `entity_id` salen de `require_session()`; el `entity_id` del
   payload es referencia blanda y `ctx.entity_exists` aplica el scoping.
 - Render del documento en Rust puro (sin I/O), como `export/render.rs`. El
-  guardado/share respetará mobile: sharesheet donde `revealItemInDir` no aplica.
+  guardado/share respeta mobile: `navigator.share` como fallback del diálogo
+  de impresión.
 
 ## 6. Pendientes (no bloquean v1)
 

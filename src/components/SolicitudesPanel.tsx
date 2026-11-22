@@ -3,6 +3,9 @@
 // Se monta dentro de la ficha del paciente. Si el módulo no está compilado,
 // activo o el rol no tiene acceso, `is_module_available` devuelve false y no
 // se renderiza nada. Toda la comunicación pasa por `module_execute`.
+//
+// Modelo v2: template = título + lista de estudios (checklist); solicitud =
+// ítems tildados + diagnóstico + notas.
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { formatError } from "../utils/errors";
@@ -16,20 +19,10 @@ import { Textarea } from "./ui/Textarea";
 
 const MODULE_ID = "solicitudes";
 
-type FieldType = "text" | "textarea" | "select" | "date";
-
-interface TemplateField {
-  name: string;
-  label: string;
-  type: FieldType;
-  required?: boolean;
-  options?: string[];
-}
-
 interface TemplateRecord {
   id: string;
   name: string;
-  fields: TemplateField[];
+  items: string[];
   created_at: string;
   updated_at: string;
 }
@@ -267,8 +260,10 @@ function SolicitudForm({
 }: SolicitudFormProps) {
   const [templateId, setTemplateId] = useState("");
   const [studyName, setStudyName] = useState("");
-  const [values, setValues] = useState<Record<string, string>>({});
-  const [manualRows, setManualRows] = useState([{ key: "", value: "" }]);
+  const [selectedItems, setSelectedItems] = useState<string[]>([]);
+  const [manualItems, setManualItems] = useState<string[]>([""]);
+  const [diagnostico, setDiagnostico] = useState("");
+  const [notas, setNotas] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
   const selectedTemplate = useMemo(
@@ -277,24 +272,34 @@ function SolicitudForm({
   );
 
   useEffect(() => {
-    setValues({});
+    setSelectedItems([]);
     setStudyName(selectedTemplate?.name ?? "");
   }, [selectedTemplate]);
 
-  const setValue = (key: string, value: string) =>
-    setValues((current) => ({ ...current, [key]: value }));
+  const toggleItem = (item: string) => {
+    setSelectedItems((current) =>
+      current.includes(item)
+        ? current.filter((selected) => selected !== item)
+        : [...current, item],
+    );
+  };
 
   const submit = async () => {
-    const manualValues = Object.fromEntries(
-      manualRows
-        .map((row) => [row.key.trim(), row.value] as const)
-        .filter(([key]) => key.length > 0),
-    );
+    const items = selectedTemplate
+      ? selectedItems
+      : manualItems.map((item) => item.trim()).filter(Boolean);
+
+    if (items.length === 0) {
+      onError("Seleccioná o agregá al menos un estudio.");
+      return;
+    }
 
     const payload = {
       template_id: templateId || null,
       study_name: templateId ? null : studyName.trim(),
-      values: selectedTemplate ? values : manualValues,
+      items,
+      diagnostico: diagnostico.trim(),
+      notas: notas.trim(),
     };
 
     setIsSaving(true);
@@ -328,7 +333,7 @@ function SolicitudForm({
           onChange={(event) => setTemplateId(event.target.value)}
           className="w-full bg-field text-text-primary border border-border rounded px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-focus"
         >
-          <option value="">Sin template (completar a mano)</option>
+          <option value="">Sin template (elegir estudios a mano)</option>
           {templates.map((template) => (
             <option key={template.id} value={template.id}>
               {template.name}
@@ -343,78 +348,111 @@ function SolicitudForm({
       </div>
 
       {selectedTemplate ? (
-        <div className="space-y-3">
-          {selectedTemplate.fields.map((field) => (
-            <FieldInput
-              key={field.name}
-              field={field}
-              value={values[field.name] ?? ""}
-              onChange={(value) => setValue(field.name, value)}
-            />
-          ))}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-semibold text-text-secondary">
+              Estudios del template
+            </span>
+            <div className="flex gap-1">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setSelectedItems(selectedTemplate.items)}
+              >
+                Todos
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setSelectedItems([])}>
+                Ninguno
+              </Button>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+            {selectedTemplate.items.map((item) => (
+              <label
+                key={item}
+                className="flex items-center gap-2 rounded border border-border bg-surface px-2.5 py-1.5 text-sm text-text-primary cursor-pointer hover:bg-surface-raised/50"
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedItems.includes(item)}
+                  onChange={() => toggleItem(item)}
+                />
+                <span className="truncate">{item}</span>
+              </label>
+            ))}
+          </div>
+          {selectedTemplate.items.length === 0 && (
+            <p className="text-[11px] text-text-muted">
+              El template no tiene estudios cargados.
+            </p>
+          )}
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-2">
           <Input
-            label="Estudio"
+            label="Título de la solicitud"
             value={studyName}
             onChange={(event) => setStudyName(event.target.value)}
             placeholder="Ej. Cultivo de orina"
           />
-          <div className="space-y-2">
-            {manualRows.map((row, index) => (
-              <div key={index} className="grid grid-cols-1 sm:grid-cols-[1fr_2fr_auto] gap-2 items-end">
+          <span className="block text-xs font-semibold text-text-secondary">
+            Estudios
+          </span>
+          {manualItems.map((item, index) => (
+            <div key={index} className="flex items-end gap-2">
+              <div className="flex-1">
                 <Input
-                  label={index === 0 ? "Campo" : undefined}
-                  value={row.key}
+                  aria-label={`Estudio ${index + 1}`}
+                  value={item}
                   onChange={(event) =>
-                    setManualRows((rows) =>
-                      rows.map((item, i) =>
-                        i === index ? { ...item, key: event.target.value } : item,
+                    setManualItems((current) =>
+                      current.map((value, i) =>
+                        i === index ? event.target.value : value,
                       ),
                     )
                   }
-                  placeholder="material"
+                  placeholder="Ej. Hemograma completo"
                 />
-                <Input
-                  label={index === 0 ? "Valor" : undefined}
-                  value={row.value}
-                  onChange={(event) =>
-                    setManualRows((rows) =>
-                      rows.map((item, i) =>
-                        i === index ? { ...item, value: event.target.value } : item,
-                      ),
-                    )
-                  }
-                  placeholder="orina"
-                />
-                <Button
-                  size="sm"
-                  variant="ghost-danger"
-                  onClick={() =>
-                    setManualRows((rows) =>
-                      rows.length === 1
-                        ? [{ key: "", value: "" }]
-                        : rows.filter((_, i) => i !== index),
-                    )
-                  }
-                >
-                  Quitar
-                </Button>
               </div>
-            ))}
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() =>
-                setManualRows((rows) => [...rows, { key: "", value: "" }])
-              }
-            >
-              Agregar campo
-            </Button>
-          </div>
+              <Button
+                size="sm"
+                variant="ghost-danger"
+                onClick={() =>
+                  setManualItems((current) =>
+                    current.length === 1
+                      ? [""]
+                      : current.filter((_, i) => i !== index),
+                  )
+                }
+              >
+                Quitar
+              </Button>
+            </div>
+          ))}
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => setManualItems((current) => [...current, ""])}
+          >
+            Agregar estudio
+          </Button>
         </div>
       )}
+
+      <Textarea
+        label="Diagnóstico / indicación"
+        value={diagnostico}
+        rows={2}
+        onChange={(event) => setDiagnostico(event.target.value)}
+        placeholder="Motivo clínico de la solicitud"
+      />
+      <Textarea
+        label="Notas"
+        value={notas}
+        rows={2}
+        onChange={(event) => setNotas(event.target.value)}
+        placeholder="Indicaciones adicionales (ayuno, preparación, etc.)"
+      />
 
       <div className="flex justify-end gap-2 pt-1">
         <Button size="sm" variant="ghost" onClick={onCancel}>
@@ -428,84 +466,9 @@ function SolicitudForm({
   );
 }
 
-function FieldInput({
-  field,
-  value,
-  onChange,
-}: {
-  field: TemplateField;
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  const label = `${field.label}${field.required ? " *" : ""}`;
-
-  if (field.type === "textarea") {
-    return (
-      <Textarea
-        label={label}
-        value={value}
-        rows={3}
-        onChange={(event) => onChange(event.target.value)}
-      />
-    );
-  }
-
-  if (field.type === "select") {
-    const selectId = `solicitud-field-${field.name}`;
-    return (
-      <div>
-        <label
-          htmlFor={selectId}
-          className="block text-xs text-text-muted mb-1 font-semibold"
-        >
-          {label}
-        </label>
-        <select
-          id={selectId}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          className="w-full bg-field text-text-primary border border-border rounded px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-focus"
-        >
-          <option value="">Seleccionar...</option>
-          {(field.options ?? []).map((option) => (
-            <option key={option} value={option}>
-              {option}
-            </option>
-          ))}
-        </select>
-      </div>
-    );
-  }
-
-  return (
-    <Input
-      label={label}
-      type={field.type === "date" ? "date" : "text"}
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-    />
-  );
-}
-
 // =======================================================================
 // TEMPLATES
 // =======================================================================
-
-interface EditableField {
-  label: string;
-  type: FieldType;
-  required: boolean;
-  options: string;
-}
-
-function editableFrom(field: TemplateField): EditableField {
-  return {
-    label: field.label,
-    type: field.type,
-    required: Boolean(field.required),
-    options: (field.options ?? []).join(", "),
-  };
-}
 
 interface TemplatesDialogProps {
   templates: TemplateRecord[];
@@ -522,25 +485,25 @@ function TemplatesDialog({
 }: TemplatesDialogProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState("");
-  const [fields, setFields] = useState<EditableField[]>([]);
+  const [items, setItems] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
 
   const startCreate = () => {
     setEditingId(null);
     setName("");
-    setFields([{ label: "", type: "text", required: false, options: "" }]);
+    setItems([""]);
   };
 
   const startEdit = (template: TemplateRecord) => {
     setEditingId(template.id);
     setName(template.name);
-    setFields(template.fields.map(editableFrom));
+    setItems(template.items.length > 0 ? template.items : [""]);
   };
 
   const reset = () => {
     setEditingId(null);
     setName("");
-    setFields([]);
+    setItems([]);
   };
 
   const save = async () => {
@@ -548,33 +511,14 @@ function TemplatesDialog({
       onError("El template necesita un nombre.");
       return;
     }
-    if (fields.length === 0) {
-      onError("El template necesita al menos un campo.");
-      return;
-    }
 
-    const payloadFields = fields.map((field) => ({
-      name: slugify(field.label),
-      label: field.label.trim(),
-      type: field.type,
-      required: field.required,
-      options:
-        field.type === "select"
-          ? field.options.split(",").map((option) => option.trim()).filter(Boolean)
-          : [],
-    }));
-
-    if (payloadFields.some((field) => !field.name || !field.label)) {
-      onError("Cada campo necesita una etiqueta.");
+    const cleanItems = items.map((item) => item.trim()).filter(Boolean);
+    if (cleanItems.length === 0) {
+      onError("Agregá al menos un estudio al template.");
       return;
     }
-    if (payloadFields.some((field) => field.type === "select" && field.options.length === 0)) {
-      onError("Un campo de tipo selección necesita al menos una opción.");
-      return;
-    }
-    const names = payloadFields.map((field) => field.name);
-    if (new Set(names).size !== names.length) {
-      onError("Hay etiquetas repetidas: cada campo debe ser distinto.");
+    if (new Set(cleanItems).size !== cleanItems.length) {
+      onError("Hay estudios repetidos en el template.");
       return;
     }
 
@@ -584,12 +528,12 @@ function TemplatesDialog({
         await moduleExecute(MODULE_ID, "template.update", {
           id: editingId,
           name: name.trim(),
-          fields: payloadFields,
+          items: cleanItems,
         });
       } else {
         await moduleExecute(MODULE_ID, "template.create", {
           name: name.trim(),
-          fields: payloadFields,
+          items: cleanItems,
         });
       }
       reset();
@@ -611,7 +555,7 @@ function TemplatesDialog({
     }
   };
 
-  const isEditing = fields.length > 0;
+  const isEditing = items.length > 0;
 
   return (
     <Dialog title="Mis templates de estudios" onClose={onClose}>
@@ -621,111 +565,50 @@ function TemplatesDialog({
             label="Nombre del template"
             value={name}
             onChange={(event) => setName(event.target.value)}
-            placeholder="Ej. Laboratorio"
+            placeholder="Ej. Laboratorio general"
           />
 
           <div className="space-y-2">
-            {fields.map((field, index) => (
-              <div key={index} className="rounded-lg border border-border p-3 space-y-2">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <span className="block text-xs font-semibold text-text-secondary">
+              Estudios
+            </span>
+            {items.map((item, index) => (
+              <div key={index} className="flex items-end gap-2">
+                <div className="flex-1">
                   <Input
-                    label="Etiqueta"
-                    value={field.label}
+                    aria-label={`Estudio ${index + 1}`}
+                    value={item}
                     onChange={(event) =>
-                      setFields((current) =>
-                        current.map((item, i) =>
-                          i === index ? { ...item, label: event.target.value } : item,
+                      setItems((current) =>
+                        current.map((value, i) =>
+                          i === index ? event.target.value : value,
                         ),
                       )
                     }
-                    placeholder="Ej. Indicación"
+                    placeholder="Ej. Hemograma completo"
                   />
-                  <div>
-                    <label
-                      htmlFor={`template-field-type-${index}`}
-                      className="block text-xs text-text-muted mb-1 font-semibold"
-                    >
-                      Tipo
-                    </label>
-                    <select
-                      id={`template-field-type-${index}`}
-                      value={field.type}
-                      onChange={(event) =>
-                        setFields((current) =>
-                          current.map((item, i) =>
-                            i === index
-                              ? { ...item, type: event.target.value as FieldType }
-                              : item,
-                          ),
-                        )
-                      }
-                      className="w-full bg-field text-text-primary border border-border rounded px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-focus"
-                    >
-                      <option value="text">Texto</option>
-                      <option value="textarea">Texto largo</option>
-                      <option value="select">Selección</option>
-                      <option value="date">Fecha</option>
-                    </select>
-                  </div>
                 </div>
-
-                {field.type === "select" && (
-                  <Input
-                    label="Opciones (separadas por coma)"
-                    value={field.options}
-                    onChange={(event) =>
-                      setFields((current) =>
-                        current.map((item, i) =>
-                          i === index ? { ...item, options: event.target.value } : item,
-                        ),
-                      )
-                    }
-                    placeholder="Rutina, Urgente"
-                  />
-                )}
-
-                <div className="flex items-center justify-between">
-                  <label className="flex items-center gap-2 text-xs text-text-secondary">
-                    <input
-                      type="checkbox"
-                      checked={field.required}
-                      onChange={(event) =>
-                        setFields((current) =>
-                          current.map((item, i) =>
-                            i === index
-                              ? { ...item, required: event.target.checked }
-                              : item,
-                          ),
-                        )
-                      }
-                    />
-                    Obligatorio
-                  </label>
-                  <Button
-                    size="sm"
-                    variant="ghost-danger"
-                    onClick={() =>
-                      setFields((current) =>
-                        current.filter((_, i) => i !== index),
-                      )
-                    }
-                  >
-                    Quitar
-                  </Button>
-                </div>
+                <Button
+                  size="sm"
+                  variant="ghost-danger"
+                  onClick={() =>
+                    setItems((current) =>
+                      current.length === 1
+                        ? [""]
+                        : current.filter((_, i) => i !== index),
+                    )
+                  }
+                >
+                  Quitar
+                </Button>
               </div>
             ))}
             <Button
               size="sm"
               variant="secondary"
-              onClick={() =>
-                setFields((current) => [
-                  ...current,
-                  { label: "", type: "text", required: false, options: "" },
-                ])
-              }
+              onClick={() => setItems((current) => [...current, ""])}
             >
-              Agregar campo
+              Agregar estudio
             </Button>
           </div>
 
@@ -743,7 +626,7 @@ function TemplatesDialog({
           {templates.length === 0 ? (
             <EmptyState
               title="Todavía no creaste templates"
-              hint="Un template define los campos de tus solicitudes"
+              hint="Un template es un título con la lista de estudios que pedís seguido"
             />
           ) : (
             <ul className="space-y-2">
@@ -757,8 +640,8 @@ function TemplatesDialog({
                       {template.name}
                     </div>
                     <div className="text-[11px] text-text-muted">
-                      {template.fields.length} campo
-                      {template.fields.length === 1 ? "" : "s"}
+                      {template.items.length} estudio
+                      {template.items.length === 1 ? "" : "s"}
                     </div>
                   </div>
                   <div className="flex gap-2 shrink-0">

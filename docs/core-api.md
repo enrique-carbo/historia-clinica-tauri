@@ -141,7 +141,7 @@ con `ProfessionalProfile` y `ExportProfessional`.
   - `fetch_professional` con múltiples matrículas y profesión.
   - `audit` anti-PHI en todas las variantes de `AuditEvent`.
 - Los 147 tests previos de Rust y los 38 commands quedan intactos.
-- Baseline actualizado a **195 tests** en `AGENTS.md` y `README.md`;
+- Baseline actualizado a **196 tests** en `AGENTS.md` y `README.md`;
   `cargo clippy --all-targets` sigue en **3 warnings**. No correr `cargo fmt`.
 
 ## 7. Cortes

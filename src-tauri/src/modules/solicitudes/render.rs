@@ -1,35 +1,33 @@
 //! Render puro de una solicitud (sin I/O, testeable).
 //!
-//! Devuelve Markdown (preview/descarga) y HTML (impresión / guardar como PDF
-//! desde el WebView). El PDF nativo queda para cuando haya una librería
-//! elegida; el documento y los datos no cambian.
+//! Documento: encabezado (paciente/profesional/fecha), diagnóstico/indicación,
+//! checklist de estudios tildados y notas. Markdown para preview/descarga y
+//! HTML para imprimir / guardar como PDF desde el WebView.
 
-use super::models::TemplateDefinition;
 use crate::core::dto::{FiliationDto, ProfessionalDto};
-use std::collections::BTreeMap;
 
 struct DocumentView {
     study_name: String,
     header: Vec<(String, String)>,
-    data: Vec<(String, String)>,
+    items: Vec<String>,
+    diagnostico: Option<String>,
+    notas: Option<String>,
 }
 
 fn one_line(value: &str) -> String {
     value.replace(['\r', '\n'], " ").trim().to_string()
 }
 
-fn humanize(key: &str) -> String {
-    key.split(['_', '-'])
-        .filter(|word| !word.is_empty())
-        .map(|word| {
-            let mut chars = word.chars();
-            match chars.next() {
-                Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
-                None => String::new(),
-            }
+/// RFC3339 de `created_at` → fecha/hora local legible (mismo formato que el
+/// resto de la app). Si no parsea, se muestra tal cual.
+fn format_timestamp(timestamp: &str) -> String {
+    chrono::DateTime::parse_from_rfc3339(timestamp)
+        .map(|date| {
+            date.with_timezone(&chrono::Local)
+                .format("%d/%m/%Y %H:%M")
+                .to_string()
         })
-        .collect::<Vec<_>>()
-        .join(" ")
+        .unwrap_or_else(|_| timestamp.to_string())
 }
 
 fn escape_html(value: &str) -> String {
@@ -45,12 +43,13 @@ fn build_view(
     filiation: &FiliationDto,
     professional: &ProfessionalDto,
     study_name: &str,
-    values: &BTreeMap<String, String>,
-    template: Option<&TemplateDefinition>,
+    items: &[String],
+    diagnostico: Option<&str>,
+    notas: Option<&str>,
     created_at: &str,
 ) -> DocumentView {
     let mut header = Vec::new();
-    header.push(("Fecha".to_string(), created_at.to_string()));
+    header.push(("Fecha".to_string(), format_timestamp(created_at)));
     header.push((
         "Profesional".to_string(),
         format!("{} ({})", professional.full_name, professional.profession),
@@ -77,48 +76,37 @@ fn build_view(
         header.push((field.label.clone(), field.value.clone()));
     }
 
-    let data: Vec<(String, String)> = match template {
-        Some(definition) => {
-            let mut ordered: Vec<(String, String)> = definition
-                .ordered_values(values)
-                .into_iter()
-                .map(|(label, value)| (label.to_string(), value.to_string()))
-                .collect();
-            // Regla de oro: si el template fue editado después de emitir la
-            // solicitud y algún campo guardado en `values` ya no figura en
-            // `definition.fields`, se conserva al final sin perder datos.
-            for (key, value) in values {
-                if !value.trim().is_empty()
-                    && !definition.fields.iter().any(|field| field.name == *key)
-                {
-                    ordered.push((humanize(key), value.clone()));
-                }
-            }
-            ordered
-        }
-        None => values
-            .iter()
-            .filter(|(_, value)| !value.trim().is_empty())
-            .map(|(key, value)| (humanize(key), value.clone()))
-            .collect(),
-    };
-
     DocumentView {
         study_name: study_name.to_string(),
         header,
-        data,
+        items: items.to_vec(),
+        diagnostico: diagnostico.map(normalize_optional),
+        notas: notas.map(normalize_optional),
     }
+}
+
+fn normalize_optional(value: &str) -> String {
+    value.trim().to_string()
 }
 
 pub fn render_solicitud(
     filiation: &FiliationDto,
     professional: &ProfessionalDto,
     study_name: &str,
-    values: &BTreeMap<String, String>,
-    template: Option<&TemplateDefinition>,
+    items: &[String],
+    diagnostico: Option<&str>,
+    notas: Option<&str>,
     created_at: &str,
 ) -> String {
-    let view = build_view(filiation, professional, study_name, values, template, created_at);
+    let view = build_view(
+        filiation,
+        professional,
+        study_name,
+        items,
+        diagnostico,
+        notas,
+        created_at,
+    );
 
     let mut out = String::new();
     out.push_str(&format!("# Solicitud de estudio: {}\n\n", view.study_name));
@@ -126,13 +114,24 @@ pub fn render_solicitud(
         out.push_str(&format!("- **{}:** {}\n", label, one_line(value)));
     }
 
-    out.push_str("\n## Datos del estudio\n\n");
-    if view.data.is_empty() {
-        out.push_str("- (sin datos)\n");
+    out.push_str("\n## Diagnóstico / indicación\n\n");
+    match view.diagnostico.as_deref().filter(|text| !text.is_empty()) {
+        Some(diagnostico) => out.push_str(&format!("{}\n", one_line(diagnostico))),
+        None => out.push_str("—\n"),
+    }
+
+    out.push_str("\n## Estudios solicitados\n\n");
+    if view.items.is_empty() {
+        out.push_str("- (sin estudios)\n");
     } else {
-        for (label, value) in &view.data {
-            out.push_str(&format!("- **{}:** {}\n", label, one_line(value)));
+        for item in &view.items {
+            out.push_str(&format!("- {}\n", one_line(item)));
         }
+    }
+
+    if let Some(notas) = view.notas.as_deref().filter(|text| !text.is_empty()) {
+        out.push_str("\n## Notas\n\n");
+        out.push_str(&format!("{}\n", one_line(notas)));
     }
 
     out
@@ -142,11 +141,20 @@ pub fn render_solicitud_html(
     filiation: &FiliationDto,
     professional: &ProfessionalDto,
     study_name: &str,
-    values: &BTreeMap<String, String>,
-    template: Option<&TemplateDefinition>,
+    items: &[String],
+    diagnostico: Option<&str>,
+    notas: Option<&str>,
     created_at: &str,
 ) -> String {
-    let view = build_view(filiation, professional, study_name, values, template, created_at);
+    let view = build_view(
+        filiation,
+        professional,
+        study_name,
+        items,
+        diagnostico,
+        notas,
+        created_at,
+    );
 
     let mut html = String::new();
     html.push_str("<!doctype html>\n<html lang=\"es\">\n<head>\n");
@@ -163,11 +171,11 @@ pub fn render_solicitud_html(
             h1 { font-size: 1.25rem; margin: 0 0 1rem; }
             h2 { font-size: 1rem; margin: 1.5rem 0 .5rem; padding-bottom: .25rem;
                  border-bottom: 1px solid #d4d4d8; }
-            dl { display: grid; grid-template-columns: max-content 1fr;
-                 gap: .3rem 1rem; margin: 0; }
-            dt { font-weight: 600; color: #52525b; }
-            dd { margin: 0; white-space: pre-wrap; }
+            p { margin: .25rem 0; }
+            strong { color: #52525b; }
+            ul { margin: 0; padding-left: 1.25rem; }
             .muted { color: #71717a; }
+            .block { white-space: pre-wrap; }
             @media print { body { margin: 1cm; } .no-print { display: none; } }
         </style>
         </head>
@@ -175,30 +183,47 @@ pub fn render_solicitud_html(
         "#,
     );
     html.push_str(&format!(
-        "<h1>Solicitud de estudio: {}</h1>\n<dl>\n",
+        "<h1>Solicitud de estudio: {}</h1>\n",
         escape_html(&view.study_name)
     ));
+    // `<p><strong>...</strong> valor</p>` en vez de `<dl>`: se lee bien aunque
+    // el CSS no aplique (impresión/visores de HTML simples).
     for (label, value) in &view.header {
         html.push_str(&format!(
-            "<dt>{}</dt><dd>{}</dd>\n",
+            "<p><strong>{}:</strong> {}</p>\n",
             escape_html(label),
             escape_html(&one_line(value))
         ));
     }
-    html.push_str("</dl>\n<h2>Datos del estudio</h2>\n");
-    if view.data.is_empty() {
-        html.push_str("<p class=\"muted\">(sin datos)</p>\n");
-    } else {
-        html.push_str("<dl>\n");
-        for (label, value) in &view.data {
-            html.push_str(&format!(
-                "<dt>{}</dt><dd>{}</dd>\n",
-                escape_html(label),
-                escape_html(&one_line(value))
-            ));
-        }
-        html.push_str("</dl>\n");
+
+    html.push_str("<h2>Diagnóstico / indicación</h2>\n");
+    match view.diagnostico.as_deref().filter(|text| !text.is_empty()) {
+        Some(diagnostico) => html.push_str(&format!(
+            "<p class=\"block\">{}</p>\n",
+            escape_html(&one_line(diagnostico))
+        )),
+        None => html.push_str("<p class=\"muted\">—</p>\n"),
     }
+
+    html.push_str("<h2>Estudios solicitados</h2>\n");
+    if view.items.is_empty() {
+        html.push_str("<p class=\"muted\">(sin estudios)</p>\n");
+    } else {
+        html.push_str("<ul>\n");
+        for item in &view.items {
+            html.push_str(&format!("<li>{}</li>\n", escape_html(&one_line(item))));
+        }
+        html.push_str("</ul>\n");
+    }
+
+    if let Some(notas) = view.notas.as_deref().filter(|text| !text.is_empty()) {
+        html.push_str("<h2>Notas</h2>\n");
+        html.push_str(&format!(
+            "<p class=\"block\">{}</p>\n",
+            escape_html(&one_line(notas))
+        ));
+    }
+
     html.push_str("</body>\n</html>\n");
     html
 }
@@ -231,95 +256,56 @@ mod tests {
         }
     }
 
-    fn template() -> TemplateDefinition {
-        TemplateDefinition {
-            fields: vec![
-                crate::modules::solicitudes::models::TemplateField {
-                    name: "estudio".to_string(),
-                    label: "Estudio".to_string(),
-                    field_type: "text".to_string(),
-                    required: true,
-                    options: Vec::new(),
-                },
-                crate::modules::solicitudes::models::TemplateField {
-                    name: "indicacion".to_string(),
-                    label: "Indicación".to_string(),
-                    field_type: "textarea".to_string(),
-                    required: false,
-                    options: Vec::new(),
-                },
-            ],
-        }
+    fn items() -> Vec<String> {
+        vec![
+            "Hemograma completo".to_string(),
+            "Glucemia".to_string(),
+        ]
     }
 
     #[test]
-    fn render_uses_template_labels_and_order() {
-        let template = template();
-        let mut values = BTreeMap::new();
-        values.insert("indicacion".to_string(), "Dolor torácico\npersistente".to_string());
-        values.insert("estudio".to_string(), "Rx tórax".to_string());
-
+    fn render_lists_items_diagnostico_and_notas() {
         let markdown = render_solicitud(
             &filiation(),
             &professional(),
-            "Rx tórax",
-            &values,
-            Some(&template),
+            "Laboratorio general",
+            &items(),
+            Some("Control anemia"),
+            Some("Paciente en ayunas"),
             "2026-11-22T10:00:00Z",
         );
 
-        assert!(markdown.contains("# Solicitud de estudio: Rx tórax"));
+        assert!(markdown.contains("# Solicitud de estudio: Laboratorio general"));
         assert!(markdown.contains("**Paciente:** Juan Pérez"));
         assert!(markdown.contains("**Matrículas:** MP-1 (Córdoba)"));
-        let estudio = markdown.find("**Estudio:**").expect("estudio");
-        let indicacion = markdown.find("**Indicación:**").expect("indicacion");
-        assert!(estudio < indicacion);
-        assert!(markdown.contains("Dolor torácico persistente"));
+        // La fecha se muestra local y legible, no en RFC3339 crudo.
+        assert!(markdown.contains("**Fecha:**"));
+        assert!(!markdown.contains("2026-11-22T10:00:00Z"));
+        assert!(markdown.contains("## Diagnóstico / indicación"));
+        assert!(markdown.contains("Control anemia"));
+        assert!(markdown.contains("## Estudios solicitados"));
+        let hemograma = markdown.find("- Hemograma completo").expect("hemograma");
+        let glucemia = markdown.find("- Glucemia").expect("glucemia");
+        assert!(hemograma < glucemia);
+        assert!(markdown.contains("## Notas"));
+        assert!(markdown.contains("Paciente en ayunas"));
     }
 
     #[test]
-    fn render_without_template_humanizes_keys() {
-        let mut values = BTreeMap::new();
-        values.insert("estudio_solicitado".to_string(), "Cultivo".to_string());
-
+    fn render_without_diagnostico_or_notas_uses_placeholders() {
         let markdown = render_solicitud(
             &filiation(),
             &professional(),
-            "Cultivo",
-            &values,
+            "Urocultivo",
+            &["Recuento de colonias".to_string()],
+            None,
             None,
             "2026-11-22T10:00:00Z",
         );
 
-        assert!(markdown.contains("**Estudio Solicitado:** Cultivo"));
-    }
-
-    #[test]
-    fn render_keeps_values_missing_from_edited_template() {
-        let template = TemplateDefinition {
-            fields: vec![crate::modules::solicitudes::models::TemplateField {
-                name: "estudio".to_string(),
-                label: "Estudio".to_string(),
-                field_type: "text".to_string(),
-                required: true,
-                options: Vec::new(),
-            }],
-        };
-        let mut values = BTreeMap::new();
-        values.insert("estudio".to_string(), "Rx tórax".to_string());
-        values.insert("indicacion".to_string(), "control".to_string());
-
-        let markdown = render_solicitud(
-            &filiation(),
-            &professional(),
-            "Rx tórax",
-            &values,
-            Some(&template),
-            "2026-11-22T10:00:00Z",
-        );
-        // El template ya no tiene el campo, así que el label se humaniza
-        // desde la clave (sin tilde); el valor no se pierde.
-        assert!(markdown.contains("**Indicacion:** control"));
+        assert!(markdown.contains("—"));
+        assert!(markdown.contains("- Recuento de colonias"));
+        assert!(!markdown.contains("## Notas"));
     }
 
     #[test]
@@ -342,7 +328,8 @@ mod tests {
             &fil,
             &professional(),
             "Cultivo",
-            &BTreeMap::new(),
+            &["Orina".to_string()],
+            None,
             None,
             "2026-11-22T10:00:00Z",
         );
@@ -354,14 +341,13 @@ mod tests {
     fn render_html_escapes_values_and_has_print_styles() {
         let mut fil = filiation();
         fil.full_name = "<b>Juan</b> & Cía".to_string();
-        let mut values = BTreeMap::new();
-        values.insert("detalle".to_string(), "a < b & c".to_string());
 
         let html = render_solicitud_html(
             &fil,
             &professional(),
             "Rx <tórax>",
-            &values,
+            &["a < b & c".to_string()],
+            Some("dx < urgente"),
             None,
             "2026-11-22T10:00:00Z",
         );
@@ -371,6 +357,10 @@ mod tests {
         assert!(html.contains("Rx &lt;tórax&gt;"));
         assert!(html.contains("&lt;b&gt;Juan&lt;/b&gt; &amp; Cía"));
         assert!(html.contains("a &lt; b &amp; c"));
+        assert!(html.contains("dx &lt; urgente"));
         assert!(!html.contains("<b>Juan</b>"));
+        // Fecha legible y separada de la etiqueta aun sin CSS.
+        assert!(html.contains("<strong>Fecha:</strong>"));
+        assert!(!html.contains("2026-11-22T10:00:00Z"));
     }
 }

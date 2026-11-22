@@ -25,7 +25,7 @@ describe("SolicitudesPanel", () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it("lista solicitudes, emite una nueva desde template y cierra el form si cambia entityId", async () => {
+  it("lista solicitudes, emite una nueva con checklist y cierra el form si cambia entityId", async () => {
     const user = userEvent.setup();
 
     invokeMock.mockImplementation((command: string, args?: unknown) => {
@@ -38,7 +38,7 @@ describe("SolicitudesPanel", () => {
               {
                 id: "sol-1",
                 entity_id: 1,
-                study_name: "Laboratorio",
+                study_name: "Laboratorio general",
                 template_id: "tpl-1",
                 status: "issued",
                 created_at: "2026-11-22T10:00:00Z",
@@ -51,22 +51,8 @@ describe("SolicitudesPanel", () => {
             payload: [
               {
                 id: "tpl-1",
-                name: "Rx tórax",
-                fields: [
-                  {
-                    name: "indicacion",
-                    label: "Indicación",
-                    type: "textarea",
-                    required: true,
-                  },
-                  {
-                    name: "prioridad",
-                    label: "Prioridad",
-                    type: "select",
-                    required: true,
-                    options: ["Rutina", "Urgente"],
-                  },
-                ],
+                name: "Laboratorio general",
+                items: ["Hemograma completo", "Glucemia"],
                 created_at: "2026-11-22T10:00:00Z",
                 updated_at: "2026-11-22T10:00:00Z",
               },
@@ -83,12 +69,17 @@ describe("SolicitudesPanel", () => {
     const { rerender } = render(<SolicitudesPanel entityId={1} />);
 
     expect(await screen.findByText("Solicitudes de estudios")).toBeInTheDocument();
-    expect(await screen.findByText("Laboratorio")).toBeInTheDocument();
+    expect(await screen.findByText("Laboratorio general")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Nueva solicitud" }));
     await user.selectOptions(screen.getByLabelText("Template"), "tpl-1");
-    await user.type(screen.getByLabelText("Indicación *"), "Control anual");
-    await user.selectOptions(screen.getByLabelText("Prioridad *"), "Rutina");
+    await user.click(
+      screen.getByRole("checkbox", { name: "Hemograma completo" }),
+    );
+    await user.type(
+      screen.getByLabelText("Diagnóstico / indicación"),
+      "Control anual",
+    );
     await user.click(screen.getByRole("button", { name: "Emitir solicitud" }));
 
     await waitFor(() => {
@@ -101,7 +92,9 @@ describe("SolicitudesPanel", () => {
           payload: {
             template_id: "tpl-1",
             study_name: null,
-            values: { indicacion: "Control anual", prioridad: "Rutina" },
+            items: ["Hemograma completo"],
+            diagnostico: "Control anual",
+            notas: "",
           },
         },
       });
