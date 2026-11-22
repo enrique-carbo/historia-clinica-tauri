@@ -117,6 +117,17 @@ impl ModuleContext for InProcessModuleContext<'_> {
         let data_key = get_data_key(&self.data_key_state)?;
         crate::core::api::unwrap_with_datakey(&data_key, ciphertext)
     }
+
+    async fn fingerprint_with_datakey(
+        &self,
+        domain: &str,
+        data: &[u8],
+    ) -> Result<String, CommandError> {
+        let data_key = get_data_key(&self.data_key_state)?;
+        Ok(crate::core::api::fingerprint_with_datakey(
+            &data_key, domain, data,
+        ))
+    }
 }
 
 /// Único entry point de los módulos. El actor sale de la sesión, nunca del
@@ -261,7 +272,7 @@ mod tests {
             ctx.audit(AuditEvent::SolicitudIssued {
                 subject_id: entity_id,
                 solicitud_id: "sol-e2e".to_string(),
-                sha256: "deadbeef".to_string(),
+                fingerprint: "hmac-sha256:deadbeef".to_string(),
             })
             .await?;
 

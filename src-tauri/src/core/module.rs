@@ -188,6 +188,15 @@ pub trait ModuleContext: Send + Sync {
         &self,
         ciphertext: &[u8],
     ) -> Result<Zeroizing<Vec<u8>>, CommandError>;
+
+    /// Fingerprint HMAC-SHA256 de datos clínicos para `audit_log` (texto
+    /// plano). La clave se deriva de la DataKey con un dominio propio; el
+    /// módulo nunca ve la clave. `data` debe ser una codificación canónica.
+    async fn fingerprint_with_datakey(
+        &self,
+        domain: &str,
+        data: &[u8],
+    ) -> Result<String, CommandError>;
 }
 
 /// Un módulo compilado. No hay métodos por acción: agregar una acción no
@@ -268,6 +277,14 @@ mod tests {
             ciphertext: &[u8],
         ) -> Result<Zeroizing<Vec<u8>>, CommandError> {
             Ok(Zeroizing::new(ciphertext.to_vec()))
+        }
+
+        async fn fingerprint_with_datakey(
+            &self,
+            domain: &str,
+            _data: &[u8],
+        ) -> Result<String, CommandError> {
+            Ok(format!("hmac-sha256:test-{}", domain))
         }
     }
 

@@ -108,15 +108,42 @@ pub fn decrypt_bytes(
 
 type HmacSha256 = Hmac<Sha256>;
 
-/// Clave de dominio del blind index: se deriva de la DataKey con un label
-/// fijo, separando este uso del HMAC del uso de la misma clave como clave
-/// AES-GCM. Se calcula al vuelo — no hay sal ni artefacto que persistir o
+/// Clave derivada de la DataKey con separación de dominio (`HMAC(label,
+/// DataKey)`). Se calcula al vuelo — no hay sal ni artefacto que persistir o
 /// sincronizar.
-fn blind_index_key(data_key: &[u8; AES_KEY_SIZE]) -> Zeroizing<[u8; AES_KEY_SIZE]> {
-    let mut mac = <HmacSha256 as HmacKeyInit>::new_from_slice(b"fichio/blind-index/v1")
+fn domain_key(data_key: &[u8; AES_KEY_SIZE], label: &[u8]) -> Zeroizing<[u8; AES_KEY_SIZE]> {
+    let mut mac = <HmacSha256 as HmacKeyInit>::new_from_slice(label)
         .expect("HMAC acepta claves de cualquier longitud");
     mac.update(data_key);
     Zeroizing::new(mac.finalize().into_bytes().into())
+}
+
+/// Clave de dominio del blind index: se deriva de la DataKey con un label
+/// fijo, separando este uso del HMAC del uso de la misma clave como clave
+/// AES-GCM.
+fn blind_index_key(data_key: &[u8; AES_KEY_SIZE]) -> Zeroizing<[u8; AES_KEY_SIZE]> {
+    domain_key(data_key, b"fichio/blind-index/v1")
+}
+
+/// Fingerprint HMAC-SHA256 para auditoría de datos clínicos.
+///
+/// `audit_log` es texto plano: un `SHA-256` determinista del contenido es un
+/// oráculo de confirmación (se puede probar "control anemia" y comparar).
+/// Con una clave derivada de la DataKey, solo quien la tiene puede calcularlo.
+/// El `domain` separa usos (ej. `solicitud.issued/v1`) y `data` debe venir en
+/// una codificación canónica (longitud-prefijo, no JSON genérico).
+pub fn audit_fingerprint(
+    data_key: &[u8; AES_KEY_SIZE],
+    domain: &str,
+    data: &[u8],
+) -> String {
+    let key = domain_key(data_key, b"fichio/audit-fingerprint/v1");
+    let mut mac = <HmacSha256 as HmacKeyInit>::new_from_slice(&*key)
+        .expect("HMAC acepta claves de cualquier longitud");
+    mac.update(domain.as_bytes());
+    mac.update(&[0x1f]);
+    mac.update(data);
+    format!("hmac-sha256:{}", hex::encode(mac.finalize().into_bytes()))
 }
 
 /// Genera el índice determinista de búsqueda sin revelar el dato:
@@ -361,6 +388,26 @@ mod tests {
         let mut hasher = Sha256::new();
         hasher.update(dni.as_bytes());
         assert_ne!(idx1, hex::encode(hasher.finalize()));
+    }
+
+    #[test]
+    fn test_audit_fingerprint_is_keyed_and_domain_separated() {
+        let data = b"control anemia";
+        let a = audit_fingerprint(&[1u8; 32], "solicitud.issued/v1", data);
+        let b = audit_fingerprint(&[2u8; 32], "solicitud.issued/v1", data);
+        let other_domain = audit_fingerprint(&[1u8; 32], "otro.dominio/v1", data);
+
+        // Misma clave + dominio = determinista; distinta clave o dominio = distinto.
+        assert_eq!(a, audit_fingerprint(&[1u8; 32], "solicitud.issued/v1", data));
+        assert_ne!(a, b);
+        assert_ne!(a, other_domain);
+
+        // No es un SHA-256 plano del contenido ni contiene el texto original.
+        let mut hasher = Sha256::new();
+        hasher.update(data);
+        assert!(!a.contains(&hex::encode(hasher.finalize())));
+        assert!(a.starts_with("hmac-sha256:"));
+        assert!(!a.contains("control anemia"));
     }
 
     #[test]

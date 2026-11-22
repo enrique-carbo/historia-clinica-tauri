@@ -447,6 +447,14 @@ mod tests {
         ) -> Result<Zeroizing<Vec<u8>>, CommandError> {
             Ok(Zeroizing::new(ciphertext.to_vec()))
         }
+
+        async fn fingerprint_with_datakey(
+            &self,
+            domain: &str,
+            _data: &[u8],
+        ) -> Result<String, CommandError> {
+            Ok(format!("hmac-sha256:test-{}", domain))
+        }
     }
 
     fn core_db() -> Connection {

@@ -153,6 +153,11 @@ pub trait ModuleContext: Send + Sync {
     async fn unwrap_with_datakey(&self, ciphertext: &[u8])
         -> Result<Zeroizing<Vec<u8>>, ApiError>;
 
+    /// Fingerprint HMAC-SHA256 para `audit_log` (texto plano): la clave se
+    /// deriva de la DataKey, el módulo nunca la ve. `data` debe ser canónica.
+    async fn fingerprint_with_datakey(&self, domain: &str, data: &[u8])
+        -> Result<String, ApiError>;
+
     /// Wrap/unwrap contra la master wrap de un usuario — thread keys
     /// (v1: solo targets `role: 'paciente'`). El módulo nunca ve claves:
     /// el Core gate-audita y envuelve.
@@ -201,7 +206,7 @@ pub struct ProfessionalDto {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum AuditEvent {
-    SolicitudIssued { subject_id: i64, solicitud_id: String, sha256: String },
+    SolicitudIssued { subject_id: i64, solicitud_id: String, fingerprint: String },
     SolicitudCompleted { subject_id: i64, solicitud_id: String },
     TeleconsultaMessageSent { entity_id: i64, conversation_id: String },
     TeleconsultaPaymentConfirmed { entity_id: i64, conversation_id: String, amount_cents: i64 },

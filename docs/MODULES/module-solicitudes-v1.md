@@ -87,9 +87,11 @@ documento, se da de alta una solicitud nueva. `template_id` es solo metadata
 de procedencia, sin FK.
 
 **Schema del módulo**: `PRAGMA user_version` propio. La v2 (checklist)
-reemplaza a la v1 pre-release (campos tipados): `migrate()` resetea
-`templates`/`solicitudes` al detectar `user_version < 2`. En dev también se
-puede borrar `fichio-solicitudes.db` con la app cerrada.
+reemplaza a la v1 pre-release (campos tipados): el reset está **acotado a
+v0/v1** (`if version < 2`) y se elimina al estabilizar la v2. Una DB en v2 no
+se toca (fast path sin DDL); las versiones futuras se migran de forma aditiva
+(`ALTER`/backfill, nunca `DROP`). En dev también se puede borrar
+`fichio-solicitudes.db` con la app cerrada.
 
 No se guarda filiación ni datos del profesional: se piden al Core al
 renderizar.
@@ -123,8 +125,11 @@ renderizar.
   `unwrap_with_datakey`). Los templates no contienen datos de paciente y
   quedan en claro.
 - `AuditEvent` es enum cerrado y sin texto libre (§4): `SolicitudIssued` lleva
-  `sha256` del material `{ items, diagnostico, notas }` (nunca el contenido) y
-  `SolicitudTemplateSaved` solo el id.
+  un `fingerprint` HMAC-SHA256 (clave derivada de la DataKey, dominio
+  `solicitud.issued/v1`) del contenido canónico + ids + título; **nunca** el
+  contenido ni un SHA-256 adivinable. `SolicitudTemplateSaved` solo el id.
+  `audit_log` es texto plano: el HMAC evita que se pueda confirmar
+  “control anemia” por diccionario sin la DataKey.
 - Actor, rol y `entity_id` salen de `require_session()`; el `entity_id` del
   payload es referencia blanda y `ctx.entity_exists` aplica el scoping.
 - Render del documento en Rust puro (sin I/O), como `export/render.rs`. El
@@ -135,6 +140,6 @@ renderizar.
 
 - **PDF nativo** (opcional): hoy se usa el diálogo de impresión del sistema
   («Guardar como PDF»); una librería PDF embebida queda como mejora.
-- **Firma/auditoría de emisión** del documento: copiar el patrón de
-  `export_emitted` o no.
+- **Firma del documento** (Ed25519): la auditoría de emisión ya está cubierta
+  por el `fingerprint` HMAC; falta decidir si el PDF/HTML se firma.
 - **Sync de fase 4**: outbox propia prevista desde el primer `migrate()` (§13).

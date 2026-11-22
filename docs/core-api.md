@@ -4,7 +4,8 @@
 
 > Capa de servicio en Rust puro (`src-tauri/src/core/`). Implementado:
 > `fetch_filiation`, `entity_exists`, `fetch_professional`, `audit`,
-> `wrap_with_datakey` / `unwrap_with_datakey`; el contrato
+> `wrap_with_datakey` / `unwrap_with_datakey`,
+> `fingerprint_with_datakey`; el contrato
 > `Module` / `ModuleContext`; y el `PluginHost` con `module_execute`,
 > `is_module_available`, `list_modules` y activación/desactivación
 > (`v002`: `modules` + `module_access`) y el módulo de solicitudes completo
@@ -66,6 +67,7 @@ no importa `tauri`.
 | `fetch_professional` | `(conn, data_key, user_id: &str) -> Result<ProfessionalDto, CommandError>`. Proyección acotada equivalente a `load_profile` (`full_name`, `profession`, `specialty`, `licenses`, `public_key_hex`) |
 | `audit` | `(conn, actor_user_id: &str, event: &AuditEvent) -> Result<(), CommandError>`. Usa `event.action()` + `to_detail()` (sin PHI) y `core::api::record_audit` (movido acá; re-exportado por `commands`) |
 | `wrap_with_datakey` / `unwrap_with_datakey` | `(data_key: &[u8; 32], bytes) -> Result<..., CommandError>` sobre `crypto::encrypt_bytes` / `decrypt_bytes` (formato `nonce‖ciphertext`; el plaintext vuelve en `Zeroizing`) |
+| `fingerprint_with_datakey` | `(data_key: &[u8; 32], domain: &str, data: &[u8]) -> String`. HMAC-SHA256 con clave derivada de la DataKey (`fichio/audit-fingerprint/v1`); se usa en `AuditEvent` para que `audit_log` (texto plano) no sea un oráculo de confirmación por diccionario |
 
 **Fuera del primer corte**: `wrap_for_user` / `unwrap_for_user` (solo
 teleconsulta) y `http_fetch` (allowlist, auditar host+path sin query — lo más
@@ -129,7 +131,7 @@ con `ProfessionalProfile` y `ExportProfessional`.
 | Scoping de `paciente` omitido en `fetch_filiation` | `fetch_filiation` recibe `&SessionUser` y valida `users.entity_id == Some(entity_id)` cuando `role == "paciente"`, devolviendo `AccessDenied` si no coincide |
 | Mutex sync dentro de `ModuleContext` async | Ningún `MutexGuard` cruza un `.await`: lock, llamada síncrona a `core::api::*`, drop del guard y recién después retorno async |
 | Segundo catálogo de errores | Reutilizar `CommandError` con códigos `ERR_*`; el frontend traduce con `formatError()` en `src/utils/errors.ts` |
-| PHI en `audit_log` | `AuditEvent` enum cerrado; `to_detail()` testeado con fixtures que contengan nombres propios y `".md"` |
+| PHI en `audit_log` | `AuditEvent` enum cerrado; `to_detail()` testeado con fixtures que contengan nombres propios y `".md"`. El contenido clínico se resume con `fingerprint_with_datakey` (HMAC con clave derivada de la DataKey), no con un `SHA-256` adivinable |
 
 ## 6. Testing y verificación
 
@@ -140,8 +142,8 @@ con `ProfessionalProfile` y `ExportProfessional`.
   - `entity_exists` (existente, inexistente y scoping paciente).
   - `fetch_professional` con múltiples matrículas y profesión.
   - `audit` anti-PHI en todas las variantes de `AuditEvent`.
-- Los 147 tests previos de Rust y los 38 commands quedan intactos.
-- Baseline actualizado a **196 tests** en `AGENTS.md` y `README.md`;
+- Los tests previos de Rust y los 38 commands quedan intactos.
+- Baseline actualizado a **202 tests** en `AGENTS.md` y `README.md`;
   `cargo clippy --all-targets` sigue en **3 warnings**. No correr `cargo fmt`.
 
 ## 7. Cortes

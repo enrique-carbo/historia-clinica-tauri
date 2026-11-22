@@ -266,6 +266,13 @@ pub fn unwrap_with_datakey(
     crypto::decrypt_bytes(ciphertext, data_key).map_err(CommandError::internal)
 }
 
+/// Fingerprint HMAC-SHA256 con clave derivada de la DataKey, para auditoría
+/// (`ModuleContext::fingerprint_with_datakey`). No es un hash plano: sin la
+/// DataKey no se puede confirmar contenido clínico por diccionario.
+pub fn fingerprint_with_datakey(data_key: &[u8; 32], domain: &str, data: &[u8]) -> String {
+    crypto::audit_fingerprint(data_key, domain, data)
+}
+
 /// Registra una acción sensible en `audit_log`.
 ///
 /// Movido desde `commands/admin_commands.rs` para que `core` no dependa de la
@@ -706,7 +713,7 @@ mod tests {
             &AuditEvent::SolicitudIssued {
                 subject_id: 7,
                 solicitud_id: "sol-1".to_string(),
-                sha256: "abc123".to_string(),
+                fingerprint: "hmac-sha256:abc123".to_string(),
             },
         )
         .expect("audit");
@@ -720,7 +727,7 @@ mod tests {
             .expect("fila de auditoría");
 
         assert_eq!(action, "solicitud_issued");
-        assert_eq!(detail, "subject_id=7 solicitud_id=sol-1 sha256=abc123");
+        assert_eq!(detail, "subject_id=7 solicitud_id=sol-1 fingerprint=hmac-sha256:abc123");
         assert!(!detail.contains("Pérez"), "detalle: {}", detail);
         assert!(!detail.contains(".md"), "detalle: {}", detail);
     }

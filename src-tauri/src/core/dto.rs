@@ -87,14 +87,15 @@ pub struct ProfessionalDto {
 }
 
 /// Eventos de auditoría de módulos: enum **cerrado** y sin texto libre.
-/// Cada variante solo lleva metadatos no-PHI (ids, hashes, montos). Es la
-/// garantía estructural contra PHI en `audit_log` (`module-contract.md` §4).
+/// Cada variante solo lleva metadatos no-PHI (ids, fingerprints, montos). Es
+/// la garantía estructural contra PHI en `audit_log` (`module-contract.md` §4).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AuditEvent {
     SolicitudIssued {
         subject_id: i64,
         solicitud_id: String,
-        sha256: String,
+        /// HMAC-SHA256 con clave derivada de la DataKey (`hmac-sha256:...`).
+        fingerprint: String,
     },
     SolicitudCompleted {
         subject_id: i64,
@@ -141,10 +142,10 @@ impl AuditEvent {
             Self::SolicitudIssued {
                 subject_id,
                 solicitud_id,
-                sha256,
+                fingerprint,
             } => format!(
-                "subject_id={} solicitud_id={} sha256={}",
-                subject_id, solicitud_id, sha256
+                "subject_id={} solicitud_id={} fingerprint={}",
+                subject_id, solicitud_id, fingerprint
             ),
             Self::SolicitudCompleted {
                 subject_id,
@@ -196,10 +197,10 @@ mod tests {
                 AuditEvent::SolicitudIssued {
                     subject_id: 7,
                     solicitud_id: "sol-1".to_string(),
-                    sha256: "abc123".to_string(),
+                    fingerprint: "hmac-sha256:abc123".to_string(),
                 },
                 "solicitud_issued",
-                "subject_id=7 solicitud_id=sol-1 sha256=abc123",
+                "subject_id=7 solicitud_id=sol-1 fingerprint=hmac-sha256:abc123",
             ),
             (
                 AuditEvent::SolicitudCompleted {
@@ -264,7 +265,7 @@ mod tests {
         let event = AuditEvent::SolicitudIssued {
             subject_id: 1,
             solicitud_id: "s".to_string(),
-            sha256: "h".to_string(),
+            fingerprint: "hmac-sha256:h".to_string(),
         };
         let json = serde_json::to_string(&event).unwrap();
         let back: AuditEvent = serde_json::from_str(&json).unwrap();

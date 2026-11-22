@@ -13,7 +13,7 @@ El Core de Rust utiliza librerías de nivel de producción (`aes-gcm`, `argon2`,
 | **Cifrado Simétrico** | `AES-GCM-256` | Blindar textos clínicos (entries), filiación (nombres) y el payload del perfil. | Cifrado Autenticado con datos asociados (AEAD). |
 | **Firma Digital** | `Ed25519` | No-repudio y validez legal de cada entry clínica. | Firma determinística (RFC 8032) sobre SHA-256 del payload de firma; verificación con la llave pública del autor. |
 | **Derivación de Claves (KDF) / Hashing** | `Argon2id` | Hasheo de contraseñas locales (Auth) y derivación de la Clave Maestra desde la contraseña del usuario. | Ganador de la Password Hashing Competition (PHC). |
-| **Índice Ciego (Blind Index)** | `SHA-256 + Salt` | Búsqueda y prevención de registros duplicados de forma anónima. | Hashing determinista e irreversible. |
+| **Índice Ciego (Blind Index)** | HMAC-SHA256 con clave derivada de la DataKey | Búsqueda y prevención de registros duplicados de forma anónima. | Hashing determinista; solo verificable con la DataKey. |
 
 ---
 
@@ -57,7 +57,7 @@ Para resolver esto sin romper el modelo Zero-Knowledge, el Core implementa un **
 
 1. El usuario ingresa el documento de identidad en la interfaz.
 2. El Core de Rust normaliza el texto (remueve espacios, guiones y lo transforma a minúsculas).
-3. Se deriva una clave de dominio de la DataKey: `HK = HMAC-SHA256(DataKey, "fichio/blind-index/v1")` (se calcula al vuelo; la DataKey no cambia con contraseñas ni rotaciones, así que los índices son estables).
+3. Se deriva una clave de dominio de la DataKey: `HK = HMAC-SHA256(key = "fichio/blind-index/v1", msg = DataKey)` (se calcula al vuelo; la DataKey no cambia con contraseñas ni rotaciones, así que los índices son estables).
 4. Se calcula `HMAC-SHA256(HK, DNI normalizado)` en hexadecimal.
 
 $$\text{Blind Index} = \text{HMAC-SHA256}(\text{HK}, \text{DNI Normalizado})$$
@@ -70,6 +70,22 @@ No hay sal persistida: `.installation_salt` fue **eliminado** (del disco, del re
 -- rebotará la query por duplicación, sin que el motor de base de datos
 -- sepa jamás qué DNI originó ese hash.
 ```
+
+### 3.1 Fingerprint de auditoría (mismo patrón, otro dominio)
+
+`audit_log` es texto plano. Para eventos de módulos que resumen contenido
+clínico (ej. una solicitud de estudios), guardar un `SHA-256` del contenido
+sería un **oráculo de confirmación**: sin la DataKey, se podría probar
+“control anemia” y comparar el hash. Se usa el mismo patrón del blind index
+con un dominio distinto:
+
+$$\text{Fingerprint} = \text{HMAC-SHA256}(\text{HK}_{audit}, \text{domain} \parallel \text{contenido canónico})$$
+
+con `HK_audit = HMAC-SHA256(key = "fichio/audit-fingerprint/v1", msg = DataKey)`. El
+contenido se serializa con longitud-prefijo (no JSON genérico) para que el
+mismo dato produzca siempre los mismos bytes. Sin la DataKey no se puede
+confirmar contenido por diccionario; con ella, el fingerprint sigue sirviendo
+para detectar tampering del blob cifrado.
 
 ---
 

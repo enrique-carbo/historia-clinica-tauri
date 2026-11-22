@@ -21,7 +21,6 @@ use models::{ensure_items_belong, normalize_optional_text};
 use render::{render_solicitud, render_solicitud_html};
 use rusqlite::Connection;
 use serde_json::{json, Value};
-use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 pub struct SolicitudesModule;
@@ -65,6 +64,19 @@ fn now() -> String {
     chrono::Utc::now().to_rfc3339()
 }
 
+/// Reset explícito de las versiones pre-release (v0/v1): esquema de campos
+/// tipados, incompatible con el checklist. Es el **único** caso destructivo y
+/// está acotado por versión; se elimina al estabilizar la v2.
+fn reset_pre_release_v0_v1(conn: &Connection) -> Result<(), ModuleError> {
+    conn.execute_batch("DROP TABLE IF EXISTS solicitudes; DROP TABLE IF EXISTS templates;")
+        .map_err(|e| ModuleError::Internal(e.to_string()))
+}
+
+fn apply_schema_v2(conn: &Connection) -> Result<(), ModuleError> {
+    conn.execute_batch(SCHEMA_V2)
+        .map_err(|e| ModuleError::Internal(e.to_string()))
+}
+
 fn require_str<'a>(payload: &'a Value, key: &str) -> Result<&'a str, ModuleError> {
     payload
         .get(key)
@@ -101,6 +113,43 @@ async fn decrypt_optional_text(
                 .map_err(|e| ModuleError::Internal(e.to_string()))
         }
     }
+}
+
+/// Codificación canónica del contenido auditado: longitud-prefijo por campo,
+/// sin depender de JSON ni del orden de claves. La usa el fingerprint HMAC
+/// (`ctx.fingerprint_with_datakey`) para que el mismo contenido produzca
+/// siempre los mismos bytes.
+fn canonical_solicitud(
+    solicitud_id: &str,
+    entity_id: i64,
+    study_name: &str,
+    items: &[String],
+    diagnostico: Option<&str>,
+    notas: Option<&str>,
+) -> Vec<u8> {
+    fn part(out: &mut Vec<u8>, bytes: &[u8]) {
+        out.extend_from_slice(&(bytes.len() as u64).to_be_bytes());
+        out.extend_from_slice(bytes);
+    }
+
+    let mut out = Vec::new();
+    part(&mut out, solicitud_id.as_bytes());
+    part(&mut out, &entity_id.to_be_bytes());
+    part(&mut out, study_name.as_bytes());
+    part(&mut out, &(items.len() as u64).to_be_bytes());
+    for item in items {
+        part(&mut out, item.as_bytes());
+    }
+    for optional in [diagnostico, notas] {
+        match optional {
+            Some(text) => {
+                out.push(1);
+                part(&mut out, text.as_bytes());
+            }
+            None => out.push(0),
+        }
+    }
+    out
 }
 
 async fn template_create(
@@ -257,15 +306,21 @@ async fn solicitud_create(
         None => None,
     };
 
-    let hash_material = serde_json::to_vec(&json!({
-        "items": items,
-        "diagnostico": diagnostico,
-        "notas": notas,
-    }))
-    .map_err(|e| ModuleError::Internal(e.to_string()))?;
-    let sha256 = hex::encode(Sha256::digest(&hash_material));
-
     let id = Uuid::new_v4().to_string();
+    let fingerprint = ctx
+        .fingerprint_with_datakey(
+            "solicitud.issued/v1",
+            &canonical_solicitud(
+                &id,
+                entity_id,
+                &study_name,
+                &items,
+                diagnostico.as_deref(),
+                notas.as_deref(),
+            ),
+        )
+        .await?;
+
     let created_at = now();
     store::insert_solicitud(
         db,
@@ -285,7 +340,7 @@ async fn solicitud_create(
     ctx.audit(AuditEvent::SolicitudIssued {
         subject_id: entity_id,
         solicitud_id: id.clone(),
-        sha256,
+        fingerprint,
     })
     .await?;
 
@@ -397,19 +452,24 @@ impl Module for SolicitudesModule {
         if version > SCHEMA_VERSION {
             return Err(ModuleError::SchemaTooNew);
         }
-
-        // v0/v1: modelo pre-release (campos tipados) incompatible con el
-        // checklist. En dev se puede borrar `fichio-solicitudes.db`; acá se
-        // resetea igual para que una DB de prueba vieja no rompa.
-        if version < SCHEMA_VERSION {
-            conn.execute_batch(
-                "DROP TABLE IF EXISTS solicitudes; DROP TABLE IF EXISTS templates;",
-            )
-            .map_err(|e| ModuleError::Internal(e.to_string()))?;
+        if version == SCHEMA_VERSION {
+            // Fast path: nunca se corre DDL sobre un schema al día (y menos
+            // un DROP). Si la DB está corrupta, que falle al usarla.
+            return Ok(());
         }
 
-        conn.execute_batch(SCHEMA_V2)
-            .map_err(|e| ModuleError::Internal(e.to_string()))?;
+        // Solo v0/v1 son incompatibles: el modelo pre-release de campos
+        // tipados no se puede convertir al checklist. El reset está acotado
+        // a esas versiones exactas; al agregar v3, los datos v2 se migran de
+        // forma aditiva (ALTER/backfill), nunca con un DROP.
+        if version < 2 {
+            reset_pre_release_v0_v1(conn)?;
+            apply_schema_v2(conn)?;
+        }
+
+        // Futuro:
+        // if version < 3 { apply_schema_v3(conn)?; }
+
         conn.execute_batch(&format!("PRAGMA user_version = {}", SCHEMA_VERSION))
             .map_err(|e| ModuleError::Internal(e.to_string()))?;
         Ok(())
@@ -528,6 +588,14 @@ mod tests {
             ciphertext: &[u8],
         ) -> Result<Zeroizing<Vec<u8>>, CommandError> {
             crypto::decrypt_bytes(ciphertext, &KEY).map_err(CommandError::internal)
+        }
+
+        async fn fingerprint_with_datakey(
+            &self,
+            domain: &str,
+            data: &[u8],
+        ) -> Result<String, CommandError> {
+            Ok(crypto::audit_fingerprint(&KEY, domain, data))
         }
     }
 
@@ -672,13 +740,18 @@ mod tests {
             );
         }
 
-        // Audit emitido (sin PHI).
-        assert!(ctx
-            .events
-            .lock()
-            .unwrap()
+        // Audit emitido (sin PHI): fingerprint HMAC, no un SHA-256 adivinable.
+        let events = ctx.events.lock().unwrap();
+        let fingerprint = events
             .iter()
-            .any(|event| matches!(event, AuditEvent::SolicitudIssued { .. })));
+            .find_map(|event| match event {
+                AuditEvent::SolicitudIssued { fingerprint, .. } => Some(fingerprint.clone()),
+                _ => None,
+            })
+            .expect("solicitud_issued");
+        assert!(fingerprint.starts_with("hmac-sha256:"));
+        assert!(!fingerprint.contains("Hemograma"));
+        assert!(!fingerprint.contains("control anemia"));
 
         // List devuelve solo metadatos y copia el nombre del template.
         let list = run(&db, &ctx, "solicitud.list", json!({}), Some(1)).unwrap();
@@ -840,6 +913,23 @@ mod tests {
     }
 
     #[test]
+    fn canonical_solicitud_is_unambiguous() {
+        let items_ab_c = vec!["ab".to_string(), "c".to_string()];
+        let items_a_bc = vec!["a".to_string(), "bc".to_string()];
+        assert_ne!(
+            canonical_solicitud("id", 1, "t", &items_ab_c, None, None),
+            canonical_solicitud("id", 1, "t", &items_a_bc, None, None),
+            "el largo-prefijo evita colisiones entre listas"
+        );
+
+        // Diagnóstico y notas ocupan posiciones distintas: no son intercambiables.
+        assert_ne!(
+            canonical_solicitud("id", 1, "t", &items_ab_c, Some("dx"), None),
+            canonical_solicitud("id", 1, "t", &items_ab_c, None, Some("dx")),
+        );
+    }
+
+    #[test]
     fn migrate_resets_legacy_v0_schema_and_sets_version() {
         let conn = Connection::open_in_memory().expect("in-memory");
         conn.execute_batch(
@@ -861,5 +951,76 @@ mod tests {
             )
             .unwrap();
         assert_eq!(columns, 1);
+    }
+
+    #[test]
+    fn migrate_v1_resets_only_the_incompatible_pre_release_schema() {
+        let conn = Connection::open_in_memory().expect("in-memory");
+        conn.execute_batch(
+            "CREATE TABLE templates (id TEXT PRIMARY KEY, fields_json TEXT);
+             CREATE TABLE solicitudes (id TEXT PRIMARY KEY, values_enc BLOB);
+             INSERT INTO templates (id, fields_json) VALUES ('old', '[]');
+             PRAGMA user_version = 1;",
+        )
+        .unwrap();
+
+        SolicitudesModule.migrate(&conn).expect("migrate v1 -> v2");
+
+        let rows: i64 = conn
+            .query_row("SELECT COUNT(*) FROM templates", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(rows, 0, "v1 no es convertible: se resetea");
+        let has_items: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('templates') WHERE name = 'items_json'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(has_items, 1);
+        let has_fields: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('templates') WHERE name = 'fields_json'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(has_fields, 0);
+    }
+
+    #[test]
+    fn migrate_current_version_is_noop_and_preserves_data() {
+        let conn = Connection::open_in_memory().expect("in-memory");
+        SolicitudesModule.migrate(&conn).expect("migrate inicial");
+        conn.execute(
+            "INSERT INTO templates
+                (id, owner_user_id, name, items_json, created_at, updated_at)
+             VALUES ('t1', 'u1', 'Laboratorio general', '[\"Hemograma\"]', 'now', 'now')",
+            [],
+        )
+        .unwrap();
+
+        // Correr migrate de nuevo es idempotente: no hay DDL ni pérdida de filas.
+        SolicitudesModule.migrate(&conn).expect("migrate idempotente");
+
+        let rows: i64 = conn
+            .query_row("SELECT COUNT(*) FROM templates", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(rows, 1);
+        let version: i64 = conn
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, SCHEMA_VERSION);
+    }
+
+    #[test]
+    fn migrate_rejects_a_newer_schema_version() {
+        let conn = Connection::open_in_memory().expect("in-memory");
+        conn.execute_batch(&format!("PRAGMA user_version = {}", SCHEMA_VERSION + 1))
+            .unwrap();
+        assert_eq!(
+            SolicitudesModule.migrate(&conn).unwrap_err(),
+            ModuleError::SchemaTooNew
+        );
     }
 }
