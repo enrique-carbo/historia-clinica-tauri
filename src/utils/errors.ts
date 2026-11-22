@@ -86,6 +86,13 @@ const MESSAGES: Record<string, string | ((params: Params) => string)> = {
   // --- Perfil profesional ---
   ERR_FOREIGN_PROFILE: "No podés editar el perfil de otro usuario.",
 
+  // --- Módulos ---
+  ERR_MODULE_UNSUPPORTED: "La acción no está soportada por este módulo.",
+  ERR_MODULE_INVALID_REQUEST: (p) =>
+    `La solicitud al módulo es inválida: ${p.detail ?? ""}.`,
+  ERR_MODULE_SCHEMA_TOO_NEW:
+    "Este módulo fue creado por una versión más nueva de la app.",
+
   // --- Export y respaldos ---
   ERR_EXPORT_EMPTY: "El paciente no tiene entries para exportar.",
   ERR_BACKUP_SIGNATURE_INVALID: (p) =>

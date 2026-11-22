@@ -65,6 +65,11 @@ pub const ERR_PROFILE_INCOMPLETE: &str = "ERR_PROFILE_INCOMPLETE";
 // --- Perfil profesional ---
 pub const ERR_FOREIGN_PROFILE: &str = "ERR_FOREIGN_PROFILE";
 
+// --- Módulos ---
+pub const ERR_MODULE_UNSUPPORTED: &str = "ERR_MODULE_UNSUPPORTED";
+pub const ERR_MODULE_INVALID_REQUEST: &str = "ERR_MODULE_INVALID_REQUEST";
+pub const ERR_MODULE_SCHEMA_TOO_NEW: &str = "ERR_MODULE_SCHEMA_TOO_NEW";
+
 // --- Export y respaldos ---
 pub const ERR_EXPORT_EMPTY: &str = "ERR_EXPORT_EMPTY";
 pub const ERR_BACKUP_SIGNATURE_INVALID: &str = "ERR_BACKUP_SIGNATURE_INVALID";

@@ -1,12 +1,13 @@
 # CoreApi — capa de servicio del Core
 
-### v1 — 2026-11-21 | Primer slice implementado 2026-11-22
+### v1 — 2026-11-21 | Implementados proyecciones, crypto y contrato de módulos
 
-> Capa de servicio en Rust puro (`src-tauri/src/core/`) sobre la que se
-> implementa `ModuleContext` in-process (§4). Implementado: `fetch_filiation`,
-> `entity_exists`, `fetch_professional` y `audit`. Pendiente: crypto
-> (`wrap_*`) y el `PluginHost`. Alineado con el principio de Core mínimo:
-> **no** reescribe los 38 commands de `lib.rs`.
+> Capa de servicio en Rust puro (`src-tauri/src/core/`). Implementado:
+> `fetch_filiation`, `entity_exists`, `fetch_professional`, `audit` y
+> `wrap_with_datakey` / `unwrap_with_datakey`; además el contrato
+> `Module` / `ModuleContext` (`core::module`). Pendiente: el `PluginHost`
+> con `module_execute`. Alineado con el principio de Core mínimo: **no**
+> reescribe los 38 commands de `lib.rs`.
 
 ---
 
@@ -55,7 +56,7 @@ src-tauri/src/core/
 | `entity_exists` | `(conn, actor: &SessionUser, entity_id: i64) -> Result<bool, CommandError>`. Mismo scoping para `paciente`; `SELECT 1 FROM entities WHERE id = ?1` para staff |
 | `fetch_professional` | `(conn, data_key, user_id: &str) -> Result<ProfessionalDto, CommandError>`. Proyección acotada equivalente a `load_profile` (`full_name`, `profession`, `specialty`, `licenses`, `public_key_hex`) |
 | `audit` | `(conn, actor_user_id: &str, event: &AuditEvent) -> Result<(), CommandError>`. Usa `event.action()` + `to_detail()` (sin PHI) y `core::api::record_audit` (movido acá; re-exportado por `commands`) |
-| `wrap_with_datakey` / `unwrap_with_datakey` | `(data_key, bytes) -> Result<..., CommandError>` sobre `security::crypto` (se suma cuando el primer módulo lo pida) |
+| `wrap_with_datakey` / `unwrap_with_datakey` | `(data_key: &[u8; 32], bytes) -> Result<..., CommandError>` sobre `crypto::encrypt_bytes` / `decrypt_bytes` (formato `nonce‖ciphertext`; el plaintext vuelve en `Zeroizing`) |
 
 **Fuera del primer corte**: `wrap_for_user` / `unwrap_for_user` (solo
 teleconsulta) y `http_fetch` (allowlist, auditar host+path sin query — lo más
@@ -131,16 +132,19 @@ con `ProfessionalProfile` y `ExportProfessional`.
   - `fetch_professional` con múltiples matrículas y profesión.
   - `audit` anti-PHI en todas las variantes de `AuditEvent`.
 - Los 147 tests previos de Rust y los 38 commands quedan intactos.
-- Baseline actualizado a **161 tests** en `AGENTS.md` y `README.md`;
+- Baseline actualizado a **171 tests** en `AGENTS.md` y `README.md`;
   `cargo clippy --all-targets` sigue en **3 warnings**. No correr `cargo fmt`.
 
-## 7. Primer slice
+## 7. Cortes
 
-1. ✅ Crear `src-tauri/src/core/` (`mod.rs`, `dto.rs`, `api.rs`).
-2. ✅ Implementar `fetch_filiation`, `entity_exists`, `fetch_professional` y
-   `audit` + 14 tests en memoria.
-3. ⬜ Sumar `wrap_with_datakey` / `unwrap_with_datakey` y el `PluginHost`
-   (`module_execute`) en el siguiente corte.
+1. ✅ `core/` (`mod.rs`, `dto.rs`, `api.rs`) con `fetch_filiation`,
+   `entity_exists`, `fetch_professional` y `audit`.
+2. ✅ Crypto opt-in: `wrap_with_datakey` / `unwrap_with_datakey` + tests.
+3. ✅ Contrato de módulos: `core::module` (`Module`, `ModuleContext`,
+   `ModuleRequest`/`ModuleResponse`/`ModuleDescriptor`/`ModuleError`).
+4. ⬜ `PluginHost` + `ModuleContext` in-process + `module_execute`,
+   `is_module_available`, activación y tablas `modules`/`module_access`.
+5. ⬜ Módulo de solicitudes (crate propio, `migrate()` y acciones).
 
 **Decisión tomada** (`docs/module-contract.md` §14): **monorepo público** —
 `core/` y los crates de módulo viven en el mismo repo (ya público). El paywall

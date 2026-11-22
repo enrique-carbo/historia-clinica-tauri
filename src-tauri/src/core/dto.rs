@@ -13,6 +13,45 @@ pub struct License {
     pub jurisdiction: String,
 }
 
+/// Rol del actor en el contrato de módulos. Cerrado: un rol de sesión
+/// desconocido no se mapea y el gate lo rechaza (fail-closed).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ActorRole {
+    Administrador,
+    Asistente,
+    Profesional,
+    Paciente,
+}
+
+impl ActorRole {
+    pub fn from_role(role: &str) -> Option<Self> {
+        match role {
+            "administrador" => Some(Self::Administrador),
+            "asistente" => Some(Self::Asistente),
+            "profesional" => Some(Self::Profesional),
+            "paciente" => Some(Self::Paciente),
+            _ => None,
+        }
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Administrador => "administrador",
+            Self::Asistente => "asistente",
+            Self::Profesional => "profesional",
+            Self::Paciente => "paciente",
+        }
+    }
+}
+
+/// Actor derivado de la sesión. El módulo nunca recibe un `user_id` del
+/// payload: `ModuleContext::actor()` sale de `require_session()` (§2.6).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Actor {
+    pub user_id: String,
+    pub role: ActorRole,
+}
+
 /// Un campo de filiación ya descifrado y etiquetado, en el orden canónico de
 /// `SchemaConfig::field_labels`. Agnóstico de Med/Vet: incluye lo que cada
 /// perfil defina (obra social/afiliado en Med, especie/raza/tutor en Vet).
@@ -128,6 +167,20 @@ impl AuditEvent {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn actor_role_maps_from_session_strings_fail_closed() {
+        for role in [
+            ActorRole::Administrador,
+            ActorRole::Asistente,
+            ActorRole::Profesional,
+            ActorRole::Paciente,
+        ] {
+            assert_eq!(ActorRole::from_role(role.as_str()), Some(role));
+        }
+        assert_eq!(ActorRole::from_role("visitante"), None);
+        assert_eq!(ActorRole::from_role(""), None);
+    }
 
     #[test]
     fn audit_events_map_to_stable_actions_and_safe_details() {

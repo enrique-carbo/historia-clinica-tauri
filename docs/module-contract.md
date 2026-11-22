@@ -74,6 +74,7 @@ pub trait Module: Send + Sync + 'static {
     async fn handle(
         &self,
         req: ModuleRequest,
+        db: &ModuleDb,
         ctx: &dyn ModuleContext,
     ) -> Result<ModuleResponse, ModuleError>;
 }

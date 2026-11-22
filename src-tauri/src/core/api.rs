@@ -14,6 +14,7 @@ use crate::security::crypto;
 use crate::types::SessionUser;
 use rusqlite::{params, Connection, OptionalExtension};
 use std::collections::HashMap;
+use zeroize::Zeroizing;
 
 /// Campos con los que se arma el atajo `full_name`. Ambos perfiles los
 /// comparten (misma convención que `export/render.rs`).
@@ -245,6 +246,24 @@ pub fn audit(
 ) -> Result<(), CommandError> {
     record_audit(conn, actor_user_id, event.action(), None, &event.to_detail())?;
     Ok(())
+}
+
+/// Cifra un blob operativo de un módulo con la DataKey compartida
+/// (`ModuleContext::wrap_with_datakey` en el contrato §4).
+pub fn wrap_with_datakey(
+    data_key: &[u8; 32],
+    plaintext: &[u8],
+) -> Result<Vec<u8>, CommandError> {
+    crypto::encrypt_bytes(plaintext, data_key).map_err(CommandError::internal)
+}
+
+/// Descifra un blob de módulo con la DataKey. El plaintext vuelve en
+/// `Zeroizing` para no dejar PHI residual en el heap.
+pub fn unwrap_with_datakey(
+    data_key: &[u8; 32],
+    ciphertext: &[u8],
+) -> Result<Zeroizing<Vec<u8>>, CommandError> {
+    crypto::decrypt_bytes(ciphertext, data_key).map_err(CommandError::internal)
 }
 
 /// Registra una acción sensible en `audit_log`.
@@ -661,6 +680,19 @@ mod tests {
         let err = fetch_professional(&conn, &KEY, "inexistente")
             .expect_err("perfil inexistente");
         assert_eq!(err.code, ERR_USER_NOT_FOUND);
+    }
+
+    #[test]
+    fn wrap_with_datakey_roundtrips_and_rejects_wrong_key() {
+        let plaintext = b"indicacion clinica";
+        let blob = wrap_with_datakey(&KEY, plaintext).expect("wrap");
+        let back = unwrap_with_datakey(&KEY, &blob).expect("unwrap");
+        assert_eq!(&*back, plaintext);
+
+        assert!(
+            unwrap_with_datakey(&[9u8; 32], &blob).is_err(),
+            "otra DataKey no puede descifrar"
+        );
     }
 
     #[test]

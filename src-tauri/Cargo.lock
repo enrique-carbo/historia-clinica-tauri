@@ -1181,9 +1181,11 @@ version = "0.2.0"
 dependencies = [
  "aes-gcm",
  "argon2",
+ "async-trait",
  "base64 0.22.1",
  "chrono",
  "ed25519-dalek",
+ "futures-executor",
  "hex",
  "hmac",
  "rand",

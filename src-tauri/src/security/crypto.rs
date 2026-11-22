@@ -61,6 +61,51 @@ pub fn decrypt_text(
         .map_err(|_| "Datos descifrados no son UTF-8 válido".to_string())
 }
 
+/// Cifra bytes arbitrarios (blobs de módulos) con AES-256-GCM.
+/// Formato de salida: `nonce (12 bytes) || ciphertext`.
+pub fn encrypt_bytes(
+    plaintext: &[u8],
+    key_bytes: &[u8; AES_KEY_SIZE],
+) -> Result<Vec<u8>, String> {
+    let key = Key::<Aes256Gcm>::from_slice(key_bytes);
+    let cipher = Aes256Gcm::new(key);
+
+    let mut nonce_bytes = [0u8; AES_NONCE_SIZE];
+    OsRng.fill_bytes(&mut nonce_bytes);
+    let nonce = Nonce::from_slice(&nonce_bytes);
+
+    let ciphertext = cipher
+        .encrypt(nonce, plaintext)
+        .map_err(|_| "Error en el proceso de cifrado".to_string())?;
+
+    let mut out = Vec::with_capacity(AES_NONCE_SIZE + ciphertext.len());
+    out.extend_from_slice(&nonce_bytes);
+    out.extend_from_slice(&ciphertext);
+    Ok(out)
+}
+
+/// Descifra el formato de `encrypt_bytes`. Devuelve `Zeroizing` para que el
+/// plaintext (potencialmente PHI) se ponga a cero al soltarse.
+pub fn decrypt_bytes(
+    blob: &[u8],
+    key_bytes: &[u8; AES_KEY_SIZE],
+) -> Result<Zeroizing<Vec<u8>>, String> {
+    if blob.len() <= AES_NONCE_SIZE {
+        return Err("Blob cifrado inválido".to_string());
+    }
+
+    let key = Key::<Aes256Gcm>::from_slice(key_bytes);
+    let cipher = Aes256Gcm::new(key);
+
+    let (nonce_bytes, ciphertext) = blob.split_at(AES_NONCE_SIZE);
+    let nonce = Nonce::from_slice(nonce_bytes);
+
+    let plaintext = cipher
+        .decrypt(nonce, ciphertext)
+        .map_err(|_| "Error de integridad: datos alterados o clave incorrecta".to_string())?;
+    Ok(Zeroizing::new(plaintext))
+}
+
 type HmacSha256 = Hmac<Sha256>;
 
 /// Clave de dominio del blind index: se deriva de la DataKey con un label
@@ -234,6 +279,46 @@ mod tests {
         bytes[0] ^= 0xFF;
         encrypted.nonce = hex::encode(bytes);
         assert!(decrypt_text(&encrypted, &key).is_err());
+    }
+
+    #[test]
+    fn test_encrypt_decrypt_bytes_roundtrip() {
+        let key = random_key();
+        let plaintext = b"payload operativo de un modulo";
+        let blob = encrypt_bytes(plaintext, &key).unwrap();
+        let decrypted = decrypt_bytes(&blob, &key).unwrap();
+        assert_eq!(&*decrypted, plaintext);
+    }
+
+    #[test]
+    fn test_encrypt_bytes_empty_roundtrip() {
+        let key = random_key();
+        let blob = encrypt_bytes(b"", &key).unwrap();
+        let decrypted = decrypt_bytes(&blob, &key).unwrap();
+        assert!(decrypted.is_empty());
+    }
+
+    #[test]
+    fn test_decrypt_bytes_wrong_key_fails() {
+        let key1 = random_key();
+        let key2 = random_key();
+        let blob = encrypt_bytes(b"dato", &key1).unwrap();
+        assert!(decrypt_bytes(&blob, &key2).is_err());
+    }
+
+    #[test]
+    fn test_decrypt_bytes_tampered_fails() {
+        let key = random_key();
+        let mut blob = encrypt_bytes(b"dato original", &key).unwrap();
+        let last = blob.len() - 1;
+        blob[last] ^= 0xFF;
+        assert!(decrypt_bytes(&blob, &key).is_err());
+    }
+
+    #[test]
+    fn test_decrypt_bytes_short_blob_fails() {
+        let key = random_key();
+        assert!(decrypt_bytes(&[0u8; 4], &key).is_err());
     }
 
     #[test]
