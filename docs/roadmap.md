@@ -115,11 +115,13 @@ CoreApi → solicitudes → teleconsulta → sync.
       (trait `Module` / `ModuleContext`) + `core::host` (`PluginHost`,
       `module_execute`, activación/desactivación) y migración **v002**
       (`modules`/`module_access`) — 2026-11-22 (`docs/core-api.md`)
-- [ ] **5a — Solicitudes de estudios complementarios**: diseño en
-      `docs/MODULES/module-solicitudes-v1.md` — templates editables por
-      profesional en DB propia, solicitudes autocontenidas, filiación y
-      profesional vía `ModuleContext`, resultado en la SOAP del Core, render
-      para imprimir/descargar
+- [x] **5a — Solicitudes (backend)**: `src-tauri/src/modules/solicitudes/` —
+      `migrate()` propio (`templates`/`solicitudes`), CRUD de templates por
+      profesional, `solicitud.create/list/get` y render Markdown; feature
+      `module-solicitudes` (build-time). Diseño en
+      `docs/MODULES/module-solicitudes-v1.md`
+- [ ] **5a — Solicitudes (PDF + UI)**: formateador PDF, pantalla de templates,
+      alta de solicitud y flujo imprimir/descargar con fallback mobile
 - [ ] **5b — Teleconsulta asíncrona**
   - [x] Diseño v5: `docs/MODULES/plugin-teleconsulta-v1.md` — chat + pago QR/transferencia (confirmación manual); la SOAP la escribe el profesional en el Core; paciente = usuario `role: 'paciente'` con DataKey ausente estructuralmente; DB propia del módulo (`docs/module-contract.md`)
   - [x] P0 Core: `unlock_vault` role-aware + `change_password` sin rewrap + `grant_patient_access` (`users.entity_id`, alta lazy desde la ficha) + reset de contraseña sin wrap para paciente + vista paciente = username/contraseña (sin entries/EHR; la deuda `require_session` de fase 4 M1 quedó resuelta) — 2026-10-11

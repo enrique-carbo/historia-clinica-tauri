@@ -9,7 +9,7 @@ El "porqué" del diseño vive en `README.md` y `docs/` — acá va lo operativo.
 
 ```bash
 cd src-tauri
-cargo test                    # baseline: 180 tests, 0 fallas
+cargo test                    # baseline: 192 tests, 0 fallas
 cargo clippy --all-targets    # baseline: 3 warnings, 0 errores
 cd .. && npx tsc --noEmit     # baseline: sin errores
 pnpm test                     # baseline: 121 tests, 0 fallas (vitest; Node >= 22.12)
@@ -17,7 +17,7 @@ pnpm version:check            # tauri.conf.json = package.json = Cargo.toml
 ```
 
 - Perfiles Med/Vet: verificar también `FICHIO_PROFILE=vet cargo test`
-  (mismo baseline 180) — build.rs copia el schema del perfil a OUT_DIR;
+  (mismo baseline 192) — build.rs copia el schema del perfil a OUT_DIR;
   `pnpm build` / `pnpm build:vet:frontend` compilan cada lado del frontend.
 
 - Los 3 warnings de clippy son `too_many_arguments` aceptados en
@@ -47,8 +47,11 @@ pnpm version:check            # tauri.conf.json = package.json = Cargo.toml
     registrarse en `src-tauri/src/lib.rs`** (invoke_handler): si no, el
     `invoke` del frontend falla en runtime y nada lo detecta al compilar.
   - `src/core/` — capa de servicio del Core (`docs/core-api.md`):
-    `core::api` (funciones puras, sin Tauri) + `core::dto`. Prerequisite de
-    los módulos; el `PluginHost` la consume in-process.
+    `core::api` (funciones puras, sin Tauri) + `core::dto` + `core::module`
+    (contrato) + `core::host` (`PluginHost`). Prerequisite de los módulos.
+  - `src/modules/` — módulos compilados (Ruta 1). `solicitudes/` es el primer
+    módulo: feature `module-solicitudes` (default on; `--no-default-features`
+    produce el binario Free sin el módulo, paywall build-time).
   - `src/error.rs` — `CommandError { code, params }` y catálogo de `ERR_*`.
   - `tests/fixtures/` — base congelada de la última release; los tests de
     `db::database::compat_tests` la abren con el build actual (compat

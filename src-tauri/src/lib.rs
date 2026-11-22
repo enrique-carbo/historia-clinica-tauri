@@ -6,6 +6,7 @@ pub mod core;
 mod db;
 mod error;
 mod export;
+mod modules;
 mod security;
 mod types;
 
@@ -43,7 +44,7 @@ pub fn run() {
             app.manage(schema);
             app.manage(core::host::PluginHost::new(
                 app_data_dir,
-                core::host::PluginHost::default_modules(),
+                modules::compiled_modules(),
             ));
 
             Ok(())

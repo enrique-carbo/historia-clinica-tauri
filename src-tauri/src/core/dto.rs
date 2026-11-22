@@ -100,6 +100,9 @@ pub enum AuditEvent {
         subject_id: i64,
         solicitud_id: String,
     },
+    SolicitudTemplateSaved {
+        template_id: String,
+    },
     TeleconsultaMessageSent {
         entity_id: i64,
         conversation_id: String,
@@ -123,6 +126,7 @@ impl AuditEvent {
         match self {
             Self::SolicitudIssued { .. } => "solicitud_issued",
             Self::SolicitudCompleted { .. } => "solicitud_completed",
+            Self::SolicitudTemplateSaved { .. } => "solicitud_template_saved",
             Self::TeleconsultaMessageSent { .. } => "teleconsulta_message_sent",
             Self::TeleconsultaPaymentConfirmed { .. } => "teleconsulta_payment_confirmed",
             Self::ModuleActivated { .. } => "module_activated",
@@ -146,6 +150,9 @@ impl AuditEvent {
                 subject_id,
                 solicitud_id,
             } => format!("subject_id={} solicitud_id={}", subject_id, solicitud_id),
+            Self::SolicitudTemplateSaved { template_id } => {
+                format!("template_id={}", template_id)
+            }
             Self::TeleconsultaMessageSent {
                 entity_id,
                 conversation_id,
@@ -201,6 +208,13 @@ mod tests {
                 },
                 "solicitud_completed",
                 "subject_id=7 solicitud_id=sol-1",
+            ),
+            (
+                AuditEvent::SolicitudTemplateSaved {
+                    template_id: "tpl-1".to_string(),
+                },
+                "solicitud_template_saved",
+                "template_id=tpl-1",
             ),
             (
                 AuditEvent::TeleconsultaMessageSent {

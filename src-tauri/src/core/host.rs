@@ -45,12 +45,6 @@ impl PluginHost {
         }
     }
 
-    /// Módulos compilados en este binario. Hoy vacío; el módulo de
-    /// solicitudes se suma cuando se implemente (corte 5).
-    pub fn default_modules() -> Vec<Box<dyn Module>> {
-        Vec::new()
-    }
-
     pub fn is_installed(&self, module_id: &str) -> bool {
         self.modules.contains_key(module_id)
     }
