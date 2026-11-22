@@ -109,4 +109,81 @@ describe("SolicitudesPanel", () => {
       expect(screen.queryByLabelText("Template")).not.toBeInTheDocument();
     });
   });
+
+  it("tilda el único estudio del template y respeta el orden canónico", async () => {
+    const user = userEvent.setup();
+
+    invokeMock.mockImplementation((command: string, args?: unknown) => {
+      if (command === "is_module_available") return Promise.resolve(true);
+      if (command === "module_execute") {
+        const req = (args as { req: { action: string } }).req;
+        if (req.action === "solicitud.list") return Promise.resolve({ payload: [] });
+        if (req.action === "template.list") {
+          return Promise.resolve({
+            payload: [
+              {
+                id: "tpl-single",
+                name: "Radiografía tórax",
+                items: ["Radiografía de tórax frente y perfil"],
+                created_at: "2026-11-22T10:00:00Z",
+                updated_at: "2026-11-22T10:00:00Z",
+              },
+              {
+                id: "tpl-lab",
+                name: "Laboratorio general",
+                items: ["Hemograma completo", "Glucemia"],
+                created_at: "2026-11-22T10:00:00Z",
+                updated_at: "2026-11-22T10:00:00Z",
+              },
+            ],
+          });
+        }
+        if (req.action === "solicitud.create") {
+          return Promise.resolve({ payload: { id: "sol-3" } });
+        }
+      }
+      return Promise.resolve(null);
+    });
+
+    render(<SolicitudesPanel entityId={1} />);
+    await screen.findByText("Solicitudes de estudios");
+    await user.click(screen.getByRole("button", { name: "Nueva solicitud" }));
+
+    // Template de un solo estudio: viene tildado.
+    await user.selectOptions(
+      screen.getByLabelText("Template"),
+      "tpl-single",
+    );
+    expect(
+      screen.getByRole("checkbox", {
+        name: "Radiografía de tórax frente y perfil",
+      }),
+    ).toBeChecked();
+
+    // Tildar en orden inverso al del template no cambia el orden emitido.
+    await user.selectOptions(screen.getByLabelText("Template"), "tpl-lab");
+    await user.click(screen.getByRole("checkbox", { name: "Glucemia" }));
+    await user.click(
+      screen.getByRole("checkbox", { name: "Hemograma completo" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Emitir solicitud" }));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith("module_execute", {
+        moduleId: "solicitudes",
+        req: {
+          protocol_version: 1,
+          action: "solicitud.create",
+          entity_id: 1,
+          payload: {
+            template_id: "tpl-lab",
+            study_name: null,
+            items: ["Hemograma completo", "Glucemia"],
+            diagnostico: "",
+            notas: "",
+          },
+        },
+      });
+    });
+  });
 });

@@ -199,7 +199,7 @@ async fn solicitud_create(
         ));
     }
 
-    let items = parse_items(&req.payload)?;
+    let mut items = parse_items(&req.payload)?;
     let diagnostico = normalize_optional_text(
         req.payload.get("diagnostico").and_then(Value::as_str),
     );
@@ -229,6 +229,14 @@ async fn solicitud_create(
             study_name = template.name.clone();
         }
         ensure_items_belong(&template.items, &items)?;
+        // Preservar el orden canónico del template, sin importar en qué
+        // orden el profesional tildó los checkboxes.
+        items = template
+            .items
+            .iter()
+            .filter(|candidate| items.contains(candidate))
+            .cloned()
+            .collect();
     }
 
     if study_name.is_empty() {
@@ -639,7 +647,9 @@ mod tests {
             "solicitud.create",
             json!({
                 "template_id": template_id,
-                "items": ["Hemograma completo", "Glucemia"],
+                // Tildados en orden inverso al del template: debe guardarse en
+                // el orden canónico del template ("Hemograma completo", "Glucemia").
+                "items": ["Glucemia", "Hemograma completo"],
                 "diagnostico": "control anemia",
                 "notas": "paciente en ayunas"
             }),
@@ -675,9 +685,10 @@ mod tests {
         assert_eq!(list[0]["study_name"].as_str(), Some("Laboratorio general"));
         assert!(list[0].get("items").is_none());
 
-        // Get descifra ítems + diagnóstico + notas.
+        // Get descifra ítems (en el orden del template) + diagnóstico + notas.
         let got = run(&db, &ctx, "solicitud.get", json!({"id": id}), None).unwrap();
         assert_eq!(got["items"][0].as_str(), Some("Hemograma completo"));
+        assert_eq!(got["items"][1].as_str(), Some("Glucemia"));
         assert_eq!(got["diagnostico"].as_str(), Some("control anemia"));
         assert_eq!(got["notas"].as_str(), Some("paciente en ayunas"));
     }

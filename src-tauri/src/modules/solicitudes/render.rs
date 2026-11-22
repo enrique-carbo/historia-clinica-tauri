@@ -86,7 +86,7 @@ fn build_view(
 }
 
 fn normalize_optional(value: &str) -> String {
-    value.trim().to_string()
+    value.replace("\r\n", "\n").replace('\r', "\n").trim().to_string()
 }
 
 pub fn render_solicitud(
@@ -116,7 +116,7 @@ pub fn render_solicitud(
 
     out.push_str("\n## Diagnóstico / indicación\n\n");
     match view.diagnostico.as_deref().filter(|text| !text.is_empty()) {
-        Some(diagnostico) => out.push_str(&format!("{}\n", one_line(diagnostico))),
+        Some(diagnostico) => out.push_str(&format!("{}\n", diagnostico)),
         None => out.push_str("—\n"),
     }
 
@@ -131,7 +131,7 @@ pub fn render_solicitud(
 
     if let Some(notas) = view.notas.as_deref().filter(|text| !text.is_empty()) {
         out.push_str("\n## Notas\n\n");
-        out.push_str(&format!("{}\n", one_line(notas)));
+        out.push_str(&format!("{}\n", notas));
     }
 
     out
@@ -200,7 +200,7 @@ pub fn render_solicitud_html(
     match view.diagnostico.as_deref().filter(|text| !text.is_empty()) {
         Some(diagnostico) => html.push_str(&format!(
             "<p class=\"block\">{}</p>\n",
-            escape_html(&one_line(diagnostico))
+            escape_html(diagnostico)
         )),
         None => html.push_str("<p class=\"muted\">—</p>\n"),
     }
@@ -220,7 +220,7 @@ pub fn render_solicitud_html(
         html.push_str("<h2>Notas</h2>\n");
         html.push_str(&format!(
             "<p class=\"block\">{}</p>\n",
-            escape_html(&one_line(notas))
+            escape_html(notas)
         ));
     }
 
@@ -289,6 +289,34 @@ mod tests {
         assert!(hemograma < glucemia);
         assert!(markdown.contains("## Notas"));
         assert!(markdown.contains("Paciente en ayunas"));
+    }
+
+    #[test]
+    fn render_preserves_line_breaks_in_diagnostico_and_notas() {
+        let markdown = render_solicitud(
+            &filiation(),
+            &professional(),
+            "Urocultivo",
+            &["Antibiograma".to_string()],
+            Some("Disuria\nfiebre"),
+            Some("Ayuno\nPrimera orina"),
+            "2026-11-22T10:00:00Z",
+        );
+        assert!(markdown.contains("Disuria\nfiebre"));
+        assert!(markdown.contains("Ayuno\nPrimera orina"));
+
+        let html = render_solicitud_html(
+            &filiation(),
+            &professional(),
+            "Urocultivo",
+            &["Antibiograma".to_string()],
+            Some("Disuria\nfiebre"),
+            Some("Ayuno\nPrimera orina"),
+            "2026-11-22T10:00:00Z",
+        );
+        // El CSS usa pre-wrap: los saltos deben sobrevivir al render.
+        assert!(html.contains("Disuria\nfiebre"));
+        assert!(html.contains("Ayuno\nPrimera orina"));
     }
 
     #[test]

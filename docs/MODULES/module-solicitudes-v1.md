@@ -108,8 +108,11 @@ renderizar.
 | `solicitud.render` | `{ id }` | `{ markdown, html }` con encabezado + diagnóstico + checklist + notas |
 
 - `items` se normaliza: trim, se descartan vacíos y se deduplica preservando
-  el orden.
+  el orden. Si hay `template_id`, la solicitud guarda los ítems en el **orden
+  canónico del template** (no en el orden en que se tildaron).
 - Sin template, `study_name` + ítems libres (lista manual).
+- Diagnóstico y notas conservan los saltos de línea (Markdown y HTML con
+  `white-space: pre-wrap`).
 - No hay acción de resultado: la SOAP es la fuente de verdad clínica. Marcar
   una solicitud como completada con un `entry_id` queda para post-v1.
 

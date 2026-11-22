@@ -151,8 +151,8 @@ El único command registrado es `export_history` (en `lib.rs`), la lógica vive 
 
 ## 🧪 Tests Automatizados
 
-- **Core (Rust)**: 196 tests — `cargo test` desde `src-tauri/` (crypto, vault, seed, data_key, backup, migraciones y todos los commands end-to-end con DB real y `tauri::test`).
-- **Frontend**: 127 tests — `pnpm test` (Node >= 22.12; vitest + Testing Library, co-located en `src/**/*.test.{ts,tsx}`, `@tauri-apps/api/core` mockeado con `vi.mock`).
+- **Core (Rust)**: 197 tests — `cargo test` desde `src-tauri/` (crypto, vault, seed, data_key, backup, migraciones y todos los commands end-to-end con DB real y `tauri::test`).
+- **Frontend**: 128 tests — `pnpm test` (Node >= 22.12; vitest + Testing Library, co-located en `src/**/*.test.{ts,tsx}`, `@tauri-apps/api/core` mockeado con `vi.mock`).
 
 Baselines exactos y checklist de verificación: **`AGENTS.md` §Verificación**. Los tests usan **fixtures propios** — no se acoplan al contenido de `entity_schema.json` (rompió la CI una vez); solo invariantes estructurales.
 
@@ -204,10 +204,10 @@ Detalle histórico y checklists por fase: **[docs/roadmap.md](./docs/roadmap.md)
 pnpm tauri dev          # Levanta el entorno (Rust + React HMR)
 pnpm tauri build        # Compila en modo release para producción
 npx tsc --noEmit        # Verifica TypeScript sin generar archivos
-pnpm test               # Ejecuta los 127 tests unitarios del frontend (vitest)
+pnpm test               # Ejecuta los 128 tests unitarios del frontend (vitest)
 pnpm test:watch         # Vitest en modo watch
 cargo check             # Verifica compilación Rust
-cargo test --lib        # Ejecuta los 196 tests unitarios del Core
+cargo test --lib        # Ejecuta los 197 tests unitarios del Core
 cargo add <crate>       # Añade dependencias al backend (desde src-tauri)
 ```
 

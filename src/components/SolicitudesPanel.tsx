@@ -272,16 +272,26 @@ function SolicitudForm({
   );
 
   useEffect(() => {
-    setSelectedItems([]);
+    // Si el template tiene un único estudio (ej. «Radiografía tórax»), viene
+    // tildado por defecto para ahorrar un click.
+    setSelectedItems(
+      selectedTemplate && selectedTemplate.items.length === 1
+        ? [...selectedTemplate.items]
+        : [],
+    );
     setStudyName(selectedTemplate?.name ?? "");
   }, [selectedTemplate]);
 
   const toggleItem = (item: string) => {
-    setSelectedItems((current) =>
-      current.includes(item)
+    setSelectedItems((current) => {
+      const next = current.includes(item)
         ? current.filter((selected) => selected !== item)
-        : [...current, item],
-    );
+        : [...current, item];
+      if (!selectedTemplate) return next;
+      return selectedTemplate.items.filter((candidate) =>
+        next.includes(candidate),
+      );
+    });
   };
 
   const submit = async () => {
