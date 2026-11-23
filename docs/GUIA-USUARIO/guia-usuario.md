@@ -160,7 +160,7 @@ Al pie del menú lateral (y también en la pantalla de login) figura la
 
 ## 5. Tu perfil profesional
 
-Pestaña **Perfil** → **"👤 Datos del profesional"** → botón **"Editar"**.
+Pestaña **Perfil** → **"👨🏻‍⚕️ Datos del profesional"** → botón **"Editar"**.
 
 - **Identidad Clínica**: Nombre completo, Profesión (lista: Médico/a,
   Enfermero/a, Lic. en Psicología, Kinesiólogo/a, …), Especialidad.

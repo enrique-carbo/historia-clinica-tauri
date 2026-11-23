@@ -137,7 +137,7 @@ export function ProfileView() {
       )}
       <div className="flex justify-between items-center mb-8 border-b border-border pb-4">
         <h2 className="text-2xl font-bold text-text-primary flex items-center gap-2">
-          <span aria-hidden="true">👤</span> <span className="hidden md:inline">Datos del profesional</span>
+          <span aria-hidden="true">👨🏻‍⚕️</span> <span className="hidden md:inline">Datos del profesional</span>
         </h2>
         {!isEditing && (
           <button
