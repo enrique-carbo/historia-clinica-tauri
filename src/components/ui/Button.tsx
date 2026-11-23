@@ -14,6 +14,11 @@ export function Button({
   isLoading,
   children,
   className = "",
+  // Un <button> dentro de un <form> es submit por defecto en HTML. Acá
+  // queremos lo contrario: solo envía quien diga explícitamente
+  // `type="submit"` (acciones como "Volver" o "Cancelar" no deben disparar el
+  // onSubmit del form que las contiene).
+  type = "button",
   ...props
 }: ButtonProps) {
   // Definimos los estilos base para cada variante
@@ -37,6 +42,7 @@ export function Button({
 
   return (
     <button
+      type={type}
       className={`rounded font-semibold transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${sizes[size]} ${variants[variant]} ${className}`}
       {...props}
       disabled={isLoading || props.disabled}
