@@ -734,7 +734,7 @@ function PreviewDialog({
           <Button
             size="sm"
             variant="secondary"
-            onClick={() => downloadText(`${safeFilename(preview.title)}.md`, preview.markdown)}
+            onClick={() => void downloadText(`${safeFilename(preview.title)}.md`, preview.markdown)}
           >
             Descargar .md
           </Button>
@@ -742,7 +742,7 @@ function PreviewDialog({
             size="sm"
             variant="secondary"
             onClick={() =>
-              downloadText(
+              void downloadText(
                 `${safeFilename(preview.title)}.html`,
                 preview.html,
                 "text/html;charset=utf-8",

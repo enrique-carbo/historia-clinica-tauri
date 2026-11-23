@@ -81,6 +81,7 @@ pub fn run() {
             commands::get_entries_by_category,
             commands::search_entries,
             commands::export_history,
+            commands::save_text_file,
             commands::generate_seed,
             commands::verify_seed,
             commands::create_backup,

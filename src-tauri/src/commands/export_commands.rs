@@ -12,6 +12,7 @@ use crate::types::{DataKey, DbState, SessionState, SigningState};
 use serde::Serialize;
 use std::path::Path;
 use tauri::{AppHandle, Manager, State};
+use tauri_plugin_dialog::DialogExt;
 
 use super::{
     get_entity, get_entries_by_subject, professional_profile_commands::load_profile,
@@ -202,6 +203,42 @@ fn write_export(
         entries_count: snapshot.entries.len(),
         sha256: hex::encode(doc_hash),
     })
+}
+
+/// Guarda un texto en la ruta que el usuario elija con el diálogo nativo.
+///
+/// El `<a download>` con blob no es confiable en WebKitGTK/WebView2, así que
+/// las descargas del frontend (solicitudes en `.md`/`.html`) pasan por acá.
+/// Devuelve `None` si el usuario cancela y el path escrito si guardó.
+#[tauri::command]
+pub async fn save_text_file(
+    app: AppHandle,
+    session_state: State<'_, SessionState>,
+    default_filename: String,
+    content: String,
+) -> Result<Option<String>, CommandError> {
+    require_session(&session_state)?;
+
+    // `blocking_save_file` no puede correr en el hilo principal.
+    let path = tauri::async_runtime::spawn_blocking(move || {
+        app.dialog()
+            .file()
+            .set_file_name(&default_filename)
+            .blocking_save_file()
+    })
+    .await
+    .map_err(|e| CommandError::internal(e.to_string()))?;
+
+    let Some(path) = path else {
+        return Ok(None);
+    };
+    let path = path
+        .into_path()
+        .map_err(|e| CommandError::internal(e.to_string()))?;
+    std::fs::write(&path, content.as_bytes())
+        .map_err(|e| CommandError::internal(format!("Error escribiendo el archivo: {}", e)))?;
+
+    Ok(Some(path.to_string_lossy().into_owned()))
 }
 
 #[cfg(test)]

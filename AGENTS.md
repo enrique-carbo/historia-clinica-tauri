@@ -12,7 +12,7 @@ cd src-tauri
 cargo test                    # baseline: 202 tests, 0 fallas
 cargo clippy --all-targets    # baseline: 3 warnings, 0 errores
 cd .. && npx tsc --noEmit     # baseline: sin errores
-pnpm test                     # baseline: 141 tests, 0 fallas (vitest; Node >= 22.12)
+pnpm test                     # baseline: 143 tests, 0 fallas (vitest; Node >= 22.12)
 pnpm version:check            # tauri.conf.json = package.json = Cargo.toml
 ```
 
@@ -111,10 +111,11 @@ pnpm version:check            # tauri.conf.json = package.json = Cargo.toml
   (`docs/module-contract.md` §9/§14). Prerequisite: `CoreApi` (`docs/core-api.md`).
 - **Mobile-aware** (futuro tras Fase 4, ver `docs/roadmap.md` §"Futuro: Mobile"):
   al usar APIs/UI de escritorio, verificar soporte mobile o dejar el
-  fallback explícito. `dialog` ✅ y `opener.openUrl` ✅ funcionan en
-  mobile; `revealItemInDir` ❌ es desktop-only → fallback sharesheet.
-  Existe el precedente: `export_history` (Fase 3.9) manda solo
-  `subject_id`, sin diálogo. Updates mobile = tiendas, nunca updater.
+  fallback explícito. `dialog.message/ask/confirm` y `dialog.open` ✅;
+  `dialog.save` + escritura en filesystem ❌ es desktop-only (Android
+  devuelve `content://`), igual que `revealItemInDir` → fallback sharesheet.
+  `opener.openUrl` ✅. Existe el precedente: `export_history` (Fase 3.9)
+  manda solo `subject_id`, sin diálogo. Updates mobile = tiendas, nunca updater.
 - **Sesión**: el `user_id` nunca se confía en lo que manda el frontend.
   Derivar con `require_session()` / `require_admin()` /
   `require_admin_or_assistant()` (definidos en
