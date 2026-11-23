@@ -20,7 +20,7 @@ function DetailRow({ label, value }: { label: string; value?: string }) {
         {label}
       </div>
       <div
-        className={`text-sm rounded-lg border border-border bg-canvas/40 px-3 py-2.5 min-h-10 break-words ${
+        className={`text-sm rounded-lg border border-border bg-canvas/40 px-3 py-2.5 min-h-10 wrap-break-word ${
           hasValue ? "text-text-primary whitespace-pre-wrap" : "text-text-muted"
         }`}
         aria-label={hasValue ? undefined : `${label}: sin dato`}
