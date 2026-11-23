@@ -184,6 +184,9 @@ pnpm version:check            # tauri.conf.json = package.json = Cargo.toml
   (Ruta 1: compilados + feature flags, paywall build-time, trait `Module`
   + `ModuleContext` + `module_execute`; reemplaza a
   `PLUGIN_ARCHITECTURE.md`).
+- `docs/licensing.md` — **idea (no implementada)** de licencias perpetuas por
+  módulo (código firmado entregado tras el pago, verificación offline, builds
+  Free/Pro); no cambia la decisión vigente de `module-contract.md` §8.3.
 - `docs/core-api.md` — diseño del `CoreApi` (capa de servicio angosta sobre
   la que se implementa `ModuleContext`; prerequisite de la Ruta 1; DTOs y
   proyecciones por perfil, sin tocar los commands del frontend).

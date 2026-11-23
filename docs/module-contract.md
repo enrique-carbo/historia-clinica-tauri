@@ -362,6 +362,11 @@ CREATE TABLE module_access (
 
 El paywall es **build-time**: un módulo comercial no está en el binario Free. No hay verificación de licencia en runtime, no hay revocación, no hay `plugins.json`. Si en el futuro se necesita licencia runtime (Ruta 2 con plugins de terceros), es un proyecto aparte.
 
+> **Idea pendiente (no implementada)**: licencias perpetuas por módulo,
+> entregadas al cliente tras el pago y verificadas offline. Está descripta en
+> `docs/licensing.md`; la decisión vigente de esta sección sigue siendo la de
+> arriba.
+
 ---
 
 ## 9. Frontend
