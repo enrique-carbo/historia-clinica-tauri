@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { formatError } from "../utils/errors";
 import type { Entry } from "../stores/useEntryStore";
+import { ChevronDown } from "lucide-react";
 
 interface AllergyCardProps {
   subjectId: number;
@@ -102,15 +103,11 @@ export function AllergyCard({ subjectId }: AllergyCardProps) {
       </div>
 
       {hasAllergies && !isLoading && !error && (
-        <svg
+        <ChevronDown
           aria-hidden="true"
-          className={`w-4 h-4 text-text-muted shrink-0 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`}
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
+          size={16}
+          className={`text-text-muted shrink-0 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`}
+        />
       )}
     </>
   );

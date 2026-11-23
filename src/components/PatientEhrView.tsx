@@ -11,6 +11,7 @@ import { Alert } from "./ui/Alert";
 import { EmptyState } from "./ui/EmptyState";
 import { calculateAge } from "../utils/dateUtils";
 import { FLAT_PATIENT_FIELDS, BLIND_INDEX_LABEL } from "../utils/schema";
+import { ChevronDown } from "lucide-react";
 
 // Campos ya mostrados en el encabezado de la ficha (nombre/apellido como
 // título, dni como badge, fecha_nacimiento como edad). El resto de los
@@ -173,11 +174,11 @@ export function PatientEhrView() {
                 <div className="text-right hidden sm:block">
                   <div className="text-xs font-mono text-text-muted">ID: {patient.id}</div>
                 </div>
-                <div className={`transform transition-transform duration-200 ${isPatientDetailsOpen ? "rotate-180" : ""}`}>
-                  <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </div>
+                <ChevronDown
+                  aria-hidden="true"
+                  size={20}
+                  className={`text-text-muted transition-transform duration-200 ${isPatientDetailsOpen ? "rotate-180" : ""}`}
+                />
               </div>
               </div>
 

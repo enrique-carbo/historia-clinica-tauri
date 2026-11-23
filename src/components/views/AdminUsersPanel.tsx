@@ -6,6 +6,7 @@ import { Alert } from "../ui/Alert";
 import { Input } from "../ui/Input";
 import { useAuthStore } from "../../stores/useAuthStore";
 import { formatDateTime } from "../../utils/dateUtils";
+import { ChevronDown } from "lucide-react";
 
 interface UserRow {
   id: string;
@@ -207,19 +208,7 @@ export function AdminUsersPanel() {
                 <option value="paciente">Paciente</option>
               </select>
               <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 top-7">
-                <svg
-                  className="h-4 w-4 text-text-muted"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M19 9l-7 7-7-7"
-                  />
-                </svg>
+                <ChevronDown size={16} className="text-text-muted" aria-hidden="true" />
               </div>
             </div>
           </div>

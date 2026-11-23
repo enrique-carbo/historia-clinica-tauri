@@ -17,6 +17,7 @@ import { Button } from "./ui/Button";
 import { EmptyState } from "./ui/EmptyState";
 import { Input } from "./ui/Input";
 import { Textarea } from "./ui/Textarea";
+import { ChevronDown } from "lucide-react";
 
 const MODULE_ID = "solicitudes";
 
@@ -139,16 +140,13 @@ export function SolicitudesPanel({ entityId }: { entityId: number }) {
           aria-controls="solicitudes-panel-content"
           className="flex items-center gap-2 min-w-0 text-left rounded focus:outline-none focus-visible:ring-1 focus-visible:ring-focus"
         >
-          <span
+          <ChevronDown
             aria-hidden="true"
-            className={`transform transition-transform duration-200 shrink-0 ${
+            size={16}
+            className={`shrink-0 text-text-muted transition-transform duration-200 ${
               isOpen ? "rotate-180" : ""
             }`}
-          >
-            <svg className="h-4 w-4 text-text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </span>
+          />
           <h3 className="text-xs font-bold text-text-muted uppercase tracking-widest truncate">
             Solicitudes de estudios
           </h3>
