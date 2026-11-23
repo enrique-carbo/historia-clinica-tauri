@@ -12,7 +12,7 @@ cd src-tauri
 cargo test                    # baseline: 202 tests, 0 fallas
 cargo clippy --all-targets    # baseline: 3 warnings, 0 errores
 cd .. && npx tsc --noEmit     # baseline: sin errores
-pnpm test                     # baseline: 137 tests, 0 fallas (vitest; Node >= 22.12)
+pnpm test                     # baseline: 141 tests, 0 fallas (vitest; Node >= 22.12)
 pnpm version:check            # tauri.conf.json = package.json = Cargo.toml
 ```
 
@@ -84,6 +84,8 @@ pnpm version:check            # tauri.conf.json = package.json = Cargo.toml
   `src/stores/` y hooks compartidos en `src/hooks/`.
   - `src/hooks/useModuleAvailable.ts` — disponibilidad de módulos con
     revalidación en `fichio:modules-changed` y `focus`.
+  - `src/components/ui/Dialog.tsx` — modal compartido: foco contenido,
+    `aria-modal`, foco inicial/restaurado, Escape y backdrop.
   - `src/utils/errors.ts` — `formatError()`: código `ERR_*` → texto (i18n-ready).
 - `config/entry_templates/*.json` — labels y orden canónicos de entries.
 

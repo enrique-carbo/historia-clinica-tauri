@@ -7,7 +7,7 @@
 // Modelo v2: template = título + lista de estudios (checklist); solicitud =
 // ítems tildados + diagnóstico + notas.
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { formatError } from "../utils/errors";
 import { moduleExecute } from "../utils/modules";
 import { useModuleAvailable } from "../hooks/useModuleAvailable";
@@ -16,6 +16,7 @@ import { Alert } from "./ui/Alert";
 import { Button } from "./ui/Button";
 import { EmptyState } from "./ui/EmptyState";
 import { Input } from "./ui/Input";
+import { Dialog } from "./ui/Dialog";
 import { Textarea } from "./ui/Textarea";
 import { ChevronDown } from "lucide-react";
 
@@ -760,49 +761,5 @@ function PreviewDialog({
         </p>
       </div>
     </Dialog>
-  );
-}
-
-// =======================================================================
-// DIALOG base
-// =======================================================================
-
-function Dialog({
-  title,
-  onClose,
-  children,
-}: {
-  title: string;
-  onClose: () => void;
-  children: ReactNode;
-}) {
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-label={title}
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
-    >
-      <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-xl border border-border bg-surface shadow-xl">
-        <div className="flex items-center justify-between gap-3 border-b border-border p-4">
-          <h2 className="text-sm font-bold text-text-primary">{title}</h2>
-          <Button size="sm" variant="ghost" onClick={onClose}>
-            Cerrar
-          </Button>
-        </div>
-        <div className="p-4">{children}</div>
-      </div>
-    </div>
   );
 }
