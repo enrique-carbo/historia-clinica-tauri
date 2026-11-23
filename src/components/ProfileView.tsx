@@ -1,12 +1,13 @@
 // src/components/ProfileView.tsx
 
+import { X } from "lucide-react";
+import { CloseButton } from "./ui/CloseButton";
 import { useState, useEffect } from "react";
 import { useAuthStore } from "../stores/useAuthStore";
 import { invoke } from "@tauri-apps/api/core";
 import { formatError } from "../utils/errors";
 import { ChangePasswordForm } from "./ChangePasswordForm";
 import { Alert } from "./ui/Alert";
-import { Button } from "./ui/Button";
 
 type License = { number: string; jurisdiction: string };
 
@@ -124,14 +125,7 @@ export function ProfileView() {
         <Alert variant="error" className="mb-6">
           <div className="flex justify-between gap-4">
             <span>{error}</span>
-            <Button
-              size="icon"
-              variant="ghost"
-              onClick={() => setError(null)}
-              aria-label="Cerrar"
-            >
-              ✕
-            </Button>
+            <CloseButton onClick={() => setError(null)} />
           </div>
         </Alert>
       )}
@@ -267,7 +261,7 @@ export function ProfileView() {
                       aria-label={`Quitar matrícula ${i + 1}`}
                       className="rounded-lg border border-border-strong px-3 text-sm text-text-secondary hover:border-red-700 hover:text-red-400 transition-colors"
                     >
-                      <span aria-hidden="true">✕</span>
+                      <X size={16} aria-hidden="true" />
                     </button>
                   </div>
                 ))}

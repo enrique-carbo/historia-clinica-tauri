@@ -1,3 +1,4 @@
+import { CloseButton } from "../ui/CloseButton";
 import { ReactNode, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { formatError } from "../../utils/errors";
@@ -10,7 +11,6 @@ import { NavigationDrawer } from "../ui/Drawer";
 import { BackupReminderBanner } from "../BackupReminderBanner";
 import { SeedPhraseSetup } from "../SeedPhraseSetup";
 import { Alert } from "../ui/Alert";
-import { Button } from "../ui/Button";
 import { useEntryStore } from "../../stores/useEntryStore";
 import { useBackupStore } from "../../stores/useBackupStore";
 import { APP_NAME } from "../../utils/branding";
@@ -133,14 +133,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         <Alert variant="error" className="mx-4 mt-3 sm:mx-10">
           <div className="flex justify-between gap-4">
             <span>No se pudo cerrar la bóveda: {logoutError}</span>
-            <Button
-              size="icon"
-              variant="ghost"
-              onClick={() => setLogoutError(null)}
-              aria-label="Cerrar"
-            >
-              ✕
-            </Button>
+            <CloseButton onClick={() => setLogoutError(null)} />
           </div>
         </Alert>
       )}

@@ -1,4 +1,5 @@
 // src/components/views/MedicoView.tsx
+import { CloseButton } from "../ui/CloseButton";
 import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { formatError } from "../../utils/errors";
@@ -202,14 +203,7 @@ export function MedicoView() {
                   <Button variant="success" onClick={handleReveal}>
                     Revelar en carpeta
                   </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    onClick={() => setExportResult(null)}
-                    aria-label="Cerrar"
-                  >
-                    ✕
-                  </Button>
+                  <CloseButton onClick={() => setExportResult(null)} />
                 </div>
               </div>
             </Alert>
@@ -219,14 +213,7 @@ export function MedicoView() {
             <Alert variant="error" className="text-sm">
               <div className="flex items-center justify-between gap-3">
                 <span className="break-all">{exportError}</span>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={() => setExportError(null)}
-                  aria-label="Cerrar"
-                >
-                  ✕
-                </Button>
+                <CloseButton onClick={() => setExportError(null)} />
               </div>
             </Alert>
           )}

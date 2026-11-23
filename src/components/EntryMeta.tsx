@@ -2,29 +2,23 @@
 // badge de categoría, badge de estado, fila de firma y footer.
 import { EntryCategory } from "../stores/useEntryStore";
 import { formatDateTime } from "../utils/dateUtils";
+import { CATEGORY_ICONS } from "../utils/entryIcons";
 
-const CATEGORY_CONFIG: Record<
-  EntryCategory,
-  { label: string; icon: string; color: string }
-> = {
+const CATEGORY_CONFIG: Record<EntryCategory, { label: string; color: string }> = {
   SOAP_NOTE: {
     label: "Nota SOAP",
-    icon: "📋",
     color: "bg-info-tint/30 text-info-text border-info-border/50",
   },
   MEDICATION: {
     label: "Medicación",
-    icon: "💊",
     color: "bg-success-tint/30 text-success-text border-success-border/50",
   },
   ALLERGY: {
     label: "Alergia",
-    icon: "⚠️",
     color: "bg-danger-tint/30 text-danger-text border-danger-border/50",
   },
   CONDITION: {
     label: "Diagnóstico",
-    icon: "🏥",
     color: "bg-violet-tint/30 text-violet-text border-violet-border/50",
   },
 };
@@ -37,11 +31,12 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
 
 export function CategoryBadge({ category }: { category: EntryCategory }) {
   const config = CATEGORY_CONFIG[category] || CATEGORY_CONFIG.SOAP_NOTE;
+  const Icon = CATEGORY_ICONS[category] || CATEGORY_ICONS.SOAP_NOTE;
   return (
     <span
       className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium border ${config.color}`}
     >
-      <span aria-hidden="true">{config.icon}</span> {config.label}
+      <Icon size={14} aria-hidden="true" /> {config.label}
     </span>
   );
 }

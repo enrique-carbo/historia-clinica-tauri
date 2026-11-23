@@ -4,17 +4,19 @@ import { EntryCard } from "./EntryCard";
 import { Button } from "./ui/Button";
 import { Alert } from "./ui/Alert";
 import { EmptyState } from "./ui/EmptyState";
+import { ALL_ENTRIES_ICON, CATEGORY_ICONS } from "../utils/entryIcons";
+import type { LucideIcon } from "lucide-react";
 
 interface EntryTimelineProps {
   subjectId: number;
 }
 
-const CATEGORIES: { value: EntryCategory | "ALL"; label: string; icon: string }[] = [
-  { value: "ALL", label: "Todas", icon: "📊" },
-  { value: "SOAP_NOTE", label: "SOAP", icon: "📋" },
-  { value: "ALLERGY", label: "Alergias", icon: "⚠️" },
-  { value: "MEDICATION", label: "Medicación", icon: "💊" },
-  { value: "CONDITION", label: "Diagnóstico", icon: "🏥" },
+const CATEGORIES: { value: EntryCategory | "ALL"; label: string; icon: LucideIcon }[] = [
+  { value: "ALL", label: "Todas", icon: ALL_ENTRIES_ICON },
+  { value: "SOAP_NOTE", label: "SOAP", icon: CATEGORY_ICONS.SOAP_NOTE },
+  { value: "ALLERGY", label: "Alergias", icon: CATEGORY_ICONS.ALLERGY },
+  { value: "MEDICATION", label: "Medicación", icon: CATEGORY_ICONS.MEDICATION },
+  { value: "CONDITION", label: "Diagnóstico", icon: CATEGORY_ICONS.CONDITION },
 ];
 
 export function EntryTimeline({ subjectId }: EntryTimelineProps) {
@@ -82,7 +84,7 @@ export function EntryTimeline({ subjectId }: EntryTimelineProps) {
                   : "bg-surface border border-border text-text-secondary hover:border-border-strong hover:text-text-primary"
               }`}
             >
-              <span>{cat.icon}</span>
+              <cat.icon size={16} aria-hidden="true" />
               {cat.label}
             </button>
           ))}

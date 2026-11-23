@@ -1,3 +1,4 @@
+import { CloseButton } from "../ui/CloseButton";
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { formatError } from "../../utils/errors";
@@ -143,9 +144,7 @@ export function AdminUsersPanel() {
         <Alert variant="error" className="my-0">
           <div className="flex justify-between gap-4">
             <span>{error}</span>
-            <Button size="icon" variant="ghost" onClick={() => setError(null)} aria-label="Cerrar">
-              ✕
-            </Button>
+            <CloseButton onClick={() => setError(null)} />
           </div>
         </Alert>
       )}
@@ -153,9 +152,7 @@ export function AdminUsersPanel() {
         <Alert variant="success" className="my-0">
           <div className="flex justify-between gap-4">
             <span>{notice}</span>
-            <Button size="icon" variant="ghost" onClick={() => setNotice(null)} aria-label="Cerrar">
-              ✕
-            </Button>
+            <CloseButton onClick={() => setNotice(null)} />
           </div>
         </Alert>
       )}

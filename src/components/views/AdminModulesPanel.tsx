@@ -1,3 +1,4 @@
+import { CloseButton } from "../ui/CloseButton";
 import { useCallback, useEffect, useState } from "react";
 import { formatError } from "../../utils/errors";
 import {
@@ -68,14 +69,7 @@ export function AdminModulesPanel() {
         <Alert variant="error">
           <div className="flex justify-between gap-4">
             <span>{error}</span>
-            <Button
-              size="icon"
-              variant="ghost"
-              onClick={() => setError(null)}
-              aria-label="Cerrar"
-            >
-              ✕
-            </Button>
+            <CloseButton onClick={() => setError(null)} />
           </div>
         </Alert>
       )}

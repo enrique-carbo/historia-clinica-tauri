@@ -1,9 +1,9 @@
+import { CloseButton } from "../ui/CloseButton";
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { formatError } from "../../utils/errors";
 import { formatDateTime } from "../../utils/dateUtils";
 import { Alert } from "../ui/Alert";
-import { Button } from "../ui/Button";
 
 interface AuditRow {
   id: number;
@@ -53,9 +53,7 @@ export function AdminAuditPanel() {
         <Alert variant="error">
           <div className="flex justify-between gap-4">
             <span>{error}</span>
-            <Button size="icon" variant="ghost" onClick={() => setError(null)} aria-label="Cerrar">
-              ✕
-            </Button>
+            <CloseButton onClick={() => setError(null)} />
           </div>
         </Alert>
       )}

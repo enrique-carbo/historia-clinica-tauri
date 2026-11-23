@@ -5,6 +5,7 @@ import { usePatientStore } from "../stores/usePatientStore";
 import { useNavigationStore } from "../stores/useNavigationStore";
 import { Button } from "./ui/Button";
 import { Alert } from "./ui/Alert";
+import { CATEGORY_ICONS } from "../utils/entryIcons";
 
 interface EntryFormProps {
   onSuccess?: () => void;
@@ -69,13 +70,6 @@ function loadTemplates(): Record<EntryCategory, Template> {
 
 const TEMPLATES = loadTemplates();
 const MISSING_TEMPLATES = CATEGORY_ORDER.filter((c) => !TEMPLATES[c]);
-
-const CATEGORY_ICONS: Record<EntryCategory, string> = {
-  SOAP_NOTE: "📋",
-  ALLERGY: "⚠️",
-  MEDICATION: "💊",
-  CONDITION: "🏥",
-};
 
 export function EntryForm({ onSuccess, lockedCategory }: EntryFormProps) {
   const [selectedCategory, setSelectedCategory] = useState<EntryCategory | null>(
@@ -233,7 +227,10 @@ export function EntryForm({ onSuccess, lockedCategory }: EntryFormProps) {
                     : "bg-field border-border text-text-secondary hover:border-border-strong"
                 }`}
               >
-                <span className="text-lg block mb-1" aria-hidden="true">{CATEGORY_ICONS[category]}</span>
+                {(() => {
+                  const Icon = CATEGORY_ICONS[category];
+                  return <Icon size={20} className="mx-auto mb-1" aria-hidden="true" />;
+                })()}
                 {TEMPLATES[category].label}
               </button>
             ))}
