@@ -6,7 +6,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { formatError } from "../utils/errors";
 import { useAuthStore } from "../stores/useAuthStore";
 import { usePatientStore } from "../stores/usePatientStore";
-import { PATIENT_FIELDS, flattenFields } from "../utils/schema";
+import { PATIENT_FIELDS, flattenFields, BLIND_INDEX_LABEL } from "../utils/schema";
 import { PatientListPanel, type EntityRecord } from "./PatientListPanel";
 import { PatientForm } from "./PatientForm";
 import { PatientDetailView } from "./PatientDetailView";
@@ -161,10 +161,16 @@ export function Entity() {
   };
 
   const handleSelect = async (id: number) => {
-    // Selección global: muestra la ficha en el panel derecho y actualiza
-    // EHR / Entries en las otras pestañas.
+    // Selección global: alimenta la ficha, el highlight de la lista y las
+    // pestañas clínicas (EHR / Solicitudes / Entries). El feedback muestra
+    // la identidad del paciente, no la posición del panel.
     await selectPatient(id);
-    setResult(`👁️ Seleccionado: ID=${id} — la ficha está a la derecha.`);
+    const patient = usePatientStore.getState().selected?.patient;
+    setResult(
+      patient && patient.id === id
+        ? `👁️ Seleccionado: ${patient.data.nombre} ${patient.data.apellido} · ${BLIND_INDEX_LABEL} ${patient.data.dni}`
+        : `❌ No se pudo seleccionar el paciente (ID=${id})`,
+    );
   };
 
   const handleList = async () => {

@@ -59,6 +59,10 @@ describe("MedicoView — tab de solicitudes", () => {
     expect(
       await screen.findByText("Solicitudes de estudios"),
     ).toBeInTheDocument();
+
+    const patientBanner = screen.getByLabelText("Paciente seleccionado");
+    expect(patientBanner).toHaveTextContent("Paciente: Ana Gómez");
+    expect(patientBanner).toHaveTextContent("30111222");
   });
 
   it("no agrega el tab si el módulo no está disponible", async () => {
@@ -73,6 +77,9 @@ describe("MedicoView — tab de solicitudes", () => {
     });
     expect(
       screen.queryByRole("tab", { name: /Solicitudes/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Paciente seleccionado"),
     ).not.toBeInTheDocument();
   });
 });

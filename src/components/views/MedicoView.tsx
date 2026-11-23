@@ -16,6 +16,7 @@ import { EntryForm } from "../../components/EntryForm";
 import { useNavigationStore, MedicoTab } from "../../stores/useNavigationStore";
 import { usePatientStore } from "../../stores/usePatientStore";
 import { useAuthStore } from "../../stores/useAuthStore";
+import { BLIND_INDEX_LABEL } from "../../utils/schema";
 
 const MEDICO_TABS: Tab[] = [
   { id: "perfil", label: "Perfil", icon: "👨🏻‍⚕️" },
@@ -28,6 +29,10 @@ const MEDICO_TABS: Tab[] = [
 // (compilado con la feature + activo + rol con acceso). Se inserta antes de
 // Entries para no separar la Historia Clínica de su tablero de entries.
 const SOLICITUDES_TAB: Tab = { id: "solicitudes", label: "Solicitudes", icon: "🧪" };
+
+// Tabs donde el paciente seleccionado es el sujeto de la acción. En Perfil y
+// Paciente (admisión) mostrarlo sería ruido: no se está trabajando sobre él.
+const PATIENT_SCOPED_TABS: MedicoTab[] = ["ehr", "solicitudes", "entries"];
 
 interface ExportResult {
   path: string;
@@ -115,6 +120,24 @@ export function MedicoView() {
 
   return (
     <Navbar tabs={tabs} activeTab={activeMedicoTab} onTabChange={(tab) => setActiveMedicoTab(tab as MedicoTab)}>
+      {selectedPatient && PATIENT_SCOPED_TABS.includes(activeMedicoTab) && (
+        <div
+          aria-label="Paciente seleccionado"
+          className="mb-4 flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-secondary"
+        >
+          <span aria-hidden="true">👤</span>
+          <span className="min-w-0 truncate">
+            Paciente:{" "}
+            <strong className="font-semibold text-text-primary">
+              {selectedPatient.data.nombre} {selectedPatient.data.apellido}
+            </strong>
+            <span className="text-text-muted">
+              {" "}· {BLIND_INDEX_LABEL} {selectedPatient.data.dni}
+            </span>
+          </span>
+        </div>
+      )}
+
       {activeMedicoTab === "ehr" && <PatientEhrView />}
 
       {solicitudesAvailable && activeMedicoTab === "solicitudes" && (
@@ -150,11 +173,6 @@ export function MedicoView() {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-lg font-semibold text-text-primary flex items-center gap-2">
               Entries <span className="hidden md:inline">(Append-Only)</span>
-              {selectedPatient && (
-                <span className="font-normal text-md">
-                  · {selectedPatient.data.nombre} {selectedPatient.data.apellido}
-                </span>
-              )}
             </h2>
             {selectedPatient && (
               <div className="flex items-center gap-2">

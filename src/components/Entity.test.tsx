@@ -76,6 +76,7 @@ describe("Entity — panel derecho (admin)", () => {
     expect(
       screen.getByRole("heading", { name: /ficha de/i }),
     ).toBeInTheDocument();
+    expect(screen.getByText(/Seleccionado: Carla Gómez/)).toBeInTheDocument();
     expect(screen.getAllByText("30111222").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
     // Bloque de acceso visible para el admin sobre la ficha seleccionada.
