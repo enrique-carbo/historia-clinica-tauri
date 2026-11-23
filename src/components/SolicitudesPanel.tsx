@@ -1,15 +1,16 @@
 // Panel del módulo de solicitudes de estudios (`docs/MODULES/module-solicitudes-v1.md`).
 //
-// Se monta dentro de la ficha del paciente. Si el módulo no está compilado,
-// activo o el rol no tiene acceso, `is_module_available` devuelve false y no
-// se renderiza nada. Toda la comunicación pasa por `module_execute`.
+// Se monta en la pestaña "Solicitudes" del profesional. Si el módulo no está
+// compilado, activo o el rol no tiene acceso, `is_module_available` devuelve
+// false y no se renderiza nada. Toda la comunicación pasa por `module_execute`.
 //
 // Modelo v2: template = título + lista de estudios (checklist); solicitud =
 // ítems tildados + diagnóstico + notas.
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { formatError } from "../utils/errors";
-import { isModuleAvailable, moduleExecute } from "../utils/modules";
+import { moduleExecute } from "../utils/modules";
+import { useModuleAvailable } from "../hooks/useModuleAvailable";
 import { canShare, downloadText, printHtml, shareText } from "../utils/print";
 import { Alert } from "./ui/Alert";
 import { Button } from "./ui/Button";
@@ -68,7 +69,7 @@ function safeFilename(title: string): string {
 }
 
 export function SolicitudesPanel({ entityId }: { entityId: number }) {
-  const [available, setAvailable] = useState<boolean | null>(null);
+  const available = useModuleAvailable(MODULE_ID);
   const [solicitudes, setSolicitudes] = useState<SolicitudSummary[]>([]);
   const [templates, setTemplates] = useState<TemplateRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -96,20 +97,6 @@ export function SolicitudesPanel({ entityId }: { entityId: number }) {
       setIsLoading(false);
     }
   }, [entityId]);
-
-  useEffect(() => {
-    let cancelled = false;
-    isModuleAvailable(MODULE_ID)
-      .then((enabled) => {
-        if (!cancelled) setAvailable(enabled);
-      })
-      .catch(() => {
-        if (!cancelled) setAvailable(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   // Cerrar formulario y vista previa al cambiar de paciente: un borrador
   // abierto en el Paciente A nunca debe quedar listo para emitirse sobre el

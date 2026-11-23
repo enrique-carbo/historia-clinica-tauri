@@ -9,6 +9,7 @@ import {
 import { Alert } from "../ui/Alert";
 import { Button } from "../ui/Button";
 import { EmptyState } from "../ui/EmptyState";
+import { notifyModulesChanged } from "../../hooks/useModuleAvailable";
 
 export function AdminModulesPanel() {
   const [modules, setModules] = useState<ModuleStatusDto[]>([]);
@@ -43,6 +44,9 @@ export function AdminModulesPanel() {
         await activateModule(module.id);
       }
       await reload();
+      // Avisar a las vistas del profesional para que revaliden el tab del
+      // módulo y el ítem del drawer sin necesidad de reiniciar la app.
+      notifyModulesChanged();
     } catch (err) {
       setError(formatError(err));
     } finally {

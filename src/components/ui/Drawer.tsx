@@ -1,7 +1,7 @@
-import { ReactNode, useEffect, useState } from "react";
+import { ReactNode, useEffect } from "react";
 import { useNavigationStore, MedicoTab, AdminTab } from "../../stores/useNavigationStore";
 import { useAuthStore } from "../../stores/useAuthStore";
-import { isModuleAvailable } from "../../utils/modules";
+import { useModuleAvailable } from "../../hooks/useModuleAvailable";
 import { Button } from "./Button";
 import { ThemeToggle } from "./ThemeToggle";
 import { AppVersion } from "./AppVersion";
@@ -171,25 +171,7 @@ export function NavigationDrawer({ onLogout }: NavigationDrawerProps) {
 
   const usesMedicoTabs = user?.role === "profesional";
   const usesAdminTabs = user?.role === "administrador" || user?.role === "asistente";
-  const [solicitudesAvailable, setSolicitudesAvailable] = useState(false);
-
-  useEffect(() => {
-    if (!usesMedicoTabs) {
-      setSolicitudesAvailable(false);
-      return;
-    }
-    let cancelled = false;
-    isModuleAvailable("solicitudes")
-      .then((enabled) => {
-        if (!cancelled) setSolicitudesAvailable(enabled);
-      })
-      .catch(() => {
-        if (!cancelled) setSolicitudesAvailable(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [usesMedicoTabs, isDrawerOpen]);
+  const solicitudesAvailable = useModuleAvailable("solicitudes");
 
   const handleMenuClick = (key: string) => {
     if (usesMedicoTabs) {

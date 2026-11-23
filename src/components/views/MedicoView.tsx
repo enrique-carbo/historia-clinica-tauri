@@ -2,7 +2,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { formatError } from "../../utils/errors";
-import { isModuleAvailable } from "../../utils/modules";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { Navbar, Tab } from "../../components/ui/Navbar";
 import { Button } from "../../components/ui/Button";
@@ -17,6 +16,7 @@ import { useNavigationStore, MedicoTab } from "../../stores/useNavigationStore";
 import { usePatientStore } from "../../stores/usePatientStore";
 import { useAuthStore } from "../../stores/useAuthStore";
 import { BLIND_INDEX_LABEL } from "../../utils/schema";
+import { useModuleAvailable } from "../../hooks/useModuleAvailable";
 
 const MEDICO_TABS: Tab[] = [
   { id: "perfil", label: "Perfil", icon: "👨🏻‍⚕️" },
@@ -49,23 +49,9 @@ export function MedicoView() {
   const [exporting, setExporting] = useState(false);
   const [exportResult, setExportResult] = useState<ExportResult | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
-  // `null` = todavía no se consultó: evita parpadear el tab y evita
-  // redirigir antes de saber si el módulo está disponible.
-  const [solicitudesAvailable, setSolicitudesAvailable] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    isModuleAvailable("solicitudes")
-      .then((enabled) => {
-        if (!cancelled) setSolicitudesAvailable(enabled);
-      })
-      .catch(() => {
-        if (!cancelled) setSolicitudesAvailable(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  // `null` = todavía no se consultó: evita parpadeos y redirecciones
+  // prematuras. El hook revalida al activar/desactivar módulos y al enfocar.
+  const solicitudesAvailable = useModuleAvailable("solicitudes");
 
   // Si el tab quedó seleccionado de una sesión anterior pero el módulo ya no
   // está disponible, volver a la Historia Clínica en vez de mostrar vacío.
