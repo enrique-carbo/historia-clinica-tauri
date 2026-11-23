@@ -99,6 +99,10 @@ pnpm version:check            # tauri.conf.json = package.json = Cargo.toml
   es agnóstico de especie. Pedidos de clientes específicos → config o
   módulo, nunca forks ni `#ifdefs` en Core (ver
   `docs/module-contract.md` §1, "Un perfil de producto").
+- **Iconos de UI**: usar `lucide-react` con `currentColor` y `aria-hidden="true"`
+  en los decorativos. `Tab.icon` es `ReactNode`, no un string con emoji.
+  Evitar emoji en navegación/acciones: cambian según el SO y no siguen el
+  tema claro/oscuro.
 - **Módulos en monorepo público**: `core/` y los crates de módulo comparten
   este repo (decidido 2026-11-21). El source de los módulos es visible; el
   paywall es build-time por feature flags, no secreto del código

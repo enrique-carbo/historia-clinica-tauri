@@ -17,18 +17,29 @@ import { usePatientStore } from "../../stores/usePatientStore";
 import { useAuthStore } from "../../stores/useAuthStore";
 import { BLIND_INDEX_LABEL } from "../../utils/schema";
 import { useModuleAvailable } from "../../hooks/useModuleAvailable";
+import {
+  ClipboardList,
+  Clock,
+  FlaskConical,
+  Stethoscope,
+  UserRound,
+} from "lucide-react";
 
 const MEDICO_TABS: Tab[] = [
-  { id: "perfil", label: "Perfil", icon: "👨🏻‍⚕️" },
-  { id: "paciente", label: "Paciente", icon: "👤" },
-  { id: "ehr", label: "Historia Clínica", icon: "📋" },
-  { id: "entries", label: "Entries", icon: "⏱️" },
+  { id: "perfil", label: "Perfil", icon: <Stethoscope size={18} /> },
+  { id: "paciente", label: "Paciente", icon: <UserRound size={18} /> },
+  { id: "ehr", label: "Historia Clínica", icon: <ClipboardList size={18} /> },
+  { id: "entries", label: "Entries", icon: <Clock size={18} /> },
 ];
 
 // El tab del módulo solo existe si `is_module_available` lo habilita
 // (compilado con la feature + activo + rol con acceso). Se inserta antes de
 // Entries para no separar la Historia Clínica de su tablero de entries.
-const SOLICITUDES_TAB: Tab = { id: "solicitudes", label: "Solicitudes", icon: "🧪" };
+const SOLICITUDES_TAB: Tab = {
+  id: "solicitudes",
+  label: "Solicitudes",
+  icon: <FlaskConical size={18} />,
+};
 
 // Tabs donde el paciente seleccionado es el sujeto de la acción. En Perfil y
 // Paciente (admisión) mostrarlo sería ruido: no se está trabajando sobre él.

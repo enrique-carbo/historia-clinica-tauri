@@ -7,17 +7,27 @@ import { AdminAuditPanel } from "./AdminAuditPanel";
 import { AdminSeedPanel } from "./AdminSeedPanel";
 import { AdminBackupPanel } from "./AdminBackupPanel";
 import { AdminModulesPanel } from "./AdminModulesPanel";
+import {
+  ClipboardList,
+  DatabaseBackup,
+  Puzzle,
+  Sprout,
+  UserPlus,
+  Users,
+} from "lucide-react";
 
 const ADMIN_TABS: Tab[] = [
-  { id: "usuarios", label: "Usuarios", icon: "👥" },
-  { id: "paciente", label: "Admisión", icon: "👤" },
-  { id: "auditoria", label: "Auditoría", icon: "📋" },
-  { id: "semilla", label: "Frase Semilla", icon: "🌱" },
-  { id: "respaldos", label: "Respaldos", icon: "💾" },
-  { id: "modulos", label: "Módulos", icon: "🧩" },
+  { id: "usuarios", label: "Usuarios", icon: <Users size={18} /> },
+  { id: "paciente", label: "Admisión", icon: <UserPlus size={18} /> },
+  { id: "auditoria", label: "Auditoría", icon: <ClipboardList size={18} /> },
+  { id: "semilla", label: "Frase Semilla", icon: <Sprout size={18} /> },
+  { id: "respaldos", label: "Respaldos", icon: <DatabaseBackup size={18} /> },
+  { id: "modulos", label: "Módulos", icon: <Puzzle size={18} /> },
 ];
 
-const ASISTENTE_TABS: Tab[] = [{ id: "paciente", label: "Admisión de Pacientes", icon: "👤" }];
+const ASISTENTE_TABS: Tab[] = [
+  { id: "paciente", label: "Admisión de Pacientes", icon: <UserPlus size={18} /> },
+];
 
 export function AdminView() {
   const { activeUser } = useAuthStore();

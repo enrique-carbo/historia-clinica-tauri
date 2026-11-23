@@ -1,4 +1,5 @@
 import { useThemeStore } from "../../stores/useThemeStore";
+import { Moon, Sun } from "lucide-react";
 
 interface ThemeToggleProps {
   className?: string;
@@ -15,7 +16,7 @@ export function ThemeToggle({ className = "" }: ThemeToggleProps) {
       title={isDark ? "Tema oscuro" : "Tema claro"}
       className={`shrink-0 rounded-lg p-2 text-sm text-text-secondary hover:text-text-primary hover:bg-surface-raised transition-colors cursor-pointer ${className}`}
     >
-      <span aria-hidden="true">{isDark ? "🌙" : "☀️"}</span>
+      {isDark ? <Moon size={18} aria-hidden="true" /> : <Sun size={18} aria-hidden="true" />}
     </button>
   );
 }

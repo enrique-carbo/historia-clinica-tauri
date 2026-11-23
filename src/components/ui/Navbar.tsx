@@ -4,7 +4,7 @@ import { ThemeToggle } from "./ThemeToggle";
 export interface Tab {
   id: string;
   label: string;
-  icon?: string;
+  icon?: ReactNode;
 }
 
 interface NavbarProps {
@@ -48,7 +48,7 @@ export function Navbar({
                   `}
                 >
                   {tab.icon && (
-                    <span className="text-base" aria-hidden="true">
+                    <span className="inline-flex shrink-0 items-center" aria-hidden="true">
                       {tab.icon}
                     </span>
                   )}

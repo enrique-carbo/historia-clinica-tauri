@@ -14,6 +14,7 @@ import { Button } from "../ui/Button";
 import { useEntryStore } from "../../stores/useEntryStore";
 import { useBackupStore } from "../../stores/useBackupStore";
 import { APP_NAME } from "../../utils/branding";
+import { Menu } from "lucide-react";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -87,19 +88,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             className="p-2 rounded-lg bg-surface border border-border text-text-primary hover:text-text-primary hover:bg-surface-raised transition-colors"
             aria-label="Abrir menú"
           >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 6h16M4 12h16M4 18h16"
-              />
-            </svg>
+            <Menu size={20} aria-hidden="true" />
           </button>
 
           <div>

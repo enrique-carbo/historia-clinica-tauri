@@ -2,6 +2,19 @@ import { ReactNode, useEffect } from "react";
 import { useNavigationStore, MedicoTab, AdminTab } from "../../stores/useNavigationStore";
 import { useAuthStore } from "../../stores/useAuthStore";
 import { useModuleAvailable } from "../../hooks/useModuleAvailable";
+import {
+  ClipboardList,
+  Clock,
+  DatabaseBackup,
+  FlaskConical,
+  LogOut,
+  Puzzle,
+  Sprout,
+  UserPlus,
+  UserRound,
+  UsersRound,
+  X,
+} from "lucide-react";
 import { Button } from "./Button";
 import { ThemeToggle } from "./ThemeToggle";
 import { AppVersion } from "./AppVersion";
@@ -18,133 +31,33 @@ interface MenuItem {
 }
 
 const MEDICO_MENU: MenuItem[] = [
-  {
-    key: "perfil",
-    label: "Perfil",
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-      </svg>
-    ),
-  },
-  {
-    key: "paciente",
-    label: "Paciente",
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-      </svg>
-    ),
-  },
-  {
-    key: "ehr",
-    label: "Historia Clínica",
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-      </svg>
-    ),
-  },
-  {
-    key: "entries",
-    label: "Entries",
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-    ),
-  },
+  { key: "perfil", label: "Perfil", icon: <UserRound size={20} /> },
+  { key: "paciente", label: "Paciente", icon: <UsersRound size={20} /> },
+  { key: "ehr", label: "Historia Clínica", icon: <ClipboardList size={20} /> },
+  { key: "entries", label: "Entries", icon: <Clock size={20} /> },
 ];
 
 const SOLICITUDES_MENU_ITEM: MenuItem = {
   key: "solicitudes",
   label: "Solicitudes",
-  icon: (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-    </svg>
-  ),
+  icon: <FlaskConical size={20} />,
 };
 
 const MENU_ITEMS: Record<string, MenuItem[]> = {
   administrador: [
-    {
-      key: "usuarios",
-      label: "Usuarios",
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-        </svg>
-      ),
-    },
-    {
-      key: "paciente",
-      label: "Admisión de Pacientes",
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-        </svg>
-      ),
-    },
-    {
-      key: "auditoria",
-      label: "Auditoría",
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-        </svg>
-      ),
-    },
-    {
-      key: "semilla",
-      label: "Frase Semilla",
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
-        </svg>
-      ),
-    },
-    {
-      key: "respaldos",
-      label: "Respaldos",
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
-        </svg>
-      ),
-    },
-    {
-      key: "modulos",
-      label: "Módulos",
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-        </svg>
-      ),
-    },
+    { key: "usuarios", label: "Usuarios", icon: <UsersRound size={20} /> },
+    { key: "paciente", label: "Admisión de Pacientes", icon: <UserPlus size={20} /> },
+    { key: "auditoria", label: "Auditoría", icon: <ClipboardList size={20} /> },
+    { key: "semilla", label: "Frase Semilla", icon: <Sprout size={20} /> },
+    { key: "respaldos", label: "Respaldos", icon: <DatabaseBackup size={20} /> },
+    { key: "modulos", label: "Módulos", icon: <Puzzle size={20} /> },
   ],
   asistente: [
-    {
-      key: "paciente",
-      label: "Admisión de Pacientes",
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-        </svg>
-      ),
-    },
+    { key: "paciente", label: "Admisión de Pacientes", icon: <UserPlus size={20} /> },
   ],
   profesional: MEDICO_MENU,
   paciente: [
-    {
-      key: "perfil",
-      label: "Mi Perfil",
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-        </svg>
-      ),
-    },
+    { key: "perfil", label: "Mi Perfil", icon: <UserRound size={20} /> },
   ],
 };
 
@@ -220,9 +133,7 @@ export function NavigationDrawer({ onLogout }: NavigationDrawerProps) {
             className="p-1.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface-raised transition-colors"
             aria-label="Cerrar menú"
           >
-            <svg aria-hidden="true" className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <X size={20} aria-hidden="true" />
           </button>
         </div>
 
@@ -255,7 +166,7 @@ export function NavigationDrawer({ onLogout }: NavigationDrawerProps) {
                         : "text-text-primary hover:bg-surface-raised hover:text-text-primary"
                     }`}
                   >
-                    <span aria-hidden="true">{item.icon}</span>
+                    <span className="inline-flex shrink-0" aria-hidden="true">{item.icon}</span>
                     {item.label}
                   </button>
                 </li>
@@ -274,9 +185,7 @@ export function NavigationDrawer({ onLogout }: NavigationDrawerProps) {
             }}
             className="w-full flex items-center gap-3 font-normal"
           >
-            <svg aria-hidden="true" className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-            </svg>
+            <LogOut size={20} aria-hidden="true" />
             Cerrar Bóveda
           </Button>
         </div>
