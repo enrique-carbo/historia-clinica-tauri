@@ -71,7 +71,7 @@ describe("SolicitudesPanel", () => {
     expect(await screen.findByText("Solicitudes de estudios")).toBeInTheDocument();
     expect(await screen.findByText("Laboratorio general")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Nueva solicitud" }));
+    await user.click(screen.getByRole("button", { name: "Nueva" }));
     await user.selectOptions(screen.getByLabelText("Template"), "tpl-1");
     await user.click(
       screen.getByRole("checkbox", { name: "Hemograma completo" }),
@@ -101,13 +101,50 @@ describe("SolicitudesPanel", () => {
     });
 
     // Si abrimos de nuevo el form y cambia el paciente (entityId), se cierra solo.
-    await user.click(screen.getByRole("button", { name: "Nueva solicitud" }));
+    await user.click(screen.getByRole("button", { name: "Nueva" }));
     expect(screen.getByLabelText("Template")).toBeInTheDocument();
 
     rerender(<SolicitudesPanel entityId={2} />);
     await waitFor(() => {
       expect(screen.queryByLabelText("Template")).not.toBeInTheDocument();
     });
+  });
+
+  it("colapsa y expande el contenido desde el encabezado", async () => {
+    const user = userEvent.setup();
+
+    invokeMock.mockImplementation((command: string, args?: unknown) => {
+      if (command === "is_module_available") return Promise.resolve(true);
+      if (command === "module_execute") {
+        const req = (args as { req: { action: string } }).req;
+        if (req.action === "solicitud.list") return Promise.resolve({ payload: [] });
+        if (req.action === "template.list") return Promise.resolve({ payload: [] });
+      }
+      return Promise.resolve(null);
+    });
+
+    render(<SolicitudesPanel entityId={1} />);
+    await screen.findByText("Solicitudes de estudios");
+
+    const toggle = screen.getByRole("button", {
+      name: /Solicitudes de estudios/i,
+    });
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(
+      await screen.findByText("Sin solicitudes registradas"),
+    ).toBeInTheDocument();
+
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(
+      screen.queryByText("Sin solicitudes registradas"),
+    ).not.toBeInTheDocument();
+
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(
+      screen.getByText("Sin solicitudes registradas"),
+    ).toBeInTheDocument();
   });
 
   it("tilda el único estudio del template y respeta el orden canónico", async () => {
@@ -147,7 +184,7 @@ describe("SolicitudesPanel", () => {
 
     render(<SolicitudesPanel entityId={1} />);
     await screen.findByText("Solicitudes de estudios");
-    await user.click(screen.getByRole("button", { name: "Nueva solicitud" }));
+    await user.click(screen.getByRole("button", { name: "Nueva" }));
 
     // Template de un solo estudio: viene tildado.
     await user.selectOptions(

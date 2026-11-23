@@ -1,6 +1,7 @@
-import { ReactNode, useEffect } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { useNavigationStore, MedicoTab, AdminTab } from "../../stores/useNavigationStore";
 import { useAuthStore } from "../../stores/useAuthStore";
+import { isModuleAvailable } from "../../utils/modules";
 import { Button } from "./Button";
 import { ThemeToggle } from "./ThemeToggle";
 import { AppVersion } from "./AppVersion";
@@ -54,6 +55,16 @@ const MEDICO_MENU: MenuItem[] = [
     ),
   },
 ];
+
+const SOLICITUDES_MENU_ITEM: MenuItem = {
+  key: "solicitudes",
+  label: "Solicitudes",
+  icon: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+    </svg>
+  ),
+};
 
 const MENU_ITEMS: Record<string, MenuItem[]> = {
   administrador: [
@@ -160,6 +171,25 @@ export function NavigationDrawer({ onLogout }: NavigationDrawerProps) {
 
   const usesMedicoTabs = user?.role === "profesional";
   const usesAdminTabs = user?.role === "administrador" || user?.role === "asistente";
+  const [solicitudesAvailable, setSolicitudesAvailable] = useState(false);
+
+  useEffect(() => {
+    if (!usesMedicoTabs) {
+      setSolicitudesAvailable(false);
+      return;
+    }
+    let cancelled = false;
+    isModuleAvailable("solicitudes")
+      .then((enabled) => {
+        if (!cancelled) setSolicitudesAvailable(enabled);
+      })
+      .catch(() => {
+        if (!cancelled) setSolicitudesAvailable(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [usesMedicoTabs, isDrawerOpen]);
 
   const handleMenuClick = (key: string) => {
     if (usesMedicoTabs) {
@@ -170,7 +200,15 @@ export function NavigationDrawer({ onLogout }: NavigationDrawerProps) {
     closeDrawer();
   };
 
-  const menuItems = user ? MENU_ITEMS[user.role] || [] : [];
+  const baseItems = user ? MENU_ITEMS[user.role] || [] : [];
+  const menuItems =
+    usesMedicoTabs && solicitudesAvailable
+      ? [
+          ...baseItems.slice(0, baseItems.findIndex((i) => i.key === "entries")),
+          SOLICITUDES_MENU_ITEM,
+          ...baseItems.slice(baseItems.findIndex((i) => i.key === "entries")),
+        ]
+      : baseItems;
 
   return (
     <div

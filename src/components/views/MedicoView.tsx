@@ -1,12 +1,14 @@
 // src/components/views/MedicoView.tsx
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { formatError } from "../../utils/errors";
+import { isModuleAvailable } from "../../utils/modules";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { Navbar, Tab } from "../../components/ui/Navbar";
 import { Button } from "../../components/ui/Button";
 import { Alert } from "../../components/ui/Alert";
 import { PatientEhrView } from "../../components/PatientEhrView";
+import { SolicitudesPanel } from "../../components/SolicitudesPanel";
 import { Entity } from "../Entity";
 import { ProfileView } from "../../components/ProfileView";
 import { EntryTimeline } from "../../components/EntryTimeline";
@@ -21,6 +23,11 @@ const MEDICO_TABS: Tab[] = [
   { id: "ehr", label: "Historia Clínica", icon: "📋" },
   { id: "entries", label: "Entries", icon: "⏱️" },
 ];
+
+// El tab del módulo solo existe si `is_module_available` lo habilita
+// (compilado con la feature + activo + rol con acceso). Se inserta antes de
+// Entries para no separar la Historia Clínica de su tablero de entries.
+const SOLICITUDES_TAB: Tab = { id: "solicitudes", label: "Solicitudes", icon: "🧪" };
 
 interface ExportResult {
   path: string;
@@ -37,6 +44,41 @@ export function MedicoView() {
   const [exporting, setExporting] = useState(false);
   const [exportResult, setExportResult] = useState<ExportResult | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
+  // `null` = todavía no se consultó: evita parpadear el tab y evita
+  // redirigir antes de saber si el módulo está disponible.
+  const [solicitudesAvailable, setSolicitudesAvailable] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    isModuleAvailable("solicitudes")
+      .then((enabled) => {
+        if (!cancelled) setSolicitudesAvailable(enabled);
+      })
+      .catch(() => {
+        if (!cancelled) setSolicitudesAvailable(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Si el tab quedó seleccionado de una sesión anterior pero el módulo ya no
+  // está disponible, volver a la Historia Clínica en vez de mostrar vacío.
+  useEffect(() => {
+    if (solicitudesAvailable === false && activeMedicoTab === "solicitudes") {
+      setActiveMedicoTab("ehr");
+    }
+  }, [solicitudesAvailable, activeMedicoTab, setActiveMedicoTab]);
+
+  const tabs = useMemo(() => {
+    if (!solicitudesAvailable) return MEDICO_TABS;
+    const entriesIndex = MEDICO_TABS.findIndex((tab) => tab.id === "entries");
+    return [
+      ...MEDICO_TABS.slice(0, entriesIndex),
+      SOLICITUDES_TAB,
+      ...MEDICO_TABS.slice(entriesIndex),
+    ];
+  }, [solicitudesAvailable]);
 
   useEffect(() => {
     setExportResult(null);
@@ -72,8 +114,20 @@ export function MedicoView() {
   };
 
   return (
-    <Navbar tabs={MEDICO_TABS} activeTab={activeMedicoTab} onTabChange={(tab) => setActiveMedicoTab(tab as MedicoTab)}>
+    <Navbar tabs={tabs} activeTab={activeMedicoTab} onTabChange={(tab) => setActiveMedicoTab(tab as MedicoTab)}>
       {activeMedicoTab === "ehr" && <PatientEhrView />}
+
+      {solicitudesAvailable && activeMedicoTab === "solicitudes" && (
+        <div className="flex flex-col gap-6 mx-auto w-full p-2">
+          {selectedPatient ? (
+            <SolicitudesPanel entityId={selectedPatient.id} />
+          ) : (
+            <div className="p-4 rounded-lg bg-surface border border-border text-text-muted text-sm">
+              Seleccioná un paciente primero para ver sus solicitudes.
+            </div>
+          )}
+        </div>
+      )}
 
       {activeMedicoTab === "paciente" && (
         <div className="flex flex-col mx-auto w-full p-2">

@@ -76,6 +76,9 @@ export function SolicitudesPanel({ entityId }: { entityId: number }) {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isTemplatesOpen, setIsTemplatesOpen] = useState(false);
   const [preview, setPreview] = useState<PreviewState | null>(null);
+  // Colapsable: el encabezado sigue visible (título + acciones) y el
+  // contenido se oculta sin perder el borrador del formulario.
+  const [isOpen, setIsOpen] = useState(true);
 
   const reload = useCallback(async () => {
     setIsLoading(true);
@@ -141,83 +144,106 @@ export function SolicitudesPanel({ entityId }: { entityId: number }) {
 
   return (
     <div className="border border-border rounded-xl bg-surface shadow-lg overflow-hidden">
-      <div className="p-4 border-b border-border bg-surface flex items-center justify-between gap-3">
-        <h3 className="text-xs font-bold text-text-muted uppercase tracking-widest">
-          Solicitudes de estudios
-        </h3>
-        <div className="flex items-center gap-2 shrink-0">
+      <div className="p-4 border-b border-border bg-surface flex flex-wrap items-center justify-between gap-3">
+        <button
+          type="button"
+          onClick={() => setIsOpen((open) => !open)}
+          aria-expanded={isOpen}
+          aria-controls="solicitudes-panel-content"
+          className="flex items-center gap-2 min-w-0 text-left rounded focus:outline-none focus-visible:ring-1 focus-visible:ring-focus"
+        >
+          <span
+            aria-hidden="true"
+            className={`transform transition-transform duration-200 shrink-0 ${
+              isOpen ? "rotate-180" : ""
+            }`}
+          >
+            <svg className="h-4 w-4 text-text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </span>
+          <h3 className="text-xs font-bold text-text-muted uppercase tracking-widest truncate">
+            Solicitudes de estudios
+          </h3>
+        </button>
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
           <Button size="sm" variant="ghost" onClick={() => setIsTemplatesOpen(true)}>
             Mis templates
           </Button>
           <Button
             size="sm"
             variant="secondary"
-            onClick={() => setIsFormOpen((open) => !open)}
+            onClick={() => {
+              setIsOpen(true);
+              setIsFormOpen((open) => !open);
+            }}
             aria-expanded={isFormOpen}
           >
-            {isFormOpen ? "Cancelar" : "Nueva solicitud"}
+            {isFormOpen ? "Cancelar" : "Nueva"}
           </Button>
         </div>
       </div>
 
-      <div className="p-4">
-        {error && (
-          <Alert variant="error" className="mb-3 text-sm">
-            {error}
-          </Alert>
-        )}
+      {isOpen && (
+        <div id="solicitudes-panel-content" className="p-4">
+          {error && (
+            <Alert variant="error" className="mb-3 text-sm">
+              {error}
+            </Alert>
+          )}
 
-        {isFormOpen && (
-          <SolicitudForm
-            key={entityId}
-            entityId={entityId}
-            templates={templates}
-            onCancel={() => setIsFormOpen(false)}
-            onCreated={() => {
-              setIsFormOpen(false);
-              void reload();
-            }}
-            onError={setError}
-          />
-        )}
+          {isFormOpen && (
+            <SolicitudForm
+              key={entityId}
+              entityId={entityId}
+              templates={templates}
+              onCancel={() => setIsFormOpen(false)}
+              onCreated={() => {
+                setIsFormOpen(false);
+                void reload();
+              }}
+              onError={setError}
+            />
+          )}
 
-        {isLoading ? (
-          <div className="flex justify-center py-6">
-            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-focus" />
-          </div>
-        ) : solicitudes.length === 0 ? (
-          <EmptyState
-            title="Sin solicitudes registradas"
-            hint="Usá «Nueva solicitud» para emitir la primera"
-          />
-        ) : (
-          <ul className="space-y-2">
-            {solicitudes.map((solicitud) => (
-              <li
-                key={solicitud.id}
-                className="flex items-center justify-between gap-3 rounded-lg border border-border bg-canvas/40 px-3 py-2"
-              >
-                <div className="min-w-0">
-                  <div className="text-sm font-semibold text-text-primary truncate">
-                    {solicitud.study_name}
-                  </div>
-                  <div className="text-[11px] text-text-muted">
-                    {formatDate(solicitud.created_at)} · {solicitud.status}
-                  </div>
-                </div>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  className="shrink-0"
-                  onClick={() => void openPreview(solicitud.id, solicitud.study_name)}
+          {isLoading ? (
+            <div className="flex justify-center py-6">
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-focus" />
+            </div>
+          ) : solicitudes.length === 0 ? (
+            <EmptyState
+              title="Sin solicitudes registradas"
+              hint="Usá «Nueva» para emitir la primera"
+            />
+          ) : (
+            <ul className="space-y-2">
+              {solicitudes.map((solicitud) => (
+                <li
+                  key={solicitud.id}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-border bg-canvas/40 px-3 py-2"
                 >
-                  Ver / Imprimir
-                </Button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-text-primary truncate">
+                      {solicitud.study_name}
+                    </div>
+                    <div className="text-[11px] text-text-muted">
+                      {formatDate(solicitud.created_at)} · {solicitud.status}
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="shrink-0"
+                    onClick={() => void openPreview(solicitud.id, solicitud.study_name)}
+                  >
+                    Ver / Imprimir
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       {isTemplatesOpen && (
         <TemplatesDialog

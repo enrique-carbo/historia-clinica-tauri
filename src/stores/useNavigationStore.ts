@@ -7,6 +7,7 @@ export type MedicoTab =
   | "perfil"
   | "paciente"
   | "ehr"
+  | "solicitudes"
   | "entries";
 
 export type AdminTab =

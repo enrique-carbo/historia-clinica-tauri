@@ -6,7 +6,6 @@ import { useEntryStore } from "../stores/useEntryStore";
 import { SoapCard } from "./SoapCard";
 import { AllergyCard } from "./AllergyCard";
 import { EntryForm } from "./EntryForm";
-import { SolicitudesPanel } from "./SolicitudesPanel";
 import { Button } from "./ui/Button";
 import { Alert } from "./ui/Alert";
 import { EmptyState } from "./ui/EmptyState";
@@ -202,9 +201,6 @@ export function PatientEhrView() {
                 </div>
               )}
           </div>
-
-          {/* SOLICITUDES DE ESTUDIOS (módulo) */}
-          <SolicitudesPanel entityId={patient.id} />
 
           {/* HISTORIAL: ENTRADAS SOAP */}
           <div className="border border-border rounded-xl bg-surface shadow-lg flex-1 flex flex-col overflow-hidden min-h-0">
