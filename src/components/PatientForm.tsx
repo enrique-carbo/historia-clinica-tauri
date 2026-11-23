@@ -1,5 +1,6 @@
 // Panel derecho: formulario dinámico de paciente (alta/edición) generado
 // desde entity_schema.json. Presentacional: recibe form y callbacks.
+import { Pencil, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { PATIENT_FIELDS, PATIENT_LABEL } from "../utils/schema";
 import { Button } from "./ui/Button";
@@ -314,7 +315,7 @@ export function PatientForm({
     >
       <div className="flex justify-between items-center mb-6">
         <h3 className="font-semibold text-text-primary uppercase tracking-wider text-sm flex items-center gap-2">
-          <span aria-hidden="true">{editingId ? "✏️" : "➕"}</span>{" "}
+          {editingId ? <Pencil size={18} aria-hidden="true" /> : <Plus size={18} aria-hidden="true" />}{" "}
           {editingId ? "Editar" : "Nuevo"} {PATIENT_LABEL}
         </h3>
         {editingId && (

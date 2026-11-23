@@ -1,4 +1,5 @@
 // src/components/ChangePasswordForm.tsx
+import { LockKeyhole } from "lucide-react";
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { formatError } from "../utils/errors";
@@ -46,8 +47,8 @@ export function ChangePasswordForm() {
 
   return (
     <div>
-      <h3 className="text-xs font-bold text-warning-text uppercase tracking-widest mb-4">
-        <span aria-hidden="true">🔒</span> Seguridad — Cambiar contraseña
+      <h3 className="inline-flex items-center gap-2 text-xs font-bold text-warning-text uppercase tracking-widest mb-4">
+        <LockKeyhole size={16} aria-hidden="true" /> Seguridad — Cambiar contraseña
       </h3>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5 max-w-3xl">

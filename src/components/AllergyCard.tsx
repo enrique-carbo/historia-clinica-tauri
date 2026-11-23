@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { formatError } from "../utils/errors";
 import type { Entry } from "../stores/useEntryStore";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, TriangleAlert } from "lucide-react";
 
 interface AllergyCardProps {
   subjectId: number;
@@ -60,7 +60,7 @@ export function AllergyCard({ subjectId }: AllergyCardProps) {
   const headerContent = (
     <>
       <div className="flex items-center gap-2.5 min-w-0 flex-wrap">
-        <span className="text-sm shrink-0" aria-hidden="true">⚠️</span>
+        <TriangleAlert size={16} className="shrink-0" aria-hidden="true" />
         <span className="select-none text-[10px] text-text-muted uppercase font-bold tracking-wider shrink-0">
           Alergias
         </span>

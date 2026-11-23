@@ -2,6 +2,7 @@
 // del usuario con el que el paciente entra a la app. Autocontenido: su
 // estado y sus invokes viven acá; solo depende del id activo (ficha en
 // edición o seleccionada en el padrón).
+import { Ticket } from "lucide-react";
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { formatError } from "../utils/errors";
@@ -90,8 +91,8 @@ export function PatientAccessPanel({
   return (
     <div className="shrink-0 rounded-xl border border-border bg-surface p-4 sm:p-6">
       <div className="flex items-center justify-between gap-3 mb-4">
-        <h3 className="font-semibold text-text-primary uppercase tracking-wider text-sm">
-          <span aria-hidden="true">🎟️</span> Acceso del paciente
+        <h3 className="flex items-center gap-2 font-semibold text-text-primary uppercase tracking-wider text-sm">
+          <Ticket size={18} aria-hidden="true" /> Acceso del paciente
         </h3>
         {accessMsg && (
           <span

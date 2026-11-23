@@ -1,6 +1,7 @@
 // Panel izquierdo del padrón: búsqueda por nombre/teléfono, búsqueda exacta
 // por el documento (blind index) y listado de pacientes. Presentacional:
 // recibe estado y callbacks.
+import { Search } from "lucide-react";
 import { EmptyState } from "./ui/EmptyState";
 import { BLIND_INDEX_LABEL } from "../utils/schema";
 
@@ -77,7 +78,7 @@ export function PatientListPanel({
             aria-label="Buscar por nombre o teléfono"
             className={SEARCH_BUTTON_CLASSES}
           >
-            <span aria-hidden="true">🔍</span>
+            <Search size={18} aria-hidden="true" />
           </button>
         </div>
 
@@ -97,7 +98,7 @@ export function PatientListPanel({
             aria-label={`Buscar por ${BLIND_INDEX_LABEL}`}
             className={SEARCH_BUTTON_CLASSES}
           >
-            <span aria-hidden="true">🔍</span>
+            <Search size={18} aria-hidden="true" />
           </button>
         </div>
       </div>

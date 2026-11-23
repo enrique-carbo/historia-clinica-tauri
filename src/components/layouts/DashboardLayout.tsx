@@ -14,7 +14,7 @@ import { Alert } from "../ui/Alert";
 import { useEntryStore } from "../../stores/useEntryStore";
 import { useBackupStore } from "../../stores/useBackupStore";
 import { APP_NAME } from "../../utils/branding";
-import { Menu } from "lucide-react";
+import { KeyRound, LockKeyhole, Menu } from "lucide-react";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -107,10 +107,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           {!isSeedConfigured && (
             <button
               onClick={() => setShowSeedSetup(true)}
-              className="px-3 py-1.5 bg-warning-tint border border-warning-border text-warning-text rounded text-xs hover:border-warning-text transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-warning-tint border border-warning-border text-warning-text rounded text-xs hover:border-warning-text transition-colors cursor-pointer"
               title="Configurar frase semilla"
             >
-              <span aria-hidden="true">🔐</span>{" "}
+              <KeyRound size={16} aria-hidden="true" />{" "}
               <span className="hidden sm:inline">Configurar Seed</span>
               <span className="sm:hidden">Seed</span>
             </button>
@@ -120,9 +120,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           </span>
           <button
             onClick={handleLogout}
-            className="px-3 py-1.5 bg-surface-raised border border-border-strong text-text-primary rounded text-xs hover:bg-danger-tint/60 hover:border-danger-border hover:text-danger-text transition-colors cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-surface-raised border border-border-strong text-text-primary rounded text-xs hover:bg-danger-tint/60 hover:border-danger-border hover:text-danger-text transition-colors cursor-pointer"
           >
-            <span aria-hidden="true">🔒</span> Cerrar
+            <LockKeyhole size={16} aria-hidden="true" /> Cerrar
           </button>
         </div>
       </header>

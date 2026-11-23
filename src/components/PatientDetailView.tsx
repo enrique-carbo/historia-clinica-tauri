@@ -2,6 +2,7 @@
 // Se genera desde entity_schema.json (mismos labels y orden que
 // PatientForm); los campos sin dato muestran "—". La edición entra por
 // el botón Editar, que carga PatientForm en modo edición.
+import { Pencil, UserRound } from "lucide-react";
 import { PATIENT_FIELDS, PATIENT_LABEL, type FieldDef } from "../utils/schema";
 import { Button } from "./ui/Button";
 
@@ -64,10 +65,10 @@ export function PatientDetailView({ patient, onEdit }: PatientDetailViewProps) {
     <div className="flex-1 overflow-y-auto p-4 sm:p-6 border border-border rounded-xl shadow-lg bg-surface custom-scrollbar">
       <div className="flex justify-between items-center mb-6 gap-3">
         <h3 className="font-semibold text-text-primary uppercase tracking-wider text-sm flex items-center gap-2">
-          <span aria-hidden="true">👤</span> Ficha de {PATIENT_LABEL}
+          <UserRound size={18} aria-hidden="true" /> Ficha de {PATIENT_LABEL}
         </h3>
-        <Button onClick={onEdit} className="shrink-0">
-          <span aria-hidden="true">✏️</span> Editar
+        <Button onClick={onEdit} className="inline-flex items-center gap-2 shrink-0">
+          <Pencil size={16} aria-hidden="true" /> Editar
         </Button>
       </div>
 

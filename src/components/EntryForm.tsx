@@ -1,3 +1,4 @@
+import { Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useEntryStore, EntryCategory, EntryStatus } from "../stores/useEntryStore";
@@ -196,7 +197,7 @@ export function EntryForm({ onSuccess, lockedCategory }: EntryFormProps) {
         </Alert>
       )}
       <h3 className="text-lg font-semibold text-text-primary mb-4 flex items-center gap-2">
-        <span className="text-2xl" aria-hidden="true">➕</span>
+        <Plus size={28} aria-hidden="true" />
         {lockedCategory
           ? `Nueva ${TEMPLATES[lockedCategory]?.label ?? "Entry"}`
           : "Nueva Entry"}

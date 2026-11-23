@@ -1,3 +1,4 @@
+import { ShieldCheck, UserRound } from "lucide-react";
 import { ChangePasswordForm } from "../ChangePasswordForm";
 import { useAuthStore } from "../../stores/useAuthStore";
 import { APP_NAME } from "../../utils/branding";
@@ -8,8 +9,8 @@ export function PacienteView() {
   return (
     <div className="max-w-3xl mx-auto flex flex-col gap-8">
       <div>
-        <h2 className="text-lg font-semibold mb-2 text-text-primary">
-          <span aria-hidden="true">👤</span> Mi Cuenta
+        <h2 className="flex items-center gap-2 text-lg font-semibold mb-2 text-text-primary">
+          <UserRound size={20} aria-hidden="true" /> Mi Cuenta
         </h2>
         <p className="text-sm text-text-muted">
           Tu usuario de acceso y la seguridad de tu cuenta.
@@ -42,7 +43,7 @@ export function PacienteView() {
       </div>
 
       <div className="p-4 bg-info-tint border border-info-border rounded-lg text-xs text-info-text text-center">
-        <span aria-hidden="true">🔒</span> <strong>Privacidad Garantizada:</strong> Tus datos clínicos se
+        <ShieldCheck size={16} className="inline-block align-text-bottom" aria-hidden="true" /> <strong>Privacidad Garantizada:</strong> Tus datos clínicos se
         guardan cifrados de extremo a extremo. Ni siquiera los servidores de{" "}
         {APP_NAME} pueden leerlos.
       </div>

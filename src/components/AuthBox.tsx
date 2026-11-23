@@ -1,3 +1,4 @@
+import { KeyRound, Sprout, TriangleAlert } from "lucide-react";
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { formatError, isErrorCode } from "../utils/errors";
@@ -147,12 +148,20 @@ export function AuthBox() {
 
   return (
     <div className="w-full max-w-md mx-auto mt-24 bg-surface p-8 rounded-lg border border-border shadow-2xl">
-      <h2 className="text-xl font-bold text-text-primary mb-1">
-        {bootstrap
-          ? "🌱 Crear Primer Administrador"
-          : recovering
-            ? "🚨 Recuperar Acceso"
-            : "🔑 Iniciar Sesión Core"}
+      <h2 className="flex items-center gap-2 text-xl font-bold text-text-primary mb-1">
+        {bootstrap ? (
+          <>
+            <Sprout size={22} aria-hidden="true" /> Crear Primer Administrador
+          </>
+        ) : recovering ? (
+          <>
+            <TriangleAlert size={22} aria-hidden="true" /> Recuperar Acceso
+          </>
+        ) : (
+          <>
+            <KeyRound size={22} aria-hidden="true" /> Iniciar Sesión Core
+          </>
+        )}
       </h2>
       <p className="text-xs text-text-muted mb-6">
         {bootstrap
@@ -169,7 +178,7 @@ export function AuthBox() {
         <form onSubmit={handleRecoverSubmit} className="flex flex-col gap-4">
           <div className="p-3 bg-purple-900/80 border border-purple-950 rounded-lg">
             <p className="text-xs text-purple-200">
-              🚨 Esto <strong>restablece la contraseña del administrador</strong> y entra
+              <TriangleAlert size={16} className="inline-block align-text-bottom shrink-0" aria-hidden="true" /> Esto <strong>restablece la contraseña del administrador</strong> y entra
               directamente al sistema. Requiere la <strong>frase semilla</strong> (6 palabras del
               papel) y queda registrado en la auditoría. Si solo olvidaste tu contraseña personal,
               pedile al administrador que te la resetee.
@@ -211,7 +220,7 @@ export function AuthBox() {
         <form onSubmit={handleSeedSubmit} className="flex flex-col gap-4">
           <div className="p-3 bg-yellow-900/80 border border-yellow-950 rounded-lg">
             <p className="text-xs text-yellow-200">
-              🌱 Este usuario necesita la <strong>frase semilla</strong> (6 palabras del papel) para
+              <Sprout size={16} className="inline-block align-text-bottom shrink-0" aria-hidden="true" /> Este usuario necesita la <strong>frase semilla</strong> (6 palabras del papel) para
               acceder a los datos cifrados de esta instalación.
             </p>
           </div>

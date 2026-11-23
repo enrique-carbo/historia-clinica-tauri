@@ -1,3 +1,4 @@
+import { TriangleAlert } from "lucide-react";
 import { CloseButton } from "../ui/CloseButton";
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
@@ -71,7 +72,7 @@ export function AdminSeedPanel() {
       </div>
 
       <Alert variant="error">
-        <strong>⚠️ Rotar la frase invalida la anterior.</strong>{" "}
+        <strong className="inline-flex items-center gap-1.5"><TriangleAlert size={14} aria-hidden="true" /> Rotar la frase invalida la anterior.</strong>{" "}
         Si no anotás la nueva en papel, la frase vieja deja de servir y no habrá
         forma de recuperar los datos si se pierden todas las contraseñas. La
         rotación recién se aplica cuando confirmás re-escribiéndola.

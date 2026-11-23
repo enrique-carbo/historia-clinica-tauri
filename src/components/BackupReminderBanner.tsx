@@ -5,6 +5,7 @@
 // pestaña — el momento en que el admin "se acuerda" de respaldar no es
 // necesariamente cuando está en Respaldos.
 
+import { HardDriveDownload } from "lucide-react";
 import { useEffect } from "react";
 import { useAuthStore } from "../stores/useAuthStore";
 import { useBackupStore } from "../stores/useBackupStore";
@@ -32,8 +33,8 @@ export function BackupReminderBanner() {
   return (
     <Alert variant="warning" className="mx-4 mt-3 sm:mx-10">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <span>
-          <span aria-hidden="true">💾</span> {backupReminderMessage(reminder)}
+        <span className="inline-flex items-center gap-2">
+          <HardDriveDownload size={18} className="shrink-0" aria-hidden="true" /> {backupReminderMessage(reminder)}
         </span>
         <Button
           size="sm"
